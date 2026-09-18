@@ -26,14 +26,19 @@ Deux pages pour la famille, une pour toi :
 
 ## Choisir le lieu
 
-Une carte de France, verte au départ. Chacun **peint en rouge** les
+Une carte de France en gris neutre. Chacun **marque en rouge** les
 départements où il n'a pas envie d'aller — en glissant le doigt, et en
 repassant dessus pour effacer. Le croisement désigne ceux que personne ne
 refuse.
 
+Le fond est neutre et non vert : un département non peint ne veut pas dire
+« choisi », seulement « pas d'objection ». Le vert lui prêtait une
+approbation que personne n'a exprimée, et le rouge reste ainsi la seule
+information portée par la couleur.
+
 Le pinceau couvre un disque de deux ou trois départements : un balayage de
-la Manche aux Ardennes en peint six d'un geste. Une vingtaine de **villes
-repères** situent le trait — on sait si l'on peint au-dessus ou au-dessous
+la Manche aux Ardennes en peint six d'un geste. Une quinzaine de **villes repères**
+situent le trait — on sait si l'on peint au-dessus ou au-dessous
 de Lyon.
 
 Le département comme unité plutôt qu'un dessin libre, pour trois raisons :
@@ -41,8 +46,8 @@ la donnée tient en quelques codes, le croisement est un simple comptage,
 et surtout **la sortie porte un nom**. « Dordogne » se cherche sur un site
 de location ; une tache sur une image, non.
 
-L'onglet **Celle de la famille** montre une carte de chaleur : vert franc
-là où personne ne refuse, puis de plus en plus clair. Les totaux sont
+L'onglet **Celle de la famille** montre une carte de chaleur : neutre là où
+personne ne refuse, puis d'un rouge de plus en plus soutenu. Les totaux sont
 visibles de tous, **jamais les noms**. Avec vingt personnes, il est
 probable qu'aucun département ne fasse l'unanimité — d'où le dégradé
 plutôt qu'un verdict binaire qui n'afficherait rien.
@@ -60,7 +65,7 @@ python preparer_carte.py
 
 Télécharge les frontières officielles (france-geojson, dérivé de l'IGN),
 garde la métropole, projette et simplifie, et écrit `carte.js` — 96
-départements et 21 villes, 64 Ko. La Corse est écartée : elle étire
+départements et 15 villes, 64 Ko. La Corse est écartée : elle étire
 l'emprise vers le sud-est et repousse tout le reste, pour deux départements
 qui ne sont pas le sujet d'un séjour familial en voiture. Les villes passent par la **même**
 projection que les contours : c'est la seule façon de garantir qu'un point

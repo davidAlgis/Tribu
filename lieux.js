@@ -198,7 +198,7 @@ function dessinerCarte() {
 // Largeur approchee d'un nom, en unites du viewBox. Mesurer le texte pour
 // de vrai supposerait de l'avoir deja insere ; cette estimation suffit a
 // decider de quel cote l'ecrire.
-const HAUTEUR_NOM = 19;
+const HAUTEUR_NOM = 27;
 
 function largeurNom(nom) {
   return nom.length * HAUTEUR_NOM * 0.52;
@@ -230,13 +230,13 @@ function dessinerVilles() {
     const point = document.createElementNS(SVG, "circle");
     point.setAttribute("cx", ville.x);
     point.setAttribute("cy", ville.y);
-    point.setAttribute("r", 5);
+    point.setAttribute("r", 6.5);
     point.classList.add("ville-point");
 
     const aGauche = ecrireAGauche(ville, largeur);
     const nom = document.createElementNS(SVG, "text");
-    nom.setAttribute("x", ville.x + (aGauche ? -9 : 9));
-    nom.setAttribute("y", ville.y + 7);
+    nom.setAttribute("x", ville.x + (aGauche ? -12 : 12));
+    nom.setAttribute("y", ville.y + 9);
     if (aGauche) nom.setAttribute("text-anchor", "end");
     nom.textContent = ville.n;
     nom.classList.add("ville-nom");
@@ -398,7 +398,7 @@ function peindre() {
       forme.classList.remove("chaleur-1", "chaleur-2", "chaleur-3");
     }
     carteLegende.innerHTML =
-      `<span class="pastille-legende vert"></span> possible ` +
+      `<span class="pastille-legende neutre"></span> sans objection ` +
       `<span class="pastille-legende rouge"></span> ${etat.refuses.size} refusé(s)`;
     return;
   }
@@ -415,7 +415,7 @@ function peindre() {
 
   const acceptes = [...formes.keys()].filter((c) => !(totaux[c] > 0));
   carteLegende.innerHTML =
-    `<span class="pastille-legende vert"></span> aucun refus (${acceptes.length}) ` +
+    `<span class="pastille-legende neutre"></span> aucun refus (${acceptes.length}) ` +
     `<span class="pastille-legende c1"></span> 1 ` +
     `<span class="pastille-legende c2"></span> 2 ` +
     `<span class="pastille-legende c3"></span> 3 ou plus`;

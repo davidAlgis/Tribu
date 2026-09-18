@@ -40,25 +40,23 @@ SOURCE = (
 )
 SORTIE = Path("carte.js")
 
-# Une vingtaine de reperes suffit a se situer. Au-dela, les noms se
-# chevauchent et il faut les ecrire si petit qu'ils ne se lisent plus --
-# une carte illisible ne repere rien.
+# Une quinzaine de reperes, pas davantage : c'est le nombre qui permet de
+# les ecrire assez gros pour qu'ils se lisent sur un telephone. Au-dela, il
+# faut reduire la police jusqu'a l'illisible -- et une carte illisible ne
+# repere rien.
 #
-# Deux absences volontaires : Clermont-Ferrand, dont le nom long recouvrait
-# Lyon d'un cote et Limoges de l'autre, et Nancy, collee a Strasbourg.
-# Retirer un repere coute moins qu'un moteur de placement d'etiquettes.
+# Les villes ecartees le sont pour cette raison et non par dedain :
+# Clermont-Ferrand recouvrait Lyon et Limoges, Nancy se collait a
+# Strasbourg, Montpellier a Marseille. Retirer un repere coute moins qu'un
+# moteur de placement d'etiquettes.
 VILLES = [
-    ("Paris", 48.8566, 2.3522), ("Lille", 50.6292, 3.0573),
-    ("Le Havre", 49.4944, 0.1079), ("Caen", 49.1829, -0.3707),
+    ("Lille", 50.6292, 3.0573), ("Paris", 48.8566, 2.3522),
+    ("Strasbourg", 48.5734, 7.7521), ("Le Havre", 49.4944, 0.1079),
     ("Brest", 48.3904, -4.4861), ("Rennes", 48.1173, -1.6778),
-    ("Nantes", 47.2184, -1.5536), ("Tours", 47.3941, 0.6848),
-    ("Orleans", 47.9029, 1.9093), ("Strasbourg", 48.5734, 7.7521),
-    ("Dijon", 47.3220, 5.0415),
-    ("La Rochelle", 46.1591, -1.1520), ("Limoges", 45.8336, 1.2611),
-    ("Lyon", 45.7640, 4.8357),
-    ("Bordeaux", 44.8378, -0.5792), ("Grenoble", 45.1885, 5.7245),
-    ("Bayonne", 43.4933, -1.4748), ("Toulouse", 43.6047, 1.4442),
-    ("Montpellier", 43.6108, 3.8767), ("Marseille", 43.2965, 5.3698),
+    ("Nantes", 47.2184, -1.5536), ("Orleans", 47.9029, 1.9093),
+    ("Dijon", 47.3220, 5.0415), ("Limoges", 45.8336, 1.2611),
+    ("Lyon", 45.7640, 4.8357), ("Bordeaux", 44.8378, -0.5792),
+    ("Toulouse", 43.6047, 1.4442), ("Marseille", 43.2965, 5.3698),
     ("Nice", 43.7102, 7.2620),
 ]
 

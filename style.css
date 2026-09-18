@@ -307,18 +307,24 @@ button.retirer:hover { color: #fff; background: var(--erreur); border-color: var
 }
 #carte.lecture { cursor: default; }
 
+/* Un departement non peint ne veut pas dire « choisi », seulement « pas
+   d'objection » : le vert lui pretait une approbation que personne n'a
+   exprimee. Le neutre laisse le rouge etre la seule information. */
 .dep {
-  fill: #86c99b;
+  fill: #d6d5cf;
   stroke: var(--carte);
   stroke-width: 1.2;
   transition: fill 0.08s linear;
 }
-#carte:not(.lecture) .dep:hover { fill: #6bb886; }
+#carte:not(.lecture) .dep:hover { fill: #c2c1ba; }
 
-.dep.refuse { fill: #d9534f; }
-.dep.chaleur-1 { fill: #cfe6a8; }
-.dep.chaleur-2 { fill: #f2d98c; }
-.dep.chaleur-3 { fill: #d9534f; }
+.dep.refuse { fill: #c0392b; }
+
+/* Du neutre vers le rouge, sans passer par une autre teinte : l'intensite
+   seule porte le nombre de refus. */
+.dep.chaleur-1 { fill: #e4c3bd; }
+.dep.chaleur-2 { fill: #d49a90; }
+.dep.chaleur-3 { fill: #c0392b; }
 
 .carte-legende {
   display: flex;
@@ -337,22 +343,22 @@ button.retirer:hover { color: #fff; background: var(--erreur); border-color: var
   vertical-align: -2px;
   margin-right: 3px;
 }
-.pastille-legende.vert { background: #86c99b; }
-.pastille-legende.rouge { background: #d9534f; }
-.pastille-legende.c1 { background: #cfe6a8; }
-.pastille-legende.c2 { background: #f2d98c; }
-.pastille-legende.c3 { background: #d9534f; }
+.pastille-legende.neutre { background: #d6d5cf; }
+.pastille-legende.rouge { background: #c0392b; }
+.pastille-legende.c1 { background: #e4c3bd; }
+.pastille-legende.c2 { background: #d49a90; }
+.pastille-legende.c3 { background: #c0392b; }
 
 @media (prefers-color-scheme: dark) {
-  .dep { fill: #4f8f68; stroke: #1c1d1e; }
-  #carte:not(.lecture) .dep:hover { fill: #63a87d; }
-  .dep.refuse, .dep.chaleur-3 { fill: #b8433f; }
-  .dep.chaleur-1 { fill: #7a9e5a; }
-  .dep.chaleur-2 { fill: #b89a4a; }
-  .pastille-legende.vert { background: #4f8f68; }
-  .pastille-legende.rouge, .pastille-legende.c3 { background: #b8433f; }
-  .pastille-legende.c1 { background: #7a9e5a; }
-  .pastille-legende.c2 { background: #b89a4a; }
+  .dep { fill: #55585b; stroke: #1c1d1e; }
+  #carte:not(.lecture) .dep:hover { fill: #656a6e; }
+  .dep.refuse, .dep.chaleur-3 { fill: #a8382f; }
+  .dep.chaleur-1 { fill: #6e4f4c; }
+  .dep.chaleur-2 { fill: #8b433c; }
+  .pastille-legende.neutre { background: #55585b; }
+  .pastille-legende.rouge, .pastille-legende.c3 { background: #a8382f; }
+  .pastille-legende.c1 { background: #6e4f4c; }
+  .pastille-legende.c2 { background: #8b433c; }
 }
 
 /* ---------- Pinceau et villes ---------- */
@@ -372,13 +378,13 @@ button.retirer:hover { color: #fff; background: var(--erreur); border-color: var
 
 .ville-point { fill: #1c1d1e; fill-opacity: 0.7; }
 .ville-nom {
-  font-size: 19px;
+  font-size: 27px;
   fill: #1c1d1e;
   fill-opacity: 0.72;
   font-family: system-ui, sans-serif;
   paint-order: stroke;
-  stroke: rgba(255, 255, 255, 0.78);
-  stroke-width: 3.6px;
+  stroke: rgba(255, 255, 255, 0.82);
+  stroke-width: 5px;
 }
 
 @media (prefers-color-scheme: dark) {
@@ -389,3 +395,13 @@ button.retirer:hover { color: #fff; background: var(--erreur); border-color: var
     stroke: rgba(0, 0, 0, 0.55);
   }
 }
+
+/* ---------- Tutoriel sous la carte ---------- */
+.tutoriel {
+  margin: 4px 0 16px;
+  padding-left: 22px;
+  font-size: 0.89rem;
+  color: var(--doux);
+  line-height: 1.7;
+}
+.tutoriel strong { color: var(--texte); }
