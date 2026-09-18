@@ -127,7 +127,12 @@ courants des exemples et des tests sont déclarés dans
    [`supabase/reglages.exemple.sql`](supabase/reglages.exemple.sql).
 3. **Code organisateur** — `python creer_code_admin.py`, puis coller le SQL
    affiché (voir ci-dessous).
-4. **Participants** — amorcer depuis le GEDCOM, puis `admin.html`.
+4. **Participants** — amorcer la base depuis le GEDCOM, une seule fois :
+   ```bash
+   python importer_ged.py --ged "D:/chemin/vers/genealogie.ged" --racine "Prénom Nom"
+   ```
+   Il demande le code organisateur, puis remplit Supabase. Ensuite, tout se
+   passe sur `admin.html`.
 5. **Clés** — `Project URL` et clé publishable dans [`config.js`](config.js).
 6. **Pages** — Settings → Pages → Deploy from a branch → `main` / `(root)`.
 7. **Tarifs** — copier `config.example.toml` en `config.toml`, à remplir
