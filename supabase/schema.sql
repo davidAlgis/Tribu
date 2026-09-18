@@ -3,8 +3,13 @@
 --  A coller dans Supabase > SQL Editor > New query > Run
 -- ============================================================
 --
---  ATTENTION : ce script repart de zero. Il supprime les tables
---  precedentes et les donnees de test qu'elles contiennent.
+--  RE-EXECUTABLE. Ce qu'il fait a une base deja en place :
+--
+--    - les PRESENCES saisies sont effacees et la table recreee ;
+--    - les PARTICIPANTS sont conserves : la base fait foi, ce serait
+--      perdre la liste que de la reconstruire a chaque passage ;
+--    - les colonnes apparues depuis la derniere execution sont ajoutees ;
+--    - les codes d'acces sont conserves.
 --
 --  PRINCIPES
 --
@@ -53,6 +58,23 @@ create table if not exists private.acces (
   cree_le        timestamptz not null default now()
 );
 
+-- Une version anterieure logeait les deux codes ici, distingues par une
+-- colonne `role`. Le code organisateur a depuis sa propre table, ou il
+-- n'est plus stocke en clair. On retire la colonne -- mais on efface
+-- d'abord les lignes 'admin' : sans le role, elles deviendraient des
+-- codes famille valides, ce qui ouvrirait la saisie a un code cense
+-- etre reserve.
+do $mig$
+begin
+  if exists (
+    select 1 from information_schema.columns
+    where table_schema = 'private' and table_name = 'acces' and column_name = 'role'
+  ) then
+    delete from private.acces where role = 'admin';
+    alter table private.acces drop column role;
+  end if;
+end $mig$;
+
 -- Le code doit pouvoir se dicter au telephone : casse, accents,
 -- espaces et tirets sont ignores. "Les Abricots" = "lesabricots".
 create or replace function private.normaliser_code(c text)
@@ -70,6 +92,14 @@ $fn$;
 -- Variante booleenne, pratique pour verifier un code a la main dans le
 -- SQL Editor. Elle reste dans `private` : PostgREST ne l'expose donc pas,
 -- et elle ne peut pas servir d'oracle de force brute depuis l'exterieur.
+-- `create or replace function` ne remplace que la MEME signature : avec une
+-- liste d'arguments differente, il ajoute une surcharge. Les deux versions
+-- coexisteraient alors, et comme l'ancienne avait une valeur par defaut,
+-- l'appel a un seul argument deviendrait ambigu -- « function name is not
+-- unique ». On efface donc explicitement les signatures d'avant.
+drop function if exists private.code_valide(text, text);
+drop function if exists private.verifier_code(text);
+
 create or replace function private.code_valide(c text)
 returns boolean language sql stable
 set search_path = private, pg_temp as $fn$
@@ -150,6 +180,12 @@ create table if not exists private.participants (
   invite        boolean not null default false,
   cree_le       timestamptz not null default now()
 );
+
+-- `create table if not exists` ne modifie PAS une table deja presente : sur
+-- une base creee par une version anterieure, la colonne ci-dessus n'aurait
+-- jamais vu le jour, et la vue de la section 7 echouerait a la reclamer.
+alter table private.participants
+  add column if not exists invite boolean not null default false;
 
 -- ============================================================
 --  4. Les presences
@@ -583,3 +619,22 @@ grant execute on function public.admin_ajouter(text, text, text, uuid, uuid, boo
 grant execute on function public.admin_modifier(text, uuid, text, text)                     to anon;
 grant execute on function public.admin_retirer(text, uuid)                                  to anon;
 grant execute on function public.admin_importer(text, jsonb)                                to anon;
+
+-- ============================================================
+--  9. Etat de la base apres execution
+-- ============================================================
+--
+--  Affiche ce qui existe reellement, plutot que de le supposer.
+--
+--    codes_famille  doit valoir 1  -> sinon, passer reglages.exemple.sql
+--    codes_admin    doit valoir 1  -> sinon, lancer creer_code_admin.py
+--    reglages       doit valoir 1  -> sinon, passer reglages.exemple.sql
+--    participants   0 avant l'amorcage, puis la taille de la famille
+--    presences      remis a 0 par ce script, c'est normal
+--
+select
+  (select count(*) from private.participants) as participants,
+  (select count(*) from public.presences)     as presences,
+  (select count(*) from private.acces)        as codes_famille,
+  (select count(*) from private.acces_admin)  as codes_admin,
+  (select count(*) from private.reglages)     as reglages;
