@@ -103,16 +103,24 @@ function lireLignes(personneId) {
 }
 
 async function inserer(table, lignes) {
+  const entetes = {
+    "Content-Type": "application/json",
+    apikey: SUPABASE_ANON_KEY,
+    // La cle n'a pas le droit de lire : on demande a Postgres de ne rien
+    // renvoyer, sinon l'insertion serait refusee par le RLS.
+    Prefer: "return=minimal",
+  };
+
+  // Les anciennes cles `anon` sont des JWT et se passent aussi en Bearer.
+  // Les nouvelles cles `sb_publishable_...` n'en sont pas : elles ne
+  // voyagent que dans l'en-tete apikey.
+  if (SUPABASE_ANON_KEY.startsWith("eyJ")) {
+    entetes.Authorization = `Bearer ${SUPABASE_ANON_KEY}`;
+  }
+
   const reponse = await fetch(`${SUPABASE_URL}/rest/v1/${table}`, {
     method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      apikey: SUPABASE_ANON_KEY,
-      Authorization: `Bearer ${SUPABASE_ANON_KEY}`,
-      // La cle anon n'a pas le droit de lire : on demande a Postgres
-      // de ne rien renvoyer, sinon l'insertion serait refusee par le RLS.
-      Prefer: "return=minimal",
-    },
+    headers: entetes,
     body: JSON.stringify(lignes),
   });
   if (!reponse.ok) throw new Error(`${table} : ${reponse.status} ${await reponse.text()}`);

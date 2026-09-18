@@ -60,7 +60,7 @@ python -m venv .venv
 
 # l'export réel, depuis Supabase
 export SUPABASE_URL="https://xxxx.supabase.co"
-export SUPABASE_SERVICE_KEY="..."   # jamais dans le navigateur, jamais commitée
+export SUPABASE_SERVICE_KEY="sb_secret_..."   # jamais dans le navigateur, jamais commitée
 .venv/Scripts/python.exe run_export.py --source supabase --out exports/sejour.xlsx
 ```
 
@@ -89,7 +89,7 @@ règles en découlent :
 - la clé `anon` dans `config.js` est publique **par conception** ; ce
   qui protège, c'est le RLS, qui n'autorise que l'insertion — pas la
   lecture, pas la modification, pas la suppression ;
-- la clé `service_role` ne doit **jamais** quitter ta machine ;
+- la clé secrète (`sb_secret_…`) ne doit **jamais** quitter ta machine ;
 - les `.xlsx` générés ne sont jamais commités, et ne sont pas produits
   par GitHub Actions : sur un repo public, les artifacts d'Actions sont
   téléchargeables par n'importe qui.

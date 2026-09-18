@@ -3,9 +3,10 @@
 Les deux sources produisent exactement les memes objets, pour que le
 moteur et les tests n'aient jamais besoin de reseau.
 
-La lecture Supabase utilise la cle `service_role`, qui contourne le
-RLS. Elle ne doit JAMAIS se trouver dans le navigateur : uniquement
-en variable d'environnement locale ou en secret GitHub Actions.
+La lecture Supabase utilise la cle secrete (`sb_secret_...`, ou
+l'ancienne `service_role`), qui contourne le RLS. Elle ne doit JAMAIS
+se trouver dans le navigateur : uniquement en variable d'environnement
+sur la machine qui genere les exports.
 """
 
 from __future__ import annotations
@@ -48,10 +49,13 @@ def charger_json(chemin: str | Path) -> tuple[dict, list]:
 
 
 def _get(url: str, cle: str, table: str) -> list[dict]:
-    requete = urllib.request.Request(
-        f"{url}/rest/v1/{table}?select=*",
-        headers={"apikey": cle, "Authorization": f"Bearer {cle}"},
-    )
+    # Les anciennes cles service_role sont des JWT et se passent aussi en
+    # Bearer ; les nouvelles cles `sb_secret_...` n'en sont pas.
+    entetes = {"apikey": cle}
+    if cle.startswith("eyJ"):
+        entetes["Authorization"] = f"Bearer {cle}"
+
+    requete = urllib.request.Request(f"{url}/rest/v1/{table}?select=*", headers=entetes)
     with urllib.request.urlopen(requete, timeout=30) as reponse:
         return json.loads(reponse.read().decode("utf-8"))
 
