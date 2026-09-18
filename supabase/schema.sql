@@ -187,6 +187,24 @@ create table if not exists private.participants (
 alter table private.participants
   add column if not exists invite boolean not null default false;
 
+-- Jusqu'ici la portee de chacun se deduisait entierement de l'arbre. Elle
+-- reste la regle par defaut, mais peut desormais etre restreinte personne
+-- par personne, sans toucher aux liens de parente :
+--
+--   'descendance' : conjoint, descendants et leurs conjoints (le defaut)
+--   'foyer'       : soi et son conjoint, rien de plus
+--   'soi'         : soi seulement
+--
+-- Restreindre quelqu'un ne change rien aux droits des autres : une
+-- grand-mere limitee a son foyer n'empeche pas ses enfants de gerer les
+-- leurs.
+alter table private.participants
+  add column if not exists portee text not null default 'descendance';
+
+alter table private.participants drop constraint if exists participants_portee_valide;
+alter table private.participants add constraint participants_portee_valide
+  check (portee in ('descendance', 'foyer', 'soi'));
+
 -- ============================================================
 --  4. Les presences
 -- ============================================================
@@ -238,7 +256,13 @@ create or replace function private.personnes_modifiables(p_acteur uuid)
 returns table (id uuid)
 language sql stable
 set search_path = private, pg_temp as $fn$
-  with recursive portee as (
+  with recursive
+  acteur as (
+    select p.id, p.conjoint_id, p.portee
+    from private.participants p
+    where p.id = p_acteur
+  ),
+  descendance as (
     select p.id, p.conjoint_id
     from private.participants p
     where p.id = p_acteur
@@ -247,12 +271,28 @@ set search_path = private, pg_temp as $fn$
 
     select p.id, p.conjoint_id
     from private.participants p
-    join portee f
+    join descendance f
       on p.parent_id = f.id           -- ses enfants
       or p.id = f.conjoint_id         -- son conjoint
       or p.conjoint_id = f.id         -- ...meme si le lien n'est pose que d'un cote
   )
-  select portee.id from portee
+
+  -- Portee complete : toute la descendance, soi-meme inclus.
+  select d.id from descendance d
+  where (select a.portee from acteur a) = 'descendance'
+
+  union
+
+  -- Portee restreinte : soi, toujours. Nul ne perd la main sur sa propre
+  -- presence, sans quoi il ne pourrait plus rien declarer.
+  select a.id from acteur a
+  where a.portee in ('foyer', 'soi')
+
+  union
+
+  -- ...et son conjoint, pour la portee 'foyer'.
+  select a.conjoint_id from acteur a
+  where a.portee = 'foyer' and a.conjoint_id is not null
 $fn$;
 
 -- ============================================================
@@ -466,6 +506,10 @@ begin
              'parent_id', p.parent_id,
              'conjoint_id', p.conjoint_id,
              'invite', p.invite,
+             'portee', p.portee,
+             -- Le nombre rend le reglage concret : passer de 16 a 2 se voit,
+             -- la ou « portee : foyer » ne dit rien de ce qu'on a change.
+             'nb_geres', (select count(*) from private.personnes_modifiables(p.id)),
              'a_saisi', exists (select 1 from public.presences x where x.participant_id = p.id)
            ) order by p.famille, p.prenom)
     from private.participants p
@@ -574,6 +618,37 @@ begin
   return jsonb_build_object('id', p_id);
 end $fn$;
 
+-- ---- 8c bis. Restreindre la portee de quelqu'un ----
+--
+--  Utile quand l'arbre dit plus que la realite : une grand-mere qui figure
+--  au-dessus de toute sa descendance, mais qui ne s'occupe en pratique que
+--  de son mari.
+--
+--  Restreindre une personne ne retire rien aux autres : ses enfants
+--  gardent la main sur leurs propres foyers.
+--
+create or replace function public.admin_portee(p_code text, p_id uuid, p_portee text)
+returns jsonb
+language plpgsql security definer
+set search_path = private, pg_temp as $fn$
+declare
+  nb integer;
+begin
+  perform private.verifier_code(p_code, 'admin');
+
+  if p_portee not in ('descendance', 'foyer', 'soi') then
+    raise exception 'PORTEE_INCONNUE' using errcode = 'P0001';
+  end if;
+
+  update private.participants set portee = p_portee where id = p_id;
+  if not found then
+    raise exception 'INCONNU' using errcode = 'P0001';
+  end if;
+
+  select count(*) into nb from private.personnes_modifiables(p_id);
+  return jsonb_build_object('portee', p_portee, 'nb_geres', nb);
+end $fn$;
+
 -- ---- 8d. Retirer quelqu'un ----
 --
 --  Retirer ne coupe jamais la branche : les enfants de la personne sont
@@ -658,6 +733,7 @@ end $fn$;
 grant execute on function public.admin_lister(text)                                         to anon;
 grant execute on function public.admin_ajouter(text, text, text, uuid, uuid, boolean, text) to anon;
 grant execute on function public.admin_modifier(text, uuid, text, text)                     to anon;
+grant execute on function public.admin_portee(text, uuid, text)                             to anon;
 grant execute on function public.admin_retirer(text, uuid)                                  to anon;
 grant execute on function public.admin_importer(text, jsonb)                                to anon;
 

@@ -50,8 +50,17 @@ const LIENS_PAR_TYPE = {
   invite: ["invite_de", "independant"],
 };
 
+// Ce que chacun a le droit de modifier. Par defaut l'arbre decide ; ces
+// reglages servent quand il dit plus que la realite.
+const PORTEES = {
+  descendance: "toute sa descendance",
+  foyer: "son conjoint",
+  soi: "elle-même seulement",
+};
+
 const MESSAGES = {
   CODE_REFUSE: "Code organisateur incorrect.",
+  PORTEE_INCONNUE: "Portée inconnue.",
   PRENOM_VIDE: "Il manque le prénom.",
   DEUX_LIENS: "Un seul rattachement à la fois.",
   RATTACHEMENT_INCONNU: "La personne de rattachement n'existe plus. Recharge la page.",
@@ -162,6 +171,8 @@ function dessinerListe() {
         `</span>` +
         `<span class="lien">${decrireLien(personne)}</span>`;
 
+      gauche.appendChild(selecteurPortee(personne));
+
       const retirer = document.createElement("button");
       retirer.type = "button";
       retirer.className = "retirer";
@@ -175,6 +186,54 @@ function dessinerListe() {
     }
   }
 }
+
+// Le nombre de personnes gerees accompagne le choix : « 16 » puis « 2 »
+// rend le reglage concret, la ou le seul mot « foyer » ne dit rien.
+function selecteurPortee(personne) {
+  const bloc = document.createElement("div");
+  bloc.className = "portee";
+
+  const etiquette = document.createElement("span");
+  etiquette.textContent = "gère";
+
+  const choix = document.createElement("select");
+  for (const [valeur, libelle] of Object.entries(PORTEES)) {
+    choix.add(new Option(libelle, valeur));
+  }
+  choix.value = personne.portee;
+
+  const compte = document.createElement("span");
+  compte.className = "compte";
+  compte.textContent = `${personne.nb_geres} pers.`;
+
+  choix.addEventListener("change", async () => {
+    const avant = personne.portee;
+    choix.disabled = true;
+    message.className = "";
+    message.textContent = "Mise à jour…";
+    try {
+      await rpc("admin_portee", {
+        p_code: etat.code,
+        p_id: personne.id,
+        p_portee: choix.value,
+      });
+      // Restreindre une personne change le decompte des autres : on
+      // recharge tout plutot que de le recalculer dans le navigateur.
+      await recharger();
+      message.className = "ok";
+      message.textContent = `${personne.prenom} gère désormais ${PORTEES[choix.value]}.`;
+    } catch (erreur) {
+      choix.value = avant;
+      choix.disabled = false;
+      message.className = "erreur";
+      message.textContent = erreur.message;
+    }
+  });
+
+  bloc.append(etiquette, choix, compte);
+  return bloc;
+}
+
 
 async function demanderRetrait(personne) {
   const enfants = etat.participants.filter((p) => p.parent_id === personne.id);

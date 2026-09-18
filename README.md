@@ -68,6 +68,24 @@ déjà saisies. Il demande confirmation, mais passé l'amorçage il n'a plus
 lieu d'être : utilise `admin.html`.
 </details>
 
+### Restreindre ce que quelqu'un peut modifier
+
+Par défaut, l'arbre décide : chacun gère son conjoint, ses descendants et
+leurs conjoints. Quand l'arbre dit plus que la réalité — une grand-mère qui
+figure au-dessus de toute sa descendance mais ne s'occupe que de son mari —
+le sélecteur **« gère … »** en face de chaque personne le corrige :
+
+| Réglage | Portée |
+|---|---|
+| **toute sa descendance** | le défaut |
+| **son conjoint** | elle et son conjoint, rien de plus |
+| **elle-même seulement** | elle seule |
+
+Le nombre de personnes gérées s'affiche à côté, et se met à jour aussitôt :
+c'est ce qui rend le réglage lisible. Restreindre quelqu'un **ne retire
+rien aux autres** — ses enfants gardent la main sur leurs propres foyers.
+Et personne ne perd jamais la main sur sa propre présence.
+
 ## Retirer des participants
 
 Le bouton ✕ en face de la personne, sur `admin.html`. La confirmation dit

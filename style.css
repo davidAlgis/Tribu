@@ -224,3 +224,23 @@ button.retirer {
   flex: none;
 }
 button.retirer:hover { color: #fff; background: var(--erreur); border-color: var(--erreur); }
+
+/* ---------- Portée des droits ---------- */
+.portee {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-top: 5px;
+  font-size: 0.8rem;
+  color: var(--doux);
+}
+.portee select {
+  width: auto;
+  padding: 2px 6px;
+  font-size: 0.8rem;
+  border-radius: 5px;
+}
+.portee .compte {
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
