@@ -70,6 +70,20 @@ create index if not exists presences_jour_idx on public.presences (jour);
 alter table public.personnes enable row level security;
 alter table public.presences enable row level security;
 
+-- Deux verrous independants, et il faut passer les deux :
+--
+--   1. le GRANT  : le role a-t-il le droit d'utiliser cette operation ?
+--   2. le RLS    : a-t-il le droit sur CES lignes-la ?
+--
+-- Le RLS seul ne suffit pas : sans GRANT, PostgreSQL refuse avant meme
+-- de regarder les policies. On revoque donc tout, puis on ne rend que
+-- l'insertion.
+revoke all on public.personnes from anon;
+revoke all on public.presences from anon;
+
+grant insert on public.personnes to anon;
+grant insert on public.presences to anon;
+
 drop policy if exists "anon peut inserer une personne" on public.personnes;
 create policy "anon peut inserer une personne"
   on public.personnes for insert to anon
