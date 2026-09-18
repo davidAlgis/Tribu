@@ -8,10 +8,21 @@ const { SUPABASE_URL, SUPABASE_ANON_KEY, DATE_DEBUT, DATE_FIN } = window.CONFIG;
 
 const REPAS = ["petit_dejeuner", "dejeuner", "diner"];
 
+// Surtout pas toISOString() ici : il convertit minuit local en UTC, ce qui
+// recule la date d'un jour dans tous les fuseaux a l'est de Greenwich.
+function versISO(d) {
+  return [
+    d.getFullYear(),
+    String(d.getMonth() + 1).padStart(2, "0"),
+    String(d.getDate()).padStart(2, "0"),
+  ].join("-");
+}
+
 function listerJours(debut, fin) {
   const jours = [];
-  for (let d = new Date(debut + "T00:00:00"); d <= new Date(fin + "T00:00:00"); d.setDate(d.getDate() + 1)) {
-    jours.push(d.toISOString().slice(0, 10));
+  const derniere = new Date(fin + "T00:00:00");
+  for (let d = new Date(debut + "T00:00:00"); d <= derniere; d.setDate(d.getDate() + 1)) {
+    jours.push(versISO(d));
   }
   return jours;
 }
