@@ -1,0 +1,70 @@
+<!doctype html>
+<html lang="fr">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="robots" content="noindex">
+  <title>Tribu — saisie des présences</title>
+  <link rel="stylesheet" href="./style.css">
+</head>
+<body>
+<main>
+  <h1>Séjour Tribu</h1>
+  <p class="sous-titre">Indique où tu dors chaque nuit et quels repas tu prends. Tout le reste est calculé automatiquement.</p>
+
+  <form id="formulaire">
+    <fieldset>
+      <legend>Qui es-tu&nbsp;?</legend>
+      <div class="grille">
+        <div>
+          <label for="nom">Prénom</label>
+          <input type="text" id="nom" required maxlength="80" autocomplete="off">
+        </div>
+        <div>
+          <label for="famille">Famille</label>
+          <input type="text" id="famille" required maxlength="80" autocomplete="off">
+        </div>
+        <div>
+          <label for="categorie_age">Catégorie d'âge</label>
+          <select id="categorie_age" required>
+            <option value="adulte">Adulte</option>
+            <option value="enfant">Enfant</option>
+            <option value="bebe">Bébé</option>
+          </select>
+        </div>
+      </div>
+    </fieldset>
+
+    <fieldset>
+      <legend>Ton séjour, jour par jour</legend>
+      <div class="defilement">
+        <table>
+          <thead>
+            <tr>
+              <th>Jour</th>
+              <th>Je dors…</th>
+              <th>Vue mer</th>
+              <th>Petit-déj.</th>
+              <th>Déjeuner</th>
+              <th>Dîner</th>
+            </tr>
+          </thead>
+          <tbody id="jours"></tbody>
+        </table>
+      </div>
+      <p class="note">
+        La colonne «&nbsp;je dors…&nbsp;» concerne <strong>la nuit qui suit</strong> le jour indiqué.
+        Les repas sont ceux pris <strong>ce jour-là</strong>. Le jour du départ, choisis
+        «&nbsp;ailleurs&nbsp;» et coche simplement le petit-déjeuner.
+      </p>
+    </fieldset>
+
+    <button type="submit" id="envoyer">Envoyer ma saisie</button>
+    <p id="message" role="status" aria-live="polite"></p>
+  </form>
+</main>
+
+<script src="./config.js"></script>
+<script src="./app.js"></script>
+</body>
+</html>

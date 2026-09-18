@@ -1,0 +1,43 @@
+name: Tests
+
+# Les regles metier ne vivent qu'a un seul endroit (engine/rules.py).
+# Ces tests sont donc le filet de securite de tout le projet.
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  tests:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Installer les dependances
+        run: pip install -r requirements.txt
+
+      - name: Lancer les tests
+        run: python -m pytest -q
+
+      - name: Verifier que l'export se genere de bout en bout
+        # Donnees et tarifs fictifs : rien de personnel ne transite ici.
+        run: python run_export.py --source json --input exemple_donnees.json --out /tmp/verification.xlsx
+
+# NOTE IMPORTANTE - pourquoi l'export n'est PAS genere ici
+#
+# Sur un repo PUBLIC, les artifacts d'Actions sont telechargeables par
+# n'importe qui. Publier ici un .xlsx contenant les noms de la famille
+# et les tarifs negocies reviendrait a les rendre publics.
+#
+# L'export reel se lance donc en local :
+#     python run_export.py --source supabase --out exports/sejour.xlsx
+#
+# Si l'automatisation devient necessaire, deux options propres :
+#   - passer le repo en prive (GitHub Pro requis pour garder Pages) ;
+#   - deplacer le moteur Python dans un second repo prive, et ne garder
+#     ici que le formulaire statique.

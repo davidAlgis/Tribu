@@ -1,0 +1,95 @@
+:root {
+  --fond: #f7f7f5;
+  --carte: #ffffff;
+  --trait: #dcdcd6;
+  --texte: #23241f;
+  --doux: #6b6b63;
+  --accent: #2f5597;
+  --ok: #2f7a4f;
+  --erreur: #b3261e;
+}
+
+* { box-sizing: border-box; }
+
+body {
+  margin: 0;
+  padding: 24px 16px 64px;
+  background: var(--fond);
+  color: var(--texte);
+  font: 16px/1.5 system-ui, -apple-system, "Segoe UI", sans-serif;
+}
+
+main { max-width: 900px; margin: 0 auto; }
+
+h1 { font-size: 1.6rem; margin: 0 0 4px; }
+h2 { font-size: 1.05rem; margin: 0 0 12px; }
+.sous-titre { color: var(--doux); margin: 0 0 28px; }
+
+fieldset {
+  background: var(--carte);
+  border: 1px solid var(--trait);
+  border-radius: 10px;
+  padding: 20px;
+  margin: 0 0 20px;
+}
+legend { font-weight: 600; padding: 0 8px; }
+
+label { display: block; font-size: 0.9rem; color: var(--doux); margin-bottom: 4px; }
+
+input[type="text"], select {
+  width: 100%;
+  padding: 9px 10px;
+  border: 1px solid var(--trait);
+  border-radius: 6px;
+  background: #fff;
+  font: inherit;
+  color: inherit;
+}
+
+.grille { display: grid; gap: 14px; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); }
+
+table { width: 100%; border-collapse: collapse; font-size: 0.92rem; }
+th, td { padding: 8px 6px; border-bottom: 1px solid var(--trait); text-align: center; }
+th:first-child, td:first-child { text-align: left; white-space: nowrap; }
+thead th { color: var(--doux); font-weight: 600; }
+td select { width: auto; min-width: 104px; }
+input[type="checkbox"] { width: 18px; height: 18px; accent-color: var(--accent); }
+
+button {
+  background: var(--accent);
+  color: #fff;
+  border: 0;
+  border-radius: 6px;
+  padding: 12px 24px;
+  font: inherit;
+  font-weight: 600;
+  cursor: pointer;
+}
+button:disabled { opacity: 0.5; cursor: default; }
+
+#message { margin-top: 14px; font-size: 0.93rem; min-height: 1.5em; }
+#message.ok { color: var(--ok); }
+#message.erreur { color: var(--erreur); }
+
+.note {
+  font-size: 0.85rem;
+  color: var(--doux);
+  background: #efefea;
+  border-left: 3px solid var(--trait);
+  padding: 10px 12px;
+  border-radius: 0 6px 6px 0;
+  margin-top: 16px;
+}
+
+.defilement { overflow-x: auto; }
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --fond: #18191a; --carte: #212223; --trait: #3a3b3c;
+    --texte: #e8e8e3; --doux: #9b9b93; --accent: #6f9ae8;
+    --ok: #7bc496; --erreur: #ef8a82;
+  }
+  input[type="text"], select { background: #2a2b2c; }
+  .note { background: #262728; }
+  button { color: #10161f; }
+}

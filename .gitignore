@@ -1,0 +1,17 @@
+# Exports : ne JAMAIS commiter (données personnelles + tarifs réels)
+*.xlsx
+exports/
+
+# Config réelle (tarifs négociés) - seul config.example.toml est versionné
+config.toml
+
+# Données locales
+donnees_locales.json
+.env
+
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+.pytest_cache/
