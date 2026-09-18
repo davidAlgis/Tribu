@@ -42,8 +42,13 @@ create table if not exists private.reglages (
 --  Ce code n'est ecrit NULLE PART dans le depot, qui est public.
 --  Il se pose a la main (voir supabase/participants.exemple.sql).
 --
+--  Deux roles, donc deux codes distincts :
+--    'famille' : saisir ses presences. Il circule dans toute la famille.
+--    'admin'   : ajouter et retirer des participants. Toi seul.
+--
 create table if not exists private.acces (
   code_normalise text primary key,
+  role           text not null default 'famille' check (role in ('famille', 'admin')),
   libelle        text,
   cree_le        timestamptz not null default now()
 );
@@ -65,20 +70,21 @@ $fn$;
 -- Variante booleenne, pratique pour verifier un code a la main dans le
 -- SQL Editor. Elle reste dans `private` : PostgREST ne l'expose donc pas,
 -- et elle ne peut pas servir d'oracle de force brute depuis l'exterieur.
-create or replace function private.code_valide(c text)
+create or replace function private.code_valide(c text, r text default 'famille')
 returns boolean language sql stable
 set search_path = private, pg_temp as $fn$
   select exists (
-    select 1 from private.acces
-    where code_normalise = private.normaliser_code(c)
+    select 1 from private.acces a
+    where a.code_normalise = private.normaliser_code(c)
+      and a.role = r
   )
 $fn$;
 
-create or replace function private.verifier_code(c text)
+create or replace function private.verifier_code(c text, r text default 'famille')
 returns void language plpgsql stable
 set search_path = private, pg_temp as $fn$
 begin
-  if not private.code_valide(c) then
+  if not private.code_valide(c, r) then
     raise exception 'CODE_REFUSE' using errcode = 'P0001';
   end if;
 end $fn$;
@@ -102,6 +108,10 @@ create table if not exists private.participants (
   categorie_age text not null check (categorie_age in ('adulte', 'enfant', 'bebe')),
   parent_id     uuid references private.participants(id) on delete set null,
   conjoint_id   uuid references private.participants(id) on delete set null,
+  -- Un invite n'est pas de la famille. Rattache a son hote via parent_id,
+  -- son hote peut donc gerer sa presence ; sans rattachement, il ne depend
+  -- que de lui-meme.
+  invite        boolean not null default false,
   cree_le       timestamptz not null default now()
 );
 
@@ -314,7 +324,7 @@ grant execute on function public.sejour_enregistrer(text, uuid, uuid, jsonb) to 
 --  navigateur, lui, n'y a aucun acces.
 --
 create or replace view public.v_participants as
-  select id, prenom, famille, categorie_age
+  select id, prenom, famille, categorie_age, invite
   from private.participants;
 
 revoke all on public.v_participants from anon, authenticated;
@@ -322,3 +332,218 @@ grant select on public.v_participants to service_role;
 
 revoke all on public.presences from anon, authenticated;
 grant select on public.presences to service_role;
+
+-- ============================================================
+--  8. L'administration des participants
+-- ============================================================
+--
+--  La base est la SOURCE DE VERITE. Le GEDCOM ne sert qu'a l'amorcage,
+--  une seule fois ; ensuite, tout passe par ces fonctions, appelees
+--  depuis admin.html.
+--
+--  Elles exigent le code ORGANISATEUR, distinct du code famille : qui
+--  peut saisir ses vacances ne peut pas pour autant modifier la liste.
+--
+
+-- ---- 8a. Tout voir ----
+create or replace function public.admin_lister(p_code text)
+returns jsonb
+language plpgsql stable security definer
+set search_path = private, pg_temp as $fn$
+begin
+  perform private.verifier_code(p_code, 'admin');
+  return coalesce((
+    select jsonb_agg(jsonb_build_object(
+             'id', p.id,
+             'prenom', p.prenom,
+             'famille', p.famille,
+             'categorie_age', p.categorie_age,
+             'parent_id', p.parent_id,
+             'conjoint_id', p.conjoint_id,
+             'invite', p.invite,
+             'a_saisi', exists (select 1 from public.presences x where x.participant_id = p.id)
+           ) order by p.famille, p.prenom)
+    from private.participants p
+  ), '[]'::jsonb);
+end $fn$;
+
+-- ---- 8b. Ajouter quelqu'un ----
+--
+--  Trois facons de rattacher, et elles suffisent a tout :
+--
+--    p_conjoint_de : un nouveau conjoint. Il entre dans le foyer de son
+--                    partenaire, et les memes personnes peuvent gerer sa
+--                    presence.
+--    p_enfant_de   : un nouveau bebe, ou un invite rattache a son hote.
+--                    Son parent et les ascendants de son parent le gerent.
+--    ni l'un ni l'autre : un invite independant. Lui seul se gere.
+--
+create or replace function public.admin_ajouter(
+  p_code        text,
+  p_prenom      text,
+  p_age         text,
+  p_conjoint_de uuid default null,
+  p_enfant_de   uuid default null,
+  p_invite      boolean default false,
+  p_famille     text default null
+)
+returns jsonb
+language plpgsql security definer
+set search_path = private, pg_temp as $fn$
+declare
+  nouveau  uuid := gen_random_uuid();
+  rattache private.participants;
+  famille  text;
+begin
+  perform private.verifier_code(p_code, 'admin');
+
+  if coalesce(trim(p_prenom), '') = '' then
+    raise exception 'PRENOM_VIDE' using errcode = 'P0001';
+  end if;
+  if p_conjoint_de is not null and p_enfant_de is not null then
+    raise exception 'DEUX_LIENS' using errcode = 'P0001';
+  end if;
+
+  select * into rattache from private.participants
+   where id = coalesce(p_conjoint_de, p_enfant_de);
+
+  if coalesce(p_conjoint_de, p_enfant_de) is not null and rattache.id is null then
+    raise exception 'RATTACHEMENT_INCONNU' using errcode = 'P0001';
+  end if;
+
+  -- Un conjoint deja pris signale une erreur de saisie plutot qu'un foyer
+  -- recompose : mieux vaut le dire que l'ecraser en silence.
+  if p_conjoint_de is not null and rattache.conjoint_id is not null then
+    raise exception 'CONJOINT_DEJA_PRIS' using errcode = 'P0001';
+  end if;
+
+  famille := coalesce(
+    nullif(trim(coalesce(p_famille, '')), ''),
+    rattache.famille,
+    case when p_invite then 'Invites' else 'Sans famille' end
+  );
+
+  insert into private.participants
+    (id, prenom, famille, categorie_age, parent_id, conjoint_id, invite)
+  values (
+    nouveau,
+    trim(p_prenom),
+    famille,
+    p_age,
+    case
+      -- Un conjoint entre dans le meme foyer que son partenaire : il se
+      -- rattache donc au meme parent, pas a son partenaire.
+      when p_conjoint_de is not null then rattache.parent_id
+      else p_enfant_de
+    end,
+    p_conjoint_de,
+    p_invite
+  );
+
+  if p_conjoint_de is not null then
+    update private.participants set conjoint_id = nouveau where id = p_conjoint_de;
+  end if;
+
+  return jsonb_build_object('id', nouveau, 'famille', famille);
+end $fn$;
+
+-- ---- 8c. Corriger une faute de frappe ou un age ----
+create or replace function public.admin_modifier(
+  p_code   text,
+  p_id     uuid,
+  p_prenom text,
+  p_age    text
+)
+returns jsonb
+language plpgsql security definer
+set search_path = private, pg_temp as $fn$
+begin
+  perform private.verifier_code(p_code, 'admin');
+  update private.participants
+     set prenom = coalesce(nullif(trim(p_prenom), ''), prenom),
+         categorie_age = coalesce(p_age, categorie_age)
+   where id = p_id;
+  if not found then
+    raise exception 'INCONNU' using errcode = 'P0001';
+  end if;
+  return jsonb_build_object('id', p_id);
+end $fn$;
+
+-- ---- 8d. Retirer quelqu'un ----
+--
+--  Retirer ne coupe jamais la branche : les enfants de la personne sont
+--  d'abord repris par son conjoint s'il reste, sinon par son propre
+--  parent. Sans cela, une generation entiere se retrouverait orpheline et
+--  plus personne ne pourrait gerer sa presence.
+--
+create or replace function public.admin_retirer(p_code text, p_id uuid)
+returns jsonb
+language plpgsql security definer
+set search_path = private, pg_temp as $fn$
+declare
+  partant   private.participants;
+  repreneur uuid;
+begin
+  perform private.verifier_code(p_code, 'admin');
+
+  select * into partant from private.participants where id = p_id;
+  if partant.id is null then
+    raise exception 'INCONNU' using errcode = 'P0001';
+  end if;
+
+  repreneur := coalesce(partant.conjoint_id, partant.parent_id);
+
+  update private.participants set parent_id = repreneur where parent_id = p_id;
+  update private.participants set conjoint_id = null     where conjoint_id = p_id;
+
+  -- Les presences deja saisies partent avec la personne (on delete cascade).
+  delete from private.participants where id = p_id;
+
+  return jsonb_build_object('retire', partant.prenom, 'repris_par', repreneur);
+end $fn$;
+
+-- ---- 8e. L'amorcage depuis le GEDCOM ----
+--
+--  Appelee UNE SEULE FOIS par importer_ged.py. Elle remplace toute la
+--  liste : c'est un amorcage, pas une mise a jour. Passe cette etape, la
+--  base fait foi et le GEDCOM n'est plus consulte.
+--
+create or replace function public.admin_importer(p_code text, p_participants jsonb)
+returns jsonb
+language plpgsql security definer
+set search_path = private, pg_temp as $fn$
+declare
+  nb integer;
+begin
+  perform private.verifier_code(p_code, 'admin');
+
+  if jsonb_array_length(coalesce(p_participants, '[]'::jsonb)) = 0 then
+    raise exception 'LISTE_VIDE' using errcode = 'P0001';
+  end if;
+
+  delete from private.participants;
+
+  -- Les identifiants viennent du script : cela permet de poser parents et
+  -- conjoints dans le meme insert. Les contraintes de cle etrangere n'etant
+  -- verifiees qu'en fin d'instruction, les references croisees passent.
+  insert into private.participants
+    (id, prenom, famille, categorie_age, parent_id, conjoint_id, invite)
+  select
+    (l->>'id')::uuid,
+    l->>'prenom',
+    l->>'famille',
+    l->>'categorie_age',
+    nullif(l->>'parent_id', '')::uuid,
+    nullif(l->>'conjoint_id', '')::uuid,
+    coalesce((l->>'invite')::boolean, false)
+  from jsonb_array_elements(p_participants) as l;
+
+  get diagnostics nb = row_count;
+  return jsonb_build_object('importes', nb);
+end $fn$;
+
+grant execute on function public.admin_lister(text)                                         to anon;
+grant execute on function public.admin_ajouter(text, text, text, uuid, uuid, boolean, text) to anon;
+grant execute on function public.admin_modifier(text, uuid, text, text)                     to anon;
+grant execute on function public.admin_retirer(text, uuid)                                  to anon;
+grant execute on function public.admin_importer(text, jsonb)                                to anon;

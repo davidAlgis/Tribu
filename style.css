@@ -175,3 +175,52 @@ button.discret {
   #suggestions li:hover, #suggestions li:focus { color: #10161f; }
   #suggestions li:hover span, #suggestions li:focus span { color: #10161f; }
 }
+
+/* ---------- Page d'administration ---------- */
+.titre-groupe { margin-top: 18px; }
+.discret-inline { color: var(--doux); font-weight: 400; font-size: 0.85rem; }
+
+.titre-famille {
+  font-size: 0.8rem;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--doux);
+  margin: 18px 0 6px;
+}
+.titre-famille:first-child { margin-top: 0; }
+
+.personne {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 9px 0;
+  border-bottom: 1px solid var(--trait);
+}
+.personne > div { flex: 1; min-width: 0; }
+.personne .lien {
+  display: block;
+  font-size: 0.83rem;
+  color: var(--doux);
+}
+
+.etiquettes { display: inline-flex; gap: 5px; margin-left: 8px; }
+.etiquette {
+  font-size: 0.72rem;
+  padding: 1px 7px;
+  border-radius: 999px;
+  border: 1px solid var(--trait);
+  color: var(--doux);
+}
+.etiquette.ok { color: var(--ok); border-color: var(--ok); }
+
+button.retirer {
+  background: transparent;
+  color: var(--doux);
+  border: 1px solid var(--trait);
+  border-radius: 6px;
+  padding: 4px 10px;
+  font-size: 0.9rem;
+  line-height: 1.2;
+  flex: none;
+}
+button.retirer:hover { color: #fff; background: var(--erreur); border-color: var(--erreur); }

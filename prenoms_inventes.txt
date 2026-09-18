@@ -2,8 +2,8 @@
 #  Prenoms fictifs utilises dans le depot
 # ============================================================
 #
-#  verifier_confidentialite.py compare les noms de `famille.txt` (reel,
-#  jamais versionne) a tout ce que git publie. Beaucoup de prenoms sont
+#  verifier_confidentialite.py compare les noms lus dans le GEDCOM (reel,
+#  hors du projet) a tout ce que git publie. Beaucoup de prenoms sont
 #  courants : « Marie » ou « Paul » dans un jeu de test n'identifie
 #  personne, mais peut exister aussi dans la vraie famille.
 #
@@ -15,14 +15,12 @@
 #  l'alarme au lieu d'eteindre l'incendie.
 # ============================================================
 
-# Familles d'exemple (famille.exemple.txt)
-Gerard Simone Sylvain Nadia Louise Simon
-Marthe Paul Alice Jules Zoe Helene
-Durand Petit
-
-# Jeux de test (tests/)
-Marie Martin Bruno Chloe Lea Jacques Claire Jeanne
-Marie-Claire Noelle Eloi Jean Robert Orphelin Golo Fantome
+# GEDCOM synthetique des tests (tests/test_import_ged.py)
+Jacques Louise Marie Paul Lea Bruno Chloe
+Durand Petit Martin Fantome
 
 # Donnees d'exemple de l'export (exemple_donnees.json)
 Alice Bruno Chloe David Emma
+
+# Famille fictive citee dans la documentation
+Gerard Simone Sylvain Nadia Simon Timeo Yanis Zora

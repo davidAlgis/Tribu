@@ -1,12 +1,13 @@
 """Cherche des noms de la vraie famille dans ce que git s'apprête à publier.
 
-    python verifier_confidentialite.py
+    python verifier_confidentialite.py --ged "D:/.../genealogie.ged"
 
 À lancer AVANT chaque `git push`. Le dépôt est public : un prénom poussé
 par erreur reste dans l'historique même après suppression du fichier.
 
-Le script lit `famille.txt` (jamais versionné) et cherche chacun de ses
-noms dans l'ensemble des fichiers suivis par git.
+Le script lit les prénoms du GEDCOM — la seule liste complète, et elle
+reste hors du projet — et les cherche dans tout ce que git publie.
+
 
 DEUX NIVEAUX DE SIGNALEMENT
 
@@ -24,28 +25,37 @@ permet de l'enchaîner : `python verifier_confidentialite.py && git push`
 
 from __future__ import annotations
 
+import argparse
 import re
 import subprocess
 import sys
 from pathlib import Path
 
-SOURCE = Path("famille.txt")
-EXEMPLES = [Path("famille.exemple.txt"), Path("prenoms_inventes.txt")]
+from importer_ged import lire_gedcom
+
+INVENTES = Path("prenoms_inventes.txt")
 
 
-def noms_du_fichier(chemin: Path) -> set[str]:
-    """Tous les prenoms d'un fichier au format famille.txt."""
+def noms_declares(chemin: Path) -> set[str]:
+    """Les prenoms volontairement fictifs, un par mot."""
     if not chemin.exists():
         return set()
-
     noms: set[str] = set()
     for ligne in chemin.read_text(encoding="utf-8").splitlines():
-        ligne = ligne.split("#")[0].strip().strip("─-—– ")
-        ligne = re.sub(r"\s*\([^)]*\)", "", ligne)  # (enfant), (bebe)
-        for morceau in ligne.split("+"):
-            for mot in morceau.split():
-                if len(mot) > 2:
-                    noms.add(mot)
+        for mot in ligne.split("#")[0].split():
+            if len(mot) > 2:
+                noms.add(mot)
+    return noms
+
+
+def noms_du_gedcom(chemin: Path) -> set[str]:
+    """Tous les prenoms et patronymes du fichier genealogique."""
+    individus, _ = lire_gedcom(chemin)
+    noms: set[str] = set()
+    for individu in individus.values():
+        for mot in (individu.prenom + " " + individu.nom).replace("-", " ").split():
+            if len(mot) > 2:
+                noms.add(mot)
     return noms
 
 
@@ -63,14 +73,19 @@ def main() -> int:
         except (AttributeError, OSError):
             pass
 
-    if not SOURCE.exists():
-        print(f"{SOURCE} est introuvable : rien a verifier.")
-        return 0
+    parseur = argparse.ArgumentParser(description=__doc__.split("\n")[0])
+    parseur.add_argument("--ged", required=True, help="le GEDCOM de la famille")
+    args = parseur.parse_args()
 
-    reels = noms_du_fichier(SOURCE)
-    inventes = {n.lower() for chemin in EXEMPLES for n in noms_du_fichier(chemin)}
+    source = Path(args.ged)
+    if not source.exists():
+        print(f"GEDCOM introuvable : {source}", file=sys.stderr)
+        return 1
+
+    reels = noms_du_gedcom(source)
+    inventes = {n.lower() for n in noms_declares(INVENTES)}
     if not reels:
-        print(f"{SOURCE} ne contient aucun nom.")
+        print(f"{source} ne contient aucun nom.")
         return 0
 
     fuites: list[tuple[str, str]] = []
@@ -91,10 +106,10 @@ def main() -> int:
             else:
                 fuites.append((str(chemin), nom))
 
-    print(f"{len(reels)} noms de {SOURCE} cherches dans les fichiers suivis par git.\n")
+    print(f"{len(reels)} noms de {source.name} cherches dans les fichiers suivis par git.\n")
 
     if coincidences:
-        print(f"  {len(coincidences)} coincidence(s) avec les exemples inventes, sans gravite :")
+        print(f"  {len(coincidences)} coincidence(s) avec {INVENTES}, sans gravite :")
         print(f"    {', '.join(sorted(coincidences))}\n")
 
     if fuites:

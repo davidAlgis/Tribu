@@ -1,0 +1,91 @@
+<!doctype html>
+<html lang="fr">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="robots" content="noindex">
+  <title>Tribu — participants</title>
+  <link rel="stylesheet" href="./style.css">
+</head>
+<body>
+<main>
+  <h1>Participants</h1>
+  <p class="sous-titre">Ajouter, retirer, corriger. Réservé à l'organisateur.</p>
+
+  <!-- ÉTAPE 1 — le code organisateur -------------------------------- -->
+  <section id="etape-code">
+    <fieldset>
+      <legend>Code organisateur</legend>
+      <form id="form-code">
+        <label for="code">Ce n'est pas le code famille</label>
+        <div class="ligne-champ">
+          <input type="password" id="code" required maxlength="40" autocomplete="off"
+                 autocapitalize="off" spellcheck="false">
+          <button type="submit">Entrer</button>
+        </div>
+        <p id="message-code" role="status" aria-live="polite"></p>
+      </form>
+    </fieldset>
+  </section>
+
+  <!-- ÉTAPE 2 — la liste et les ajouts ------------------------------- -->
+  <section id="etape-liste" hidden>
+
+    <fieldset>
+      <legend>Ajouter quelqu'un</legend>
+
+      <div class="grille">
+        <div>
+          <label for="prenom">Prénom</label>
+          <input type="text" id="prenom" maxlength="40" autocomplete="off">
+        </div>
+        <div>
+          <label for="age">Catégorie d'âge</label>
+          <select id="age">
+            <option value="adulte">Adulte</option>
+            <option value="enfant">Enfant</option>
+            <option value="bebe">Bébé</option>
+          </select>
+        </div>
+      </div>
+
+      <label class="titre-groupe">Qui est-ce&nbsp;?</label>
+      <div class="pastilles" id="type-personne">
+        <button type="button" class="pastille active" data-type="famille">De la famille</button>
+        <button type="button" class="pastille" data-type="invite">Un invité</button>
+      </div>
+
+      <div class="grille" style="margin-top:14px">
+        <div>
+          <label for="lien">Rattachement</label>
+          <select id="lien"></select>
+        </div>
+        <div id="bloc-cible">
+          <label for="cible">Avec qui&nbsp;?</label>
+          <select id="cible"></select>
+        </div>
+      </div>
+
+      <p class="note" id="explication-lien"></p>
+
+      <button type="button" id="ajouter">Ajouter</button>
+      <p id="message" role="status" aria-live="polite"></p>
+    </fieldset>
+
+    <fieldset>
+      <legend>La liste <span id="compteur" class="discret-inline"></span></legend>
+      <div id="liste"></div>
+      <p class="note">
+        Retirer quelqu'un supprime aussi sa saisie de présences. Ses enfants
+        sont repris par son conjoint s'il reste, sinon par son propre parent —
+        la branche n'est jamais coupée.
+      </p>
+    </fieldset>
+
+  </section>
+</main>
+
+<script src="./config.js"></script>
+<script src="./admin.js"></script>
+</body>
+</html>

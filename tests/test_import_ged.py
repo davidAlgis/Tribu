@@ -17,7 +17,15 @@ from datetime import date
 
 import pytest
 
-from importer_ged import Arbre, categorie_age, construire, lire_gedcom, normaliser
+from importer_ged import (
+    Arbre,
+    apercu,
+    categorie_age,
+    construire,
+    lire_gedcom,
+    normaliser,
+    portee,
+)
 
 GEDCOM = """0 HEAD
 0 @I1@ INDI
@@ -88,9 +96,25 @@ def lire_gedcom_texte(texte, tmp=None):
     return lire_gedcom(chemin)
 
 
+def participants(arbre, exclusions=frozenset()):
+    return construire(arbre, "@I1@", set(exclusions), SEJOUR, 3, 12).participants
+
+
+def par_prenom(arbre, exclusions=frozenset()):
+    return {p.prenom: p for p in participants(arbre, exclusions)}
+
+
 def lignes(arbre, exclusions=frozenset()):
+    """L'apercu affiche, pour verifier l'indentation et les couples."""
     rapport = construire(arbre, "@I1@", set(exclusions), SEJOUR, 3, 12)
-    return [l for l in rapport.lignes if l.strip() and not l.strip().startswith("##")]
+    return [l.strip() for l in apercu(rapport).splitlines() if l.strip()]
+
+
+def couverture(arbre, exclusions=frozenset()):
+    """{prenom: set des prenoms qu'il peut modifier}"""
+    gens = participants(arbre, exclusions)
+    par_id = {p.id: p for p in gens}
+    return {p.prenom: {par_id[i].prenom for i in portee(gens, p.id)} for p in gens}
 
 
 def test_prenom_et_nom_sont_separes(arbre):
@@ -101,11 +125,19 @@ def test_prenom_et_nom_sont_separes(arbre):
 
 def test_les_couples_viennent_du_gedcom(arbre):
     """C'est tout l'interet : plus besoin de deviner qui va avec qui."""
-    assert lignes(arbre)[0] == "Marie + Paul"
+    gens = par_prenom(arbre)
+    assert gens["Marie"].conjoint_id == gens["Paul"].id
+    assert gens["Paul"].conjoint_id == gens["Marie"].id
 
 
-def test_la_filiation_donne_l_indentation(arbre):
-    assert "── Lea (enfant)" in lignes(arbre)
+def test_la_filiation_donne_le_parent(arbre):
+    gens = par_prenom(arbre)
+    assert gens["Lea"].parent_id == gens["Marie"].id
+
+
+def test_l_apercu_indente_les_generations(arbre):
+    assert "Marie + Paul" in lignes(arbre)
+    assert "Lea (enfant)" in lignes(arbre)
 
 
 def test_les_descendants_partent_des_enfants_de_la_racine(arbre):
@@ -118,18 +150,18 @@ def test_les_descendants_partent_des_enfants_de_la_racine(arbre):
 def test_une_personne_decedee_est_ecartee(arbre):
     rapport = construire(arbre, "@I1@", set(), SEJOUR, 3, 12)
     assert rapport.decedes == ["Bruno Durand"]
-    assert "Bruno" not in "\n".join(rapport.lignes)
+    assert "Bruno" not in {p.prenom for p in rapport.participants}
 
 
 def test_l_enfant_d_un_ecarte_remonte_d_un_cran(arbre):
-    """Bruno est decede : Chloe se rattache a ses grands-parents."""
-    assert "Chloe" in lignes(arbre)  # sans indentation : generation 0
+    """Bruno est decede : Chloe n'a plus de parent dans la liste."""
+    assert par_prenom(arbre)["Chloe"].parent_id is None
 
 
 def test_exclusion_par_prenom(arbre):
     rapport = construire(arbre, "@I1@", {normaliser("Paul")}, SEJOUR, 3, 12)
     assert rapport.exclus == ["Paul Martin"]
-    assert lignes(arbre, {normaliser("Paul")})[0] == "Marie"
+    assert "Paul" not in par_prenom(arbre, {normaliser("Paul")})
 
 
 def test_exclusion_par_prenom_et_nom(arbre):
@@ -139,12 +171,25 @@ def test_exclusion_par_prenom_et_nom(arbre):
 
 def test_le_conjoint_restant_garde_les_enfants(arbre):
     """Paul exclu, Marie reste : Lea doit rester sous Marie, pas remonter."""
-    assert "── Lea (enfant)" in lignes(arbre, {normaliser("Paul")})
+    gens = par_prenom(arbre, {normaliser("Paul")})
+    assert gens["Lea"].parent_id == gens["Marie"].id
+    assert gens["Marie"].conjoint_id is None
 
 
 def test_exclure_tout_un_couple_fait_remonter_les_enfants(arbre):
-    resultat = lignes(arbre, {normaliser("Paul"), normaliser("Marie")})
-    assert "Lea (enfant)" in resultat  # plus aucune indentation
+    exclus = {normaliser("Paul"), normaliser("Marie")}
+    gens = par_prenom(arbre, exclus)
+    assert set(gens) == {"Lea", "Chloe"}
+    assert gens["Lea"].parent_id is None
+
+
+def test_les_droits_suivent_la_filiation(arbre):
+    """Le pendant Python de private.personnes_modifiables."""
+    c = couverture(arbre)
+    assert c["Marie"] == {"Marie", "Paul", "Lea"}
+    assert c["Paul"] == c["Marie"]   # le conjoint couvre autant
+    assert c["Lea"] == {"Lea"}       # un enfant ne remonte pas
+    assert c["Chloe"] == {"Chloe"}
 
 
 def test_une_exclusion_qui_ne_correspond_a_personne_est_signalee(arbre):
@@ -195,6 +240,20 @@ def test_exclusion_accentuee_trouve_un_prenom_sans_accent(arbre):
 
 
 def test_le_chef_de_branche_donne_le_nom_de_famille(arbre):
-    rapport = construire(arbre, "@I1@", set(), SEJOUR, 3, 12)
-    entetes = [l.strip() for l in rapport.lignes if l.strip().startswith("##")]
-    assert "## Marie" in entetes
+    gens = par_prenom(arbre)
+    assert gens["Marie"].famille == "Marie"
+    assert gens["Lea"].famille == "Marie"   # toute la branche partage le nom
+    # Bruno est ecarte : c'est Chloe qui devient chef de sa branche, et donc
+    # le nom sous lequel l'export regroupera ses totaux.
+    assert gens["Chloe"].famille == "Chloe"
+
+
+def test_les_participants_sont_prets_pour_supabase(arbre):
+    """La forme envoyee a admin_importer doit etre exactement celle attendue."""
+    attendu = {
+        "id", "prenom", "famille", "categorie_age",
+        "parent_id", "conjoint_id", "invite",
+    }
+    for participant in participants(arbre):
+        assert set(participant.vers_json()) == attendu
+        assert participant.invite is False

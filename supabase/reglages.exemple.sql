@@ -38,9 +38,17 @@ on conflict (id) do update
 --  Evite `tribu` et l'annee : le depot s'appelle publiquement Tribu et
 --  les dates sont en base. Prends ce que seule la famille connait.
 --
+--  DEUX codes, deux pouvoirs :
+--
+--    famille : saisir ses presences. Il circule dans toute la famille.
+--    admin   : ajouter et retirer des participants, sur admin.html.
+--              Toi seul. Prends-le long et different du premier.
+--
 delete from private.acces;
-insert into private.acces (code_normalise, libelle)
-values (private.normaliser_code('CHANGE MOI'), 'Sejour 2027');
+insert into private.acces (code_normalise, role, libelle) values
+  (private.normaliser_code('CHANGE MOI'),       'famille', 'Sejour 2027'),
+  (private.normaliser_code('CHANGE MOI AUSSI'), 'admin',   'Organisateur');
 
--- Verification (doit renvoyer true) :
---   select private.code_valide('change moi');
+-- Verification (doivent renvoyer true) :
+--   select private.code_valide('change moi', 'famille');
+--   select private.code_valide('change moi aussi', 'admin');
