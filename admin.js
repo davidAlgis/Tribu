@@ -65,7 +65,9 @@ const MESSAGES = {
   DEUX_LIENS: "Un seul rattachement à la fois.",
   RATTACHEMENT_INCONNU: "La personne de rattachement n'existe plus. Recharge la page.",
   CONJOINT_DEJA_PRIS: "Cette personne a déjà un conjoint enregistré.",
-  INCONNU: "Cette personne n'existe plus. Recharge la page.",
+  INCONNU: "Cet élément n'existe plus. Recharge la page.",
+  LIBELLE_VIDE: "Il manque l'intitulé du week-end.",
+  DATES_INVERSEES: "La date de fin précède la date de début.",
   LISTE_VIDE: "La liste envoyée est vide.",
 };
 
@@ -127,6 +129,7 @@ async function recharger() {
   etat.participants = await rpc("admin_lister", { p_code: etat.code });
   dessinerListe();
   remplirSelecteurs();
+  await rechargerDates();
 }
 
 function parId(id) {
@@ -352,3 +355,119 @@ function montrer(id) {
     section.hidden = section.id !== id;
   }
 }
+
+
+// ------------------------------------------------------- choix de la date
+//
+// L'organisateur propose les week-ends, la famille repond sur dates.html.
+// Personne d'autre ne propose de date, sans quoi le sondage se diluerait.
+
+const zoneDates = document.getElementById("liste-dates");
+const compteurDates = document.getElementById("compteur-dates");
+const messageDates = document.getElementById("message-dates");
+const interrupteur = document.getElementById("voeux-ouverts");
+
+function afficherJour(iso) {
+  return new Date(iso + "T00:00:00").toLocaleDateString("fr-FR", {
+    day: "numeric",
+    month: "short",
+  });
+}
+
+async function rechargerDates() {
+  const donnees = await rpc("admin_dates_lister", { p_code: etat.code });
+  interrupteur.checked = donnees.voeux_ouverts;
+  compteurDates.textContent = donnees.options.length
+    ? `${donnees.options.length} proposé(s)`
+    : "aucun pour l'instant";
+
+  zoneDates.innerHTML = "";
+  for (const option of donnees.options) {
+    const ligne = document.createElement("div");
+    ligne.className = "personne";
+
+    const periode =
+      option.date_debut && option.date_fin
+        ? `${afficherJour(option.date_debut)} → ${afficherJour(option.date_fin)}`
+        : "sans dates";
+
+    // Les « si besoin » comptent pour moitie : un week-end que tout le monde
+    // accepte a contrecoeur ne vaut pas celui que tout le monde choisit.
+    const score = option.oui + option.peut_etre / 2;
+
+    const gauche = document.createElement("div");
+    gauche.innerHTML =
+      `<strong>${option.libelle}</strong>` +
+      `<span class="etiquettes">` +
+      `<span class="etiquette ok">${option.oui} oui</span>` +
+      `<span class="etiquette">${option.peut_etre} si besoin</span>` +
+      `<span class="etiquette">${option.non} non</span>` +
+      `</span>` +
+      `<span class="lien">${periode} · score ${score.toFixed(1)} sur ${donnees.participants}</span>`;
+
+    const retirer = document.createElement("button");
+    retirer.type = "button";
+    retirer.className = "retirer";
+    retirer.textContent = "✕";
+    retirer.setAttribute("aria-label", `Retirer ${option.libelle}`);
+    retirer.addEventListener("click", async () => {
+      const repondu = option.oui + option.peut_etre + option.non;
+      const question =
+        `Retirer « ${option.libelle} » ?` +
+        (repondu ? `
+
+${repondu} réponse(s) déjà données seront supprimées.` : "");
+      if (!confirm(question)) return;
+      try {
+        await rpc("admin_date_retirer", { p_code: etat.code, p_id: option.id });
+        await rechargerDates();
+        messageDates.className = "ok";
+        messageDates.textContent = `« ${option.libelle} » a été retiré.`;
+      } catch (erreur) {
+        messageDates.className = "erreur";
+        messageDates.textContent = erreur.message;
+      }
+    });
+
+    ligne.append(gauche, retirer);
+    zoneDates.appendChild(ligne);
+  }
+}
+
+document.getElementById("ajouter-date").addEventListener("click", async () => {
+  const libelle = document.getElementById("date-libelle");
+  const debut = document.getElementById("date-debut");
+  const fin = document.getElementById("date-fin");
+
+  messageDates.className = "";
+  messageDates.textContent = "Ajout…";
+  try {
+    await rpc("admin_date_ajouter", {
+      p_code: etat.code,
+      p_libelle: libelle.value.trim(),
+      p_debut: debut.value || null,
+      p_fin: fin.value || null,
+    });
+    libelle.value = debut.value = fin.value = "";
+    await rechargerDates();
+    messageDates.className = "ok";
+    messageDates.textContent = "Week-end proposé.";
+  } catch (erreur) {
+    messageDates.className = "erreur";
+    messageDates.textContent = erreur.message;
+  }
+});
+
+interrupteur.addEventListener("change", async () => {
+  try {
+    await rpc("admin_voeux_ouvrir", { p_code: etat.code, p_ouvert: interrupteur.checked });
+    messageDates.className = "ok";
+    messageDates.textContent = interrupteur.checked
+      ? "Sondage ouvert."
+      : "Sondage clos : la famille ne peut plus répondre.";
+  } catch (erreur) {
+    interrupteur.checked = !interrupteur.checked;
+    messageDates.className = "erreur";
+    messageDates.textContent = erreur.message;
+  }
+});

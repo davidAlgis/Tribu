@@ -13,6 +13,35 @@ Pensions, tarifs et totaux sont recalculés par
 [`engine/rules.py`](engine/rules.py), seul endroit où vivent les règles.
 Les Excel ne sont qu'une sortie : plus une seule formule à maintenir.
 
+Deux pages pour la famille, une pour toi :
+
+| Page | Qui | Quoi |
+|---|---|---|
+| [`dates.html`](dates.html) | la famille | quel week-end arrange chacun |
+| [`index.html`](index.html) | la famille | qui vient, quelles nuits, quels repas |
+| [`admin.html`](admin.html) | toi | les participants, leurs droits, les week-ends proposés |
+
+---
+
+## Choisir la date
+
+Un sondage, en amont du reste. **C'est toi qui proposes les week-ends**,
+sur `admin.html` : intitulé, date de début, date de fin. La famille répond
+sur `dates.html`, avec le même code et le même prénom que pour les
+présences.
+
+Trois réponses possibles par week-end : **Oui**, **Si besoin**, **Non** —
+recliquer sur sa réponse l'annule. « Si besoin » n'est pas du remplissage :
+c'est ce qui départage deux week-ends quand personne n'a de disponibilité
+parfaite.
+
+Chacun voit les totaux de la famille, **jamais les noms**. Toi seul vois le
+score, qui compte les « si besoin » pour moitié : un week-end que tout le
+monde accepte à contrecœur ne vaut pas celui que tout le monde choisit.
+
+L'interrupteur **Sondage ouvert** ferme les réponses une fois la date
+arrêtée.
+
 ---
 
 ## Ajouter des participants

@@ -17,8 +17,8 @@
 --     tarif, aucun total : tout est derive par le Python.
 --
 --  2. Aucune table n'est accessible directement depuis le navigateur.
---     Tout passe par trois fonctions qui verifient le code d'acces et
---     les droits.
+--     Tout passe par des fonctions qui verifient le code d'acces et les
+--     droits a chaque appel.
 --
 --  3. Absent est l'etat par defaut. Une personne qui n'a rien saisi
 --     n'a aucune ligne. Saisir, c'est declarer une presence.
@@ -296,7 +296,7 @@ set search_path = private, pg_temp as $fn$
 $fn$;
 
 -- ============================================================
---  6. Les trois seules portes d'entree du navigateur
+--  6. Les seules portes d'entree du navigateur
 -- ============================================================
 
 -- Personne ne touche aux tables directement.
@@ -737,8 +737,258 @@ grant execute on function public.admin_portee(text, uuid, text)                 
 grant execute on function public.admin_retirer(text, uuid)                                  to anon;
 grant execute on function public.admin_importer(text, jsonb)                                to anon;
 
+
 -- ============================================================
---  9. Etat de la base apres execution
+--  9. Le choix de la date
+-- ============================================================
+--
+--  Un sondage, en amont du reste : on choisit d'abord le week-end, on
+--  remplit les presences ensuite.
+--
+--  Meme modele d'identite et de droits que le formulaire de presences :
+--  code famille, prenom, et l'on repond pour les personnes qu'on gere.
+--  Rien de nouveau a expliquer a la famille.
+--
+--  Les options sont posees par l'organisateur : personne d'autre ne
+--  propose de date, sans quoi le sondage se diluerait.
+--
+
+alter table private.reglages
+  add column if not exists voeux_ouverts boolean not null default true;
+
+create table if not exists private.options_date (
+  id         uuid primary key default gen_random_uuid(),
+  libelle    text not null check (length(trim(libelle)) between 1 and 80),
+  date_debut date,
+  date_fin   date,
+  cree_le    timestamptz not null default now()
+);
+
+--  Pas de reponse = aucune ligne, comme l'absence pour les presences.
+--  C'est le meme principe : la base ne stocke que ce qui a ete declare.
+create table if not exists public.voeux (
+  id             uuid primary key default gen_random_uuid(),
+  participant_id uuid not null references private.participants(id) on delete cascade,
+  option_id      uuid not null references private.options_date(id) on delete cascade,
+  choix          text not null check (choix in ('oui', 'peut_etre', 'non')),
+  maj_le         timestamptz not null default now(),
+  unique (participant_id, option_id)
+);
+
+revoke all on public.voeux from anon, authenticated;
+grant select on public.voeux to service_role;
+
+-- ---- 9a. Charger le sondage ----
+create or replace function public.dates_charger(p_code text, p_acteur uuid)
+returns jsonb
+language plpgsql stable security definer
+set search_path = private, pg_temp as $fn$
+declare
+  r private.reglages;
+begin
+  perform private.verifier_code(p_code);
+  select * into r from private.reglages;
+
+  return jsonb_build_object(
+    'voeux_ouverts', r.voeux_ouverts,
+
+    -- Les totaux sont renvoyes a tout le monde, mais jamais les noms : voir
+    -- que le premier week-end tient la corde aide a se decider, savoir qui
+    -- a dit non ne regarde personne.
+    'options', coalesce((
+      select jsonb_agg(jsonb_build_object(
+               'id', o.id,
+               'libelle', o.libelle,
+               'date_debut', o.date_debut,
+               'date_fin', o.date_fin,
+               'oui', (select count(*) from public.voeux v
+                        where v.option_id = o.id and v.choix = 'oui'),
+               'peut_etre', (select count(*) from public.voeux v
+                        where v.option_id = o.id and v.choix = 'peut_etre'),
+               'non', (select count(*) from public.voeux v
+                        where v.option_id = o.id and v.choix = 'non')
+             ) order by o.date_debut nulls last, o.libelle)
+      from private.options_date o
+    ), '[]'::jsonb),
+
+    'modifiables', coalesce((
+      select jsonb_agg(jsonb_build_object(
+               'id', p.id,
+               'prenom', p.prenom,
+               'famille', p.famille,
+               'repondu', exists (select 1 from public.voeux v where v.participant_id = p.id)
+             ) order by (p.id <> p_acteur), p.prenom)
+      from private.participants p
+      where p.id in (select m.id from private.personnes_modifiables(p_acteur) m)
+    ), '[]'::jsonb),
+
+    'voeux', coalesce((
+      select jsonb_agg(jsonb_build_object(
+               'participant_id', v.participant_id,
+               'option_id', v.option_id,
+               'choix', v.choix
+             ))
+      from public.voeux v
+      where v.participant_id in (select m.id from private.personnes_modifiables(p_acteur) m)
+    ), '[]'::jsonb)
+  );
+end $fn$;
+
+-- ---- 9b. Enregistrer les voeux ----
+--
+--  Remplacement complet, comme pour les presences : ce qui est envoye
+--  devient l'etat exact de chaque personne visee. Une option laissee sans
+--  reponse redevient sans reponse.
+--
+create or replace function public.dates_enregistrer(
+  p_code   text,
+  p_acteur uuid,
+  p_cibles uuid[],
+  p_choix  jsonb
+)
+returns jsonb
+language plpgsql security definer
+set search_path = private, pg_temp as $fn$
+declare
+  r      private.reglages;
+  cibles uuid[];
+  cible  uuid;
+  total  integer := 0;
+  nb     integer;
+begin
+  perform private.verifier_code(p_code);
+
+  select * into r from private.reglages;
+  if not r.voeux_ouverts then
+    raise exception 'VOEUX_FERMES' using errcode = 'P0001';
+  end if;
+
+  select array_agg(distinct c) into cibles from unnest(coalesce(p_cibles, '{}')) c;
+  if cibles is null then
+    raise exception 'AUCUNE_CIBLE' using errcode = 'P0001';
+  end if;
+
+  if exists (
+    select 1 from unnest(cibles) c
+    where c not in (select m.id from private.personnes_modifiables(p_acteur) m)
+  ) then
+    raise exception 'DROIT_REFUSE' using errcode = 'P0001';
+  end if;
+
+  foreach cible in array cibles loop
+    delete from public.voeux where participant_id = cible;
+
+    insert into public.voeux (participant_id, option_id, choix)
+    select cible, (l->>'option_id')::uuid, l->>'choix'
+    from jsonb_array_elements(coalesce(p_choix, '[]'::jsonb)) as l
+    where l->>'choix' in ('oui', 'peut_etre', 'non')
+      -- Une option supprimee entre-temps est ignoree plutot que de faire
+      -- echouer toute la saisie.
+      and exists (select 1 from private.options_date o where o.id = (l->>'option_id')::uuid);
+
+    get diagnostics nb = row_count;
+    total := total + nb;
+  end loop;
+
+  return jsonb_build_object('personnes', array_length(cibles, 1), 'enregistres', total);
+end $fn$;
+
+grant execute on function public.dates_charger(text, uuid)                  to anon;
+grant execute on function public.dates_enregistrer(text, uuid, uuid[], jsonb) to anon;
+
+-- ---- 9c. Cote organisateur : poser et retirer les options ----
+
+create or replace function public.admin_dates_lister(p_code text)
+returns jsonb
+language plpgsql stable security definer
+set search_path = private, pg_temp as $fn$
+begin
+  perform private.verifier_code(p_code, 'admin');
+  return jsonb_build_object(
+    'voeux_ouverts', (select voeux_ouverts from private.reglages),
+    'participants', (select count(*) from private.participants),
+    'options', coalesce((
+      select jsonb_agg(jsonb_build_object(
+               'id', o.id,
+               'libelle', o.libelle,
+               'date_debut', o.date_debut,
+               'date_fin', o.date_fin,
+               'oui', (select count(*) from public.voeux v
+                        where v.option_id = o.id and v.choix = 'oui'),
+               'peut_etre', (select count(*) from public.voeux v
+                        where v.option_id = o.id and v.choix = 'peut_etre'),
+               'non', (select count(*) from public.voeux v
+                        where v.option_id = o.id and v.choix = 'non')
+             ) order by o.date_debut nulls last, o.libelle)
+      from private.options_date o
+    ), '[]'::jsonb)
+  );
+end $fn$;
+
+create or replace function public.admin_date_ajouter(
+  p_code    text,
+  p_libelle text,
+  p_debut   date default null,
+  p_fin     date default null
+)
+returns jsonb
+language plpgsql security definer
+set search_path = private, pg_temp as $fn$
+declare
+  nouveau uuid := gen_random_uuid();
+begin
+  perform private.verifier_code(p_code, 'admin');
+
+  if coalesce(trim(p_libelle), '') = '' then
+    raise exception 'LIBELLE_VIDE' using errcode = 'P0001';
+  end if;
+  if p_debut is not null and p_fin is not null and p_fin < p_debut then
+    raise exception 'DATES_INVERSEES' using errcode = 'P0001';
+  end if;
+
+  insert into private.options_date (id, libelle, date_debut, date_fin)
+  values (nouveau, trim(p_libelle), p_debut, p_fin);
+
+  return jsonb_build_object('id', nouveau);
+end $fn$;
+
+create or replace function public.admin_date_retirer(p_code text, p_id uuid)
+returns jsonb
+language plpgsql security definer
+set search_path = private, pg_temp as $fn$
+declare
+  partant private.options_date;
+begin
+  perform private.verifier_code(p_code, 'admin');
+
+  select * into partant from private.options_date where id = p_id;
+  if partant.id is null then
+    raise exception 'INCONNU' using errcode = 'P0001';
+  end if;
+
+  -- Les voeux deja exprimes sur cette option partent avec elle
+  -- (on delete cascade).
+  delete from private.options_date where id = p_id;
+  return jsonb_build_object('retire', partant.libelle);
+end $fn$;
+
+create or replace function public.admin_voeux_ouvrir(p_code text, p_ouvert boolean)
+returns jsonb
+language plpgsql security definer
+set search_path = private, pg_temp as $fn$
+begin
+  perform private.verifier_code(p_code, 'admin');
+  update private.reglages set voeux_ouverts = p_ouvert;
+  return jsonb_build_object('voeux_ouverts', p_ouvert);
+end $fn$;
+
+grant execute on function public.admin_dates_lister(text)                      to anon;
+grant execute on function public.admin_date_ajouter(text, text, date, date)    to anon;
+grant execute on function public.admin_date_retirer(text, uuid)                to anon;
+grant execute on function public.admin_voeux_ouvrir(text, boolean)             to anon;
+
+-- ============================================================
+--  10. Etat de la base apres execution
 -- ============================================================
 --
 --  Affiche ce qui existe reellement, plutot que de le supposer.
@@ -748,10 +998,14 @@ grant execute on function public.admin_importer(text, jsonb)                    
 --    reglages       doit valoir 1  -> sinon, passer reglages.exemple.sql
 --    participants   0 avant l'amorcage, puis la taille de la famille
 --    presences      remis a 0 par ce script, c'est normal
+--    options_date   les week-ends proposes, poses depuis admin.html
+--    voeux          les reponses de la famille au sondage
 --
 select
   (select count(*) from private.participants) as participants,
   (select count(*) from public.presences)     as presences,
   (select count(*) from private.acces)        as codes_famille,
   (select count(*) from private.acces_admin)  as codes_admin,
-  (select count(*) from private.reglages)     as reglages;
+  (select count(*) from private.reglages)     as reglages,
+  (select count(*) from private.options_date) as options_date,
+  (select count(*) from public.voeux)         as voeux;

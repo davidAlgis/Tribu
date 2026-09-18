@@ -73,6 +73,38 @@
     </fieldset>
 
     <fieldset>
+      <legend>Week-ends proposés <span id="compteur-dates" class="discret-inline"></span></legend>
+
+      <div class="grille">
+        <div>
+          <label for="date-libelle">Intitulé</label>
+          <input type="text" id="date-libelle" maxlength="80" autocomplete="off"
+                 placeholder="ex. week-end du 14 juillet">
+        </div>
+        <div>
+          <label for="date-debut">Du</label>
+          <input type="date" id="date-debut">
+        </div>
+        <div>
+          <label for="date-fin">Au</label>
+          <input type="date" id="date-fin">
+        </div>
+      </div>
+
+      <button type="button" id="ajouter-date">Proposer ce week-end</button>
+      <p id="message-dates" role="status" aria-live="polite"></p>
+
+      <div id="liste-dates"></div>
+
+      <p class="note">
+        Retirer un week-end supprime les réponses déjà données pour lui.
+        <label class="interrupteur">
+          <input type="checkbox" id="voeux-ouverts"> Sondage ouvert
+        </label>
+      </p>
+    </fieldset>
+
+    <fieldset>
       <legend>La liste <span id="compteur" class="discret-inline"></span></legend>
       <div id="liste"></div>
       <p class="note">

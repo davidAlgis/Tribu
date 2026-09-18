@@ -4,13 +4,13 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="robots" content="noindex">
-  <title>Tribu — saisie des présences</title>
+  <title>Tribu — choix de la date</title>
   <link rel="stylesheet" href="./style.css">
 </head>
 <body>
 <main>
-  <h1>Séjour Tribu</h1>
-  <p class="sous-titre" id="sous-titre">Indique qui est là, quand, et pour quels repas.</p>
+  <h1>Quand partons-nous&nbsp;?</h1>
+  <p class="sous-titre" id="sous-titre">Dis quels week-ends t'arrangent. Rien n'est encore décidé.</p>
 
   <!-- ÉTAPE 1 — le code famille ------------------------------------ -->
   <section id="etape-code">
@@ -23,10 +23,6 @@
                  autocapitalize="off" spellcheck="false" placeholder="ex. les abricots">
           <button type="submit">Entrer</button>
         </div>
-        <p class="note">
-          Majuscules, accents, espaces et tirets n'ont pas d'importance.
-          Le code est retenu sur cet appareil.
-        </p>
         <p id="message-code" role="status" aria-live="polite"></p>
       </form>
     </fieldset>
@@ -39,50 +35,29 @@
       <label for="prenom">Commence à taper ton prénom</label>
       <div class="auto">
         <input type="text" id="prenom" autocomplete="off" spellcheck="false"
-               placeholder="ex. Syl…" aria-describedby="aide-prenom"
-               role="combobox" aria-expanded="false" aria-controls="suggestions">
+               placeholder="ex. Syl…" role="combobox" aria-expanded="false"
+               aria-controls="suggestions">
         <ul id="suggestions" role="listbox"></ul>
       </div>
-      <p class="note" id="aide-prenom">
-        Tu pourras aussi remplir pour ton conjoint, tes enfants et leurs familles.
-      </p>
       <p id="message-prenom" role="status" aria-live="polite"></p>
     </fieldset>
   </section>
 
-  <!-- ÉTAPE 3 — la saisie ------------------------------------------ -->
-  <section id="etape-saisie" hidden>
+  <!-- ÉTAPE 3 — les vœux ------------------------------------------- -->
+  <section id="etape-voeux" hidden>
     <fieldset>
-      <legend>Pour qui remplis-tu&nbsp;?</legend>
+      <legend>Pour qui réponds-tu&nbsp;?</legend>
       <div id="personnes" class="pastilles"></div>
-      <p class="note">
-        Tout le monde est <strong>absent par défaut</strong>. Ne remplis que
-        les jours de présence — et reviens modifier quand tu veux.
-        Enregistrer ne touche qu'à la personne sélectionnée.
-      </p>
     </fieldset>
 
     <fieldset>
-      <legend id="legende-jours">Séjour</legend>
-      <div class="defilement">
-        <table>
-          <thead>
-            <tr>
-              <th>Jour</th>
-              <th>La nuit…</th>
-              <th>Vue mer</th>
-              <th>Petit-déj.</th>
-              <th>Déjeuner</th>
-              <th>Dîner</th>
-            </tr>
-          </thead>
-          <tbody id="jours"></tbody>
-        </table>
-      </div>
+      <legend id="legende-voeux">Week-ends proposés</legend>
+      <div id="options"></div>
       <p class="note">
-        La colonne «&nbsp;la nuit…&nbsp;» concerne <strong>la nuit qui suit</strong>
-        le jour indiqué. Les repas sont ceux pris <strong>ce jour-là</strong>.
-        Le jour du départ, choisis «&nbsp;ailleurs&nbsp;» et coche le petit-déjeuner.
+        Les compteurs indiquent les réponses de toute la famille, sans les
+        noms. <strong>Si besoin</strong> veut dire «&nbsp;je peux m'arranger,
+        mais ce n'est pas mon premier choix&nbsp;» — c'est souvent ce qui
+        départage deux week-ends.
       </p>
     </fieldset>
 
@@ -95,13 +70,13 @@
     <p id="message" role="status" aria-live="polite"></p>
 
     <p class="note">
-      La date n'est pas encore arrêtée&nbsp;? Donne tes disponibilités sur
-      <a href="./dates.html">la page du choix de la date</a>.
+      La date arrêtée, les présences se remplissent sur
+      <a href="./index.html">la page du séjour</a>.
     </p>
   </section>
 </main>
 
 <script src="./config.js"></script>
-<script src="./app.js"></script>
+<script src="./dates.js"></script>
 </body>
 </html>

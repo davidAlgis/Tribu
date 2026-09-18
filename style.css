@@ -244,3 +244,45 @@ button.retirer:hover { color: #fff; background: var(--erreur); border-color: var
   font-variant-numeric: tabular-nums;
   white-space: nowrap;
 }
+
+/* ---------- Sondage sur la date ---------- */
+.option {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 12px 0;
+  border-bottom: 1px solid var(--trait);
+}
+.option:last-child { border-bottom: 0; }
+.option-titre { flex: 1; min-width: 190px; }
+.option-titre .lien { display: block; font-size: 0.82rem; color: var(--doux); }
+
+.choix { display: flex; gap: 6px; flex: none; }
+.choix button {
+  background: transparent;
+  color: var(--doux);
+  border: 1px solid var(--trait);
+  border-radius: 6px;
+  padding: 7px 13px;
+  font-size: 0.88rem;
+  font-weight: 500;
+}
+.choix button.actif { color: #fff; border-color: transparent; }
+.choix button.choix-oui.actif { background: var(--ok); }
+.choix button.choix-peut_etre.actif { background: var(--accent); }
+.choix button.choix-non.actif { background: var(--erreur); }
+
+@media (prefers-color-scheme: dark) {
+  .choix button.actif { color: #10161f; }
+}
+
+.interrupteur {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  margin: 8px 0 0;
+  color: var(--texte);
+  cursor: pointer;
+}
