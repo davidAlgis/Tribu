@@ -48,6 +48,14 @@ def charger_json(chemin: str | Path) -> tuple[dict, list]:
     return personnes, presences
 
 
+# On nomme les colonnes au lieu de faire `select=*` : le code d'acces
+# reste ainsi en base et n'entre jamais dans un export.
+COLONNES = {
+    "personnes": "id,nom,famille,categorie_age",
+    "presences": "personne_id,jour,hebergement,petit_dejeuner,dejeuner,diner,vue_mer",
+}
+
+
 def _get(url: str, cle: str, table: str) -> list[dict]:
     # Les anciennes cles service_role sont des JWT et se passent aussi en
     # Bearer ; les nouvelles cles `sb_secret_...` n'en sont pas.
@@ -55,7 +63,9 @@ def _get(url: str, cle: str, table: str) -> list[dict]:
     if cle.startswith("eyJ"):
         entetes["Authorization"] = f"Bearer {cle}"
 
-    requete = urllib.request.Request(f"{url}/rest/v1/{table}?select=*", headers=entetes)
+    requete = urllib.request.Request(
+        f"{url}/rest/v1/{table}?select={COLONNES[table]}", headers=entetes
+    )
     with urllib.request.urlopen(requete, timeout=30) as reponse:
         return json.loads(reponse.read().decode("utf-8"))
 

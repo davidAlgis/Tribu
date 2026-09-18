@@ -79,7 +79,7 @@ for (const jour of jours) {
   corps.appendChild(ligne);
 }
 
-function lireLignes(personneId) {
+function lireLignes(personneId, codeAcces) {
   const presences = [];
   for (const ligne of corps.querySelectorAll("tr")) {
     const valeur = (champ) => ligne.querySelector(`[data-champ="${champ}"]`);
@@ -96,6 +96,7 @@ function lireLignes(personneId) {
       jour: ligne.dataset.jour,
       hebergement,
       vue_mer: valeur("vue_mer").checked,
+      code_acces: codeAcces,
       ...repas,
     });
   }
@@ -123,23 +124,56 @@ async function inserer(table, lignes) {
     headers: entetes,
     body: JSON.stringify(lignes),
   });
-  if (!reponse.ok) throw new Error(`${table} : ${reponse.status} ${await reponse.text()}`);
+  if (reponse.ok) return;
+
+  // Un code invalide fait echouer la policy RLS : Postgres repond 401/403.
+  // Inutile d'afficher le detail technique a un participant.
+  if (reponse.status === 401 || reponse.status === 403) {
+    throw new Error("CODE_REFUSE");
+  }
+  throw new Error(`${table} : ${reponse.status} ${await reponse.text()}`);
+}
+
+// Le code est le meme pour toute la famille et sera resaisi a chaque
+// modification : on le garde sur l'appareil, jamais ailleurs.
+const MEMOIRE_CODE = "tribu.code_acces";
+
+function lireCodeMemorise() {
+  try {
+    return localStorage.getItem(MEMOIRE_CODE) || "";
+  } catch {
+    return ""; // navigation privee, stockage bloque : sans importance
+  }
+}
+
+function memoriserCode(code) {
+  try {
+    localStorage.setItem(MEMOIRE_CODE, code);
+  } catch {
+    /* sans importance */
+  }
 }
 
 const message = document.getElementById("message");
 const bouton = document.getElementById("envoyer");
 
+const champCode = document.getElementById("code_acces");
+champCode.value = lireCodeMemorise();
+
 document.getElementById("formulaire").addEventListener("submit", async (evenement) => {
   evenement.preventDefault();
+
+  const codeAcces = champCode.value.trim();
 
   const personne = {
     id: crypto.randomUUID(),
     nom: document.getElementById("nom").value.trim(),
     famille: document.getElementById("famille").value.trim(),
     categorie_age: document.getElementById("categorie_age").value,
+    code_acces: codeAcces,
   };
 
-  const presences = lireLignes(personne.id);
+  const presences = lireLignes(personne.id, codeAcces);
   if (presences.length === 0) {
     message.className = "erreur";
     message.textContent = "Rien à envoyer : indique au moins une nuit ou un repas.";
@@ -153,11 +187,18 @@ document.getElementById("formulaire").addEventListener("submit", async (evenemen
   try {
     await inserer("personnes", [personne]);
     await inserer("presences", presences);
+    memoriserCode(codeAcces);
     message.className = "ok";
     message.textContent = `Merci ${personne.nom} ! ${presences.length} jour(s) enregistré(s).`;
   } catch (erreur) {
     message.className = "erreur";
-    message.textContent = `Échec de l'envoi : ${erreur.message}`;
+    if (erreur.message === "CODE_REFUSE") {
+      message.textContent = "Code famille incorrect. Demande-le à l'organisateur.";
+      champCode.focus();
+      champCode.select();
+    } else {
+      message.textContent = `Échec de l'envoi : ${erreur.message}`;
+    }
     bouton.disabled = false;
   }
 });

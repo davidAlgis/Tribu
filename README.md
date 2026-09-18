@@ -72,7 +72,9 @@ anomalies de saisie.
 ## Mise en route
 
 1. **Supabase** — créer un projet en région UE, puis coller
-   [`supabase/schema.sql`](supabase/schema.sql) dans le SQL Editor.
+   [`supabase/schema.sql`](supabase/schema.sql) puis
+   [`supabase/code_acces.sql`](supabase/code_acces.sql) dans le SQL Editor,
+   et poser le code famille à la main (dernière section du second fichier).
 2. **Clés** — reporter `Project URL` et la clé `anon public` dans
    [`config.js`](config.js), ainsi que les dates du séjour.
 3. **Pages** — Settings → Pages → Deploy from a branch → `main` / `(root)`.
@@ -93,3 +95,21 @@ règles en découlent :
 - les `.xlsx` générés ne sont jamais commités, et ne sont pas produits
   par GitHub Actions : sur un repo public, les artifacts d'Actions sont
   téléchargeables par n'importe qui.
+
+### Code d'accès
+
+La clé publique suffisait à insérer n'importe quoi : des robots scannent
+GitHub à la recherche de clés Supabase exposées. Le formulaire exige donc
+un **code famille**, vérifié par le RLS contre une table du schéma
+`private`, que PostgREST n'expose pas — sans quoi la fonction de
+vérification serait appelable en RPC et fournirait un oracle de force
+brute.
+
+**Ce code n'est écrit nulle part dans ce dépôt**, qui est public. Il se
+pose à la main dans le SQL Editor de Supabase, et se transmet à la
+famille de vive voix ou par message privé.
+
+Un code mémorisable reste, par construction, devinable par un humain
+déterminé. Il n'est pas là pour ça : il arrête les robots, qui sont la
+seule menace réellement automatisée. Contre un volume anormal, la parade
+est le coupe-circuit de débit et la fermeture de la saisie hors période.
