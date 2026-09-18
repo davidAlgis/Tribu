@@ -385,7 +385,9 @@ def apercu(rapport: Rapport) -> str:
             continue
         if participant.famille != famille_courante:
             famille_courante = participant.famille
-            lignes.append(f"\n  {famille_courante}")
+            # Sans le mot « Branche », l'entete et la premiere ligne portent
+            # le meme prenom et se lisent comme un doublon.
+            lignes.append(f"\n  ── Branche {famille_courante} " + "─" * 16)
 
         noms = [participant]
         conjoint = next(
@@ -498,14 +500,20 @@ def main() -> int:
     if rapport.decedes:
         print(f"  {len(rapport.decedes)} decede(s) ecarte(s) : {', '.join(rapport.decedes)}")
     if rapport.exclus:
-        print(f"  {len(rapport.exclus)} exclusion(s) : {', '.join(rapport.exclus)}")
+        print(
+            f"  {len(rapport.exclus)} ecartee(s) par {args.exclusions} : "
+            f"{', '.join(rapport.exclus)}"
+        )
     if rapport.sans_date:
         print(
             f"  ATTENTION  {len(rapport.sans_date)} sans date de naissance, comptes adultes : "
             f"{', '.join(rapport.sans_date)}"
         )
     for inutile in rapport.exclusions_inutiles:
-        print(f"  ATTENTION  « {inutile} » ne correspond a personne (faute de frappe ?)")
+        print(
+            f"  ATTENTION  « {inutile} » dans {args.exclusions} "
+            f"ne correspond a personne (faute de frappe ?)"
+        )
 
     if args.apercu:
         print("\nApercu seul : rien n'a ete envoye.")

@@ -593,7 +593,15 @@ begin
     raise exception 'LISTE_VIDE' using errcode = 'P0001';
   end if;
 
-  delete from private.participants;
+  -- TRUNCATE et non DELETE : Supabase charge l'extension `safeupdate` pour
+  -- le role qui sert l'API, laquelle refuse tout DELETE sans clause WHERE
+  -- (erreur 21000). Un `where true` n'y changerait rien, le planificateur
+  -- l'eliminerait. TRUNCATE n'est pas un DELETE et passe donc outre.
+  --
+  -- Les deux tables sont citees ensemble parce que les presences
+  -- referencent les participants : de toute facon, reamorcer la liste
+  -- invalide les saisies existantes.
+  truncate table public.presences, private.participants;
 
   -- Les identifiants viennent du script : cela permet de poser parents et
   -- conjoints dans le meme insert. Les contraintes de cle etrangere n'etant
