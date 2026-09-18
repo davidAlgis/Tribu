@@ -24,7 +24,8 @@ const etat = {
   cible: null,
   refuses: new Set(), // les departements peints pour la personne courante
   vue: "moi",
-  peint: null, // pendant un glisse : true = on peint, false = on efface
+  trace: false, // un geste est en cours, meme s'il a commence hors de la carte
+  peint: null, // true = on peint, false = on efface ; null = pas encore decide
 };
 
 // ---------------------------------------------------------------- reseau
@@ -150,6 +151,7 @@ async function choisirPersonne(personne) {
 // ------------------------------------------------------------- la carte
 
 const svg = document.getElementById("carte");
+const cadreCarte = document.querySelector(".carte-cadre");
 const zonePersonnes = document.getElementById("personnes");
 const legende = document.getElementById("legende-carte");
 const carteLegende = document.getElementById("carte-legende");
@@ -324,8 +326,21 @@ function codesSousLePinceau(evenement) {
   return codes;
 }
 
-function appliquer(codes) {
-  if (etat.vue !== "moi" || etat.peint === null || codes.size === 0) return;
+// Le sens du trace se decide au premier departement rencontre, et non a
+// l'appui. On peut donc commencer le geste sur la mer ou dans la marge et
+// entrer ensuite dans la carte : c'est ce que fait naturellement quelqu'un
+// qui veut balayer une bordure sans mordre au milieu.
+function appliquer(codes, codeCentre) {
+  if (etat.vue !== "moi" || codes.size === 0) return;
+
+  if (etat.peint === null) {
+    // De preference le departement vise au centre : le sens ne doit pas
+    // dependre d'un voisin attrape au bord du pinceau.
+    const reference =
+      codeCentre && codes.has(codeCentre) ? codeCentre : [...codes][0];
+    etat.peint = !etat.refuses.has(reference);
+  }
+
   for (const code of codes) {
     if (etat.peint) etat.refuses.add(code);
     else etat.refuses.delete(code);
@@ -342,43 +357,41 @@ function suivrePinceau(evenement) {
   pinceau.classList.toggle("masquee", etat.vue !== "moi");
 }
 
-svg.addEventListener("pointerdown", (e) => {
+// Les evenements sont poses sur le CADRE et non sur le SVG : appuyer dans
+// la marge autour de la carte doit aussi commencer un trace.
+cadreCarte.addEventListener("pointerdown", (e) => {
   if (etat.vue !== "moi") return;
   e.preventDefault();
+  etat.trace = true;
   etat.peint = null;
-  // Le sens du trace est decide par le departement vise au centre, pas par
-  // l'un des voisins attrapes au bord du pinceau : sinon le meme geste
-  // peindrait ou effacerait selon la position exacte du doigt.
-  basculer(codeSous(e));
-  appliquer(codesSousLePinceau(e));
+  appliquer(codesSousLePinceau(e), codeSous(e));
 
-  // Sans capture, quitter la forme d'origine interromprait le glisse. Tous
-  // les navigateurs ne l'acceptent pas dans tous les cas : c'est un confort,
+  // Sans capture, quitter le cadre interromprait le glisse. Tous les
+  // navigateurs ne l'acceptent pas dans tous les cas : c'est un confort,
   // pas une condition, et un echec ne doit pas bloquer le trace.
   try {
-    svg.setPointerCapture(e.pointerId);
+    cadreCarte.setPointerCapture(e.pointerId);
   } catch {
-    /* on peindra tant que le pointeur reste sur la carte */
+    /* on peindra tant que le pointeur reste sur le cadre */
   }
 });
 
-svg.addEventListener("pointermove", (e) => {
+cadreCarte.addEventListener("pointermove", (e) => {
   suivrePinceau(e);
-  // `etat.peint` non nul signifie qu'un trace est en cours : c'est lui qui
-  // fait foi, et non la capture, qui peut avoir echoue.
-  if (etat.peint === null) return;
-  appliquer(codesSousLePinceau(e));
-});
-
-svg.addEventListener("pointerleave", () => {
-  if (pinceau) pinceau.classList.add("masquee");
+  if (!etat.trace) return;
+  appliquer(codesSousLePinceau(e), codeSous(e));
 });
 
 for (const fin of ["pointerup", "pointercancel"]) {
-  svg.addEventListener(fin, () => {
+  cadreCarte.addEventListener(fin, () => {
+    etat.trace = false;
     etat.peint = null;
   });
 }
+
+cadreCarte.addEventListener("pointerleave", () => {
+  if (pinceau) pinceau.classList.add("masquee");
+});
 
 // Le clavier doit pouvoir faire la meme chose que le doigt. `detail === 0`
 // distingue l'activation au clavier du clic de souris, deja traite par les
@@ -398,7 +411,7 @@ function peindre() {
       forme.classList.remove("chaleur-1", "chaleur-2", "chaleur-3");
     }
     carteLegende.innerHTML =
-      `<span class="pastille-legende neutre"></span> sans objection ` +
+      `<span class="pastille-legende vert"></span> on peut y aller ` +
       `<span class="pastille-legende rouge"></span> ${etat.refuses.size} refusé(s)`;
     return;
   }
@@ -415,7 +428,7 @@ function peindre() {
 
   const acceptes = [...formes.keys()].filter((c) => !(totaux[c] > 0));
   carteLegende.innerHTML =
-    `<span class="pastille-legende neutre"></span> aucun refus (${acceptes.length}) ` +
+    `<span class="pastille-legende vert"></span> aucun refus (${acceptes.length}) ` +
     `<span class="pastille-legende c1"></span> 1 ` +
     `<span class="pastille-legende c2"></span> 2 ` +
     `<span class="pastille-legende c3"></span> 3 ou plus`;

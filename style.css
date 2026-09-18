@@ -307,23 +307,23 @@ button.retirer:hover { color: #fff; background: var(--erreur); border-color: var
 }
 #carte.lecture { cursor: default; }
 
-/* Un departement non peint ne veut pas dire « choisi », seulement « pas
-   d'objection » : le vert lui pretait une approbation que personne n'a
-   exprimee. Le neutre laisse le rouge etre la seule information. */
+/* Vert pour « on peut y aller », rouge pour « pas là » : le couple se lit
+   sans légende, et c'est ce qui compte sur une carte qu'on parcourt du
+   regard avant de la comprendre. */
 .dep {
-  fill: #d6d5cf;
+  fill: #6aab84;
   stroke: var(--carte);
   stroke-width: 1.2;
   transition: fill 0.08s linear;
 }
-#carte:not(.lecture) .dep:hover { fill: #c2c1ba; }
+#carte:not(.lecture) .dep:hover { fill: #5b9b75; }
 
 .dep.refuse { fill: #c0392b; }
 
-/* Du neutre vers le rouge, sans passer par une autre teinte : l'intensite
-   seule porte le nombre de refus. */
-.dep.chaleur-1 { fill: #e4c3bd; }
-.dep.chaleur-2 { fill: #d49a90; }
+/* Du vert au rouge en passant par l'ambre : le nombre de refus se lit
+   comme une température. */
+.dep.chaleur-1 { fill: #b6c98a; }
+.dep.chaleur-2 { fill: #e0b167; }
 .dep.chaleur-3 { fill: #c0392b; }
 
 .carte-legende {
@@ -343,22 +343,22 @@ button.retirer:hover { color: #fff; background: var(--erreur); border-color: var
   vertical-align: -2px;
   margin-right: 3px;
 }
-.pastille-legende.neutre { background: #d6d5cf; }
+.pastille-legende.vert { background: #6aab84; }
 .pastille-legende.rouge { background: #c0392b; }
-.pastille-legende.c1 { background: #e4c3bd; }
-.pastille-legende.c2 { background: #d49a90; }
+.pastille-legende.c1 { background: #b6c98a; }
+.pastille-legende.c2 { background: #e0b167; }
 .pastille-legende.c3 { background: #c0392b; }
 
 @media (prefers-color-scheme: dark) {
-  .dep { fill: #55585b; stroke: #1c1d1e; }
-  #carte:not(.lecture) .dep:hover { fill: #656a6e; }
+  .dep { fill: #4a8965; stroke: #1c1d1e; }
+  #carte:not(.lecture) .dep:hover { fill: #579a73; }
   .dep.refuse, .dep.chaleur-3 { fill: #a8382f; }
-  .dep.chaleur-1 { fill: #6e4f4c; }
-  .dep.chaleur-2 { fill: #8b433c; }
-  .pastille-legende.neutre { background: #55585b; }
+  .dep.chaleur-1 { fill: #7e9257; }
+  .dep.chaleur-2 { fill: #a87f42; }
+  .pastille-legende.vert { background: #4a8965; }
   .pastille-legende.rouge, .pastille-legende.c3 { background: #a8382f; }
-  .pastille-legende.c1 { background: #6e4f4c; }
-  .pastille-legende.c2 { background: #8b433c; }
+  .pastille-legende.c1 { background: #7e9257; }
+  .pastille-legende.c2 { background: #a87f42; }
 }
 
 /* ---------- Pinceau et villes ---------- */
@@ -376,25 +376,26 @@ button.retirer:hover { color: #fff; background: var(--erreur); border-color: var
 #couche-villes { pointer-events: none; }
 #couche-villes.masquee, #pinceau.masquee { display: none; }
 
-.ville-point { fill: #1c1d1e; fill-opacity: 0.7; }
+/* Blanc cerne de noir, et non l'inverse : c'est la seule combinaison qui
+   tienne aussi bien sur le vert moyen que sur le rouge sature. Le cerne est
+   trace SOUS le remplissage (`paint-order`), sinon il rongerait les lettres. */
+.ville-point {
+  fill: #ffffff;
+  stroke: rgba(0, 0, 0, 0.7);
+  stroke-width: 2;
+}
 .ville-nom {
   font-size: 27px;
-  fill: #1c1d1e;
-  fill-opacity: 0.72;
+  font-weight: 600;
+  fill: #ffffff;
   font-family: system-ui, sans-serif;
   paint-order: stroke;
-  stroke: rgba(255, 255, 255, 0.82);
-  stroke-width: 5px;
+  stroke: rgba(0, 0, 0, 0.72);
+  stroke-width: 5.5px;
+  stroke-linejoin: round;
 }
 
-@media (prefers-color-scheme: dark) {
-  .ville-point { fill: #f2f2ee; fill-opacity: 0.75; }
-  .ville-nom {
-    fill: #f2f2ee;
-    fill-opacity: 0.86;
-    stroke: rgba(0, 0, 0, 0.55);
-  }
-}
+
 
 /* ---------- Tutoriel sous la carte ---------- */
 .tutoriel {
