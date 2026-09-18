@@ -987,8 +987,194 @@ grant execute on function public.admin_date_ajouter(text, text, date, date)    t
 grant execute on function public.admin_date_retirer(text, uuid)                to anon;
 grant execute on function public.admin_voeux_ouvrir(text, boolean)             to anon;
 
+
 -- ============================================================
---  10. Etat de la base apres execution
+--  10. Le choix du lieu
+-- ============================================================
+--
+--  Chacun peint en rouge les departements ou il ne veut pas aller. Le
+--  croisement designe ceux que personne ne refuse.
+--
+--  Un refus, c'est une ligne. Pas de ligne = pas d'objection, comme
+--  l'absence pour les presences : la base ne stocke que ce qui a ete
+--  declare.
+--
+--  On stocke le CODE du departement et rien d'autre. Les contours vivent
+--  dans carte.js, cote navigateur : la base n'a aucune geometrie a
+--  manipuler, et changer le fond de carte ne la touche pas.
+--
+
+alter table private.reglages
+  add column if not exists lieux_ouverts boolean not null default true;
+
+create table if not exists public.refus_lieu (
+  id             uuid primary key default gen_random_uuid(),
+  participant_id uuid not null references private.participants(id) on delete cascade,
+  departement    text not null check (departement ~ '^(0[1-9]|[1-8][0-9]|9[0-5]|2[AB])$'),
+  maj_le         timestamptz not null default now(),
+  unique (participant_id, departement)
+);
+
+create index if not exists refus_lieu_dep_idx on public.refus_lieu (departement);
+
+revoke all on public.refus_lieu from anon, authenticated;
+grant select on public.refus_lieu to service_role;
+
+-- ---- 10a. Charger la carte ----
+create or replace function public.lieux_charger(p_code text, p_acteur uuid)
+returns jsonb
+language plpgsql stable security definer
+set search_path = private, pg_temp as $fn$
+declare
+  r private.reglages;
+begin
+  perform private.verifier_code(p_code);
+  select * into r from private.reglages;
+
+  return jsonb_build_object(
+    'lieux_ouverts', r.lieux_ouverts,
+    'participants', (select count(*) from private.participants),
+
+    -- Combien de refus par departement, pour toute la famille. Des nombres,
+    -- jamais des noms : savoir qu'un departement recueille trois refus aide
+    -- a chercher ailleurs, savoir lesquels ne regarde personne.
+    'totaux', coalesce((
+      select jsonb_object_agg(x.departement, x.n)
+      from (
+        select departement, count(*) as n
+        from public.refus_lieu group by departement
+      ) x
+    ), '{}'::jsonb),
+
+    -- Combien de personnes se sont prononcees : sans cela, « 0 refus »
+    -- pourrait aussi bien vouloir dire « personne n'a encore repondu ».
+    'repondants', (select count(distinct participant_id) from public.refus_lieu),
+
+    'modifiables', coalesce((
+      select jsonb_agg(jsonb_build_object(
+               'id', p.id,
+               'prenom', p.prenom,
+               'famille', p.famille,
+               'repondu', exists (select 1 from public.refus_lieu x
+                                   where x.participant_id = p.id)
+             ) order by (p.id <> p_acteur), p.prenom)
+      from private.participants p
+      where p.id in (select m.id from private.personnes_modifiables(p_acteur) m)
+    ), '[]'::jsonb),
+
+    'refus', coalesce((
+      select jsonb_agg(jsonb_build_object(
+               'participant_id', x.participant_id,
+               'departement', x.departement
+             ))
+      from public.refus_lieu x
+      where x.participant_id in (select m.id from private.personnes_modifiables(p_acteur) m)
+    ), '[]'::jsonb)
+  );
+end $fn$;
+
+-- ---- 10b. Enregistrer les refus ----
+--
+--  Remplacement complet, comme partout ailleurs : ce qui arrive devient
+--  l'etat exact de chaque personne visee. Effacer un departement de sa
+--  carte le rend a nouveau acceptable.
+--
+create or replace function public.lieux_enregistrer(
+  p_code         text,
+  p_acteur       uuid,
+  p_cibles       uuid[],
+  p_departements text[]
+)
+returns jsonb
+language plpgsql security definer
+set search_path = private, pg_temp as $fn$
+declare
+  r      private.reglages;
+  cibles uuid[];
+  cible  uuid;
+  total  integer := 0;
+  nb     integer;
+begin
+  perform private.verifier_code(p_code);
+
+  select * into r from private.reglages;
+  if not r.lieux_ouverts then
+    raise exception 'LIEUX_FERMES' using errcode = 'P0001';
+  end if;
+
+  select array_agg(distinct c) into cibles from unnest(coalesce(p_cibles, '{}')) c;
+  if cibles is null then
+    raise exception 'AUCUNE_CIBLE' using errcode = 'P0001';
+  end if;
+
+  if exists (
+    select 1 from unnest(cibles) c
+    where c not in (select m.id from private.personnes_modifiables(p_acteur) m)
+  ) then
+    raise exception 'DROIT_REFUSE' using errcode = 'P0001';
+  end if;
+
+  -- Refuser toute la France n'est pas une reponse, c'est une erreur de
+  -- manipulation : mieux vaut la signaler que l'enregistrer.
+  if array_length(coalesce(p_departements, '{}'), 1) > 90 then
+    raise exception 'TOUT_REFUSE' using errcode = 'P0001';
+  end if;
+
+  foreach cible in array cibles loop
+    delete from public.refus_lieu where participant_id = cible;
+
+    insert into public.refus_lieu (participant_id, departement)
+    select distinct cible, d
+    from unnest(coalesce(p_departements, '{}')) d
+    where d ~ '^(0[1-9]|[1-8][0-9]|9[0-5]|2[AB])$';
+
+    get diagnostics nb = row_count;
+    total := total + nb;
+  end loop;
+
+  return jsonb_build_object('personnes', array_length(cibles, 1), 'refus', total);
+end $fn$;
+
+grant execute on function public.lieux_charger(text, uuid)                     to anon;
+grant execute on function public.lieux_enregistrer(text, uuid, uuid[], text[]) to anon;
+
+-- ---- 10c. Cote organisateur ----
+
+create or replace function public.admin_lieux(p_code text)
+returns jsonb
+language plpgsql stable security definer
+set search_path = private, pg_temp as $fn$
+begin
+  perform private.verifier_code(p_code, 'admin');
+  return jsonb_build_object(
+    'lieux_ouverts', (select lieux_ouverts from private.reglages),
+    'participants', (select count(*) from private.participants),
+    'repondants', (select count(distinct participant_id) from public.refus_lieu),
+    'totaux', coalesce((
+      select jsonb_object_agg(x.departement, x.n)
+      from (
+        select departement, count(*) as n
+        from public.refus_lieu group by departement
+      ) x
+    ), '{}'::jsonb)
+  );
+end $fn$;
+
+create or replace function public.admin_lieux_ouvrir(p_code text, p_ouvert boolean)
+returns jsonb
+language plpgsql security definer
+set search_path = private, pg_temp as $fn$
+begin
+  perform private.verifier_code(p_code, 'admin');
+  update private.reglages set lieux_ouverts = p_ouvert;
+  return jsonb_build_object('lieux_ouverts', p_ouvert);
+end $fn$;
+
+grant execute on function public.admin_lieux(text)                 to anon;
+grant execute on function public.admin_lieux_ouvrir(text, boolean) to anon;
+
+-- ============================================================
+--  11. Etat de la base apres execution
 -- ============================================================
 --
 --  Affiche ce qui existe reellement, plutot que de le supposer.
@@ -999,7 +1185,8 @@ grant execute on function public.admin_voeux_ouvrir(text, boolean)             t
 --    participants   0 avant l'amorcage, puis la taille de la famille
 --    presences      remis a 0 par ce script, c'est normal
 --    options_date   les week-ends proposes, poses depuis admin.html
---    voeux          les reponses de la famille au sondage
+--    voeux          les reponses de la famille au sondage des dates
+--    refus_lieu     les departements peints en rouge sur la carte
 --
 select
   (select count(*) from private.participants) as participants,
@@ -1008,4 +1195,5 @@ select
   (select count(*) from private.acces_admin)  as codes_admin,
   (select count(*) from private.reglages)     as reglages,
   (select count(*) from private.options_date) as options_date,
-  (select count(*) from public.voeux)         as voeux;
+  (select count(*) from public.voeux)         as voeux,
+  (select count(*) from public.refus_lieu)    as refus_lieu;

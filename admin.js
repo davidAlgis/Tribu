@@ -130,6 +130,7 @@ async function recharger() {
   dessinerListe();
   remplirSelecteurs();
   await rechargerDates();
+  await rechargerLieux();
 }
 
 function parId(id) {
@@ -469,5 +470,75 @@ interrupteur.addEventListener("change", async () => {
     interrupteur.checked = !interrupteur.checked;
     messageDates.className = "erreur";
     messageDates.textContent = erreur.message;
+  }
+});
+
+
+// ------------------------------------------------------------ le lieu
+//
+// La carte se peint sur lieux.html ; ici on ne montre que le resultat du
+// croisement, et on ouvre ou ferme la saisie.
+
+const zoneLieux = document.getElementById("classement-lieux");
+const compteurLieux = document.getElementById("compteur-lieux");
+const messageLieux = document.getElementById("message-lieux");
+const interrupteurLieux = document.getElementById("lieux-ouverts");
+
+async function rechargerLieux() {
+  const d = await rpc("admin_lieux", { p_code: etat.code });
+  interrupteurLieux.checked = d.lieux_ouverts;
+  compteurLieux.textContent = `${d.repondants} réponse(s) sur ${d.participants}`;
+
+  const totaux = d.totaux || {};
+  const classes = (window.CARTE?.departements || [])
+    .map((dep) => ({ ...dep, refus: totaux[dep.c] || 0 }))
+    .sort((a, b) => a.refus - b.refus || a.n.localeCompare(b.n, "fr"));
+
+  zoneLieux.innerHTML = "";
+  if (!classes.length) {
+    zoneLieux.innerHTML = '<p class="note">carte.js manque sur cette page.</p>';
+    return;
+  }
+
+  const sansRefus = classes.filter((x) => x.refus === 0);
+  // Quand tout le monde a une objection quelque part, il n'existe plus de
+  // departement parfait : on montre alors les moins contestes, sans quoi la
+  // page n'afficherait rien.
+  const aMontrer = (sansRefus.length ? sansRefus : classes).slice(0, 12);
+
+  const titre = document.createElement("p");
+  titre.className = "note";
+  titre.textContent = sansRefus.length
+    ? `${sansRefus.length} département(s) ne sont refusés par personne :`
+    : "Aucun département ne fait l'unanimité. Les moins contestés :";
+  zoneLieux.appendChild(titre);
+
+  const liste = document.createElement("div");
+  liste.className = "pastilles";
+  for (const dep of aMontrer) {
+    const etiquette = document.createElement("span");
+    etiquette.className = "pastille";
+    etiquette.textContent = dep.refus
+      ? `${dep.n} (${dep.refus} refus)`
+      : dep.n;
+    liste.appendChild(etiquette);
+  }
+  zoneLieux.appendChild(liste);
+}
+
+interrupteurLieux.addEventListener("change", async () => {
+  try {
+    await rpc("admin_lieux_ouvrir", {
+      p_code: etat.code,
+      p_ouvert: interrupteurLieux.checked,
+    });
+    messageLieux.className = "ok";
+    messageLieux.textContent = interrupteurLieux.checked
+      ? "Carte ouverte."
+      : "Carte close : la famille ne peut plus la modifier.";
+  } catch (erreur) {
+    interrupteurLieux.checked = !interrupteurLieux.checked;
+    messageLieux.className = "erreur";
+    messageLieux.textContent = erreur.message;
   }
 });

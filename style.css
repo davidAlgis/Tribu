@@ -286,3 +286,71 @@ button.retirer:hover { color: #fff; background: var(--erreur); border-color: var
   color: var(--texte);
   cursor: pointer;
 }
+
+/* ---------- Carte des départements ---------- */
+.carte-cadre {
+  background: var(--carte);
+  border: 1px solid var(--trait);
+  border-radius: 10px;
+  padding: 8px;
+  margin: 12px 0 10px;
+}
+
+#carte {
+  display: block;
+  width: 100%;
+  height: auto;
+  max-height: 68vh;
+  /* Sans cela, le glissé du doigt fait défiler la page au lieu de peindre. */
+  touch-action: none;
+  cursor: crosshair;
+}
+#carte.lecture { cursor: default; }
+
+.dep {
+  fill: #86c99b;
+  stroke: var(--carte);
+  stroke-width: 1.2;
+  transition: fill 0.08s linear;
+}
+#carte:not(.lecture) .dep:hover { fill: #6bb886; }
+
+.dep.refuse { fill: #d9534f; }
+.dep.chaleur-1 { fill: #cfe6a8; }
+.dep.chaleur-2 { fill: #f2d98c; }
+.dep.chaleur-3 { fill: #d9534f; }
+
+.carte-legende {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px 14px;
+  font-size: 0.84rem;
+  color: var(--doux);
+  margin: 0 0 8px;
+}
+.pastille-legende {
+  display: inline-block;
+  width: 13px;
+  height: 13px;
+  border-radius: 3px;
+  vertical-align: -2px;
+  margin-right: 3px;
+}
+.pastille-legende.vert { background: #86c99b; }
+.pastille-legende.rouge { background: #d9534f; }
+.pastille-legende.c1 { background: #cfe6a8; }
+.pastille-legende.c2 { background: #f2d98c; }
+.pastille-legende.c3 { background: #d9534f; }
+
+@media (prefers-color-scheme: dark) {
+  .dep { fill: #4f8f68; stroke: #1c1d1e; }
+  #carte:not(.lecture) .dep:hover { fill: #63a87d; }
+  .dep.refuse, .dep.chaleur-3 { fill: #b8433f; }
+  .dep.chaleur-1 { fill: #7a9e5a; }
+  .dep.chaleur-2 { fill: #b89a4a; }
+  .pastille-legende.vert { background: #4f8f68; }
+  .pastille-legende.rouge, .pastille-legende.c3 { background: #b8433f; }
+  .pastille-legende.c1 { background: #7a9e5a; }
+  .pastille-legende.c2 { background: #b89a4a; }
+}

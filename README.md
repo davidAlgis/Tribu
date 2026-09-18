@@ -17,9 +17,48 @@ Deux pages pour la famille, une pour toi :
 
 | Page | Qui | Quoi |
 |---|---|---|
+| [`lieux.html`](lieux.html) | la famille | où l'on n'a pas envie d'aller |
 | [`dates.html`](dates.html) | la famille | quel week-end arrange chacun |
 | [`index.html`](index.html) | la famille | qui vient, quelles nuits, quels repas |
-| [`admin.html`](admin.html) | toi | les participants, leurs droits, les week-ends proposés |
+| [`admin.html`](admin.html) | toi | participants, droits, week-ends, résultat de la carte |
+
+---
+
+## Choisir le lieu
+
+Une carte de France, verte au départ. Chacun **peint en rouge** les
+départements où il n'a pas envie d'aller — en glissant le doigt, et en
+repassant dessus pour effacer. Le croisement désigne ceux que personne ne
+refuse.
+
+Le département comme unité plutôt qu'un dessin libre, pour trois raisons :
+la donnée tient en quelques codes, le croisement est un simple comptage,
+et surtout **la sortie porte un nom**. « Dordogne » se cherche sur un site
+de location ; une tache sur une image, non.
+
+L'onglet **Celle de la famille** montre une carte de chaleur : vert franc
+là où personne ne refuse, puis de plus en plus clair. Les totaux sont
+visibles de tous, **jamais les noms**. Avec vingt personnes, il est
+probable qu'aucun département ne fasse l'unanimité — d'où le dégradé
+plutôt qu'un verdict binaire qui n'afficherait rien.
+
+Côté organisateur, `admin.html` liste les départements sans aucun refus, ou
+à défaut les moins contestés, et l'interrupteur **Carte ouverte** clôt la
+saisie.
+
+<details>
+<summary>Refaire le fond de carte</summary>
+
+```bash
+python preparer_carte.py
+```
+
+Télécharge les frontières officielles (france-geojson, dérivé de l'IGN),
+garde la métropole, projette et simplifie, et écrit `carte.js` — 96
+départements, 59 Ko. Le résultat est versionné : une carte de France ne
+contient aucune donnée personnelle. Relancer ne sert qu'à changer le niveau
+de détail (constante `TOLERANCE`).
+</details>
 
 ---
 

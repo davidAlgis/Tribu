@@ -1,0 +1,90 @@
+<!doctype html>
+<html lang="fr">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="robots" content="noindex">
+  <title>Tribu — choix du lieu</title>
+  <link rel="stylesheet" href="./style.css">
+</head>
+<body>
+<main>
+  <h1>Où se retrouve-t-on&nbsp;?</h1>
+  <p class="sous-titre">Peins en rouge les départements où tu n'as pas envie d'aller. Le reste reste possible.</p>
+
+  <!-- ÉTAPE 1 — le code famille ------------------------------------ -->
+  <section id="etape-code">
+    <fieldset>
+      <legend>Code famille</legend>
+      <form id="form-code">
+        <label for="code">Code communiqué par l'organisateur</label>
+        <div class="ligne-champ">
+          <input type="text" id="code" required maxlength="40" autocomplete="off"
+                 autocapitalize="off" spellcheck="false" placeholder="ex. les abricots">
+          <button type="submit">Entrer</button>
+        </div>
+        <p id="message-code" role="status" aria-live="polite"></p>
+      </form>
+    </fieldset>
+  </section>
+
+  <!-- ÉTAPE 2 — qui es-tu ? ---------------------------------------- -->
+  <section id="etape-prenom" hidden>
+    <fieldset>
+      <legend>Qui es-tu&nbsp;?</legend>
+      <label for="prenom">Commence à taper ton prénom</label>
+      <div class="auto">
+        <input type="text" id="prenom" autocomplete="off" spellcheck="false"
+               placeholder="ex. Syl…" role="combobox" aria-expanded="false"
+               aria-controls="suggestions">
+        <ul id="suggestions" role="listbox"></ul>
+      </div>
+      <p id="message-prenom" role="status" aria-live="polite"></p>
+    </fieldset>
+  </section>
+
+  <!-- ÉTAPE 3 — la carte ------------------------------------------- -->
+  <section id="etape-carte" hidden>
+    <fieldset>
+      <legend>Pour qui réponds-tu&nbsp;?</legend>
+      <div id="personnes" class="pastilles"></div>
+    </fieldset>
+
+    <fieldset>
+      <legend id="legende-carte">Ta carte</legend>
+
+      <div class="pastilles" id="vues">
+        <button type="button" class="pastille active" data-vue="moi">Ma carte</button>
+        <button type="button" class="pastille" data-vue="famille">Celle de la famille</button>
+      </div>
+
+      <div class="carte-cadre">
+        <svg id="carte" role="img" aria-label="Carte des départements français"></svg>
+      </div>
+
+      <p class="carte-legende" id="carte-legende"></p>
+      <p class="note" id="carte-aide"></p>
+
+      <button type="button" id="tout-effacer" class="discret">Tout remettre au vert</button>
+    </fieldset>
+
+    <div class="actions">
+      <button type="button" id="enregistrer">Enregistrer</button>
+      <button type="button" id="appliquer-tous" class="discret" hidden></button>
+      <button type="button" id="changer" class="discret">Changer de personne</button>
+    </div>
+    <p class="note" id="portee-saisie"></p>
+    <p id="message" role="status" aria-live="polite"></p>
+
+    <p class="note">
+      Le lieu retenu, il reste à choisir <a href="./dates.html">la date</a>,
+      puis à remplir <a href="./index.html">les présences</a>.
+    </p>
+  </section>
+</main>
+
+<script src="./config.js"></script>
+<script src="./carte.js"></script>
+<script src="./lieux.js"></script>
+</body>
+</html>

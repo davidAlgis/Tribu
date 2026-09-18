@@ -105,6 +105,19 @@
     </fieldset>
 
     <fieldset>
+      <legend>Lieu <span id="compteur-lieux" class="discret-inline"></span></legend>
+      <div id="classement-lieux"></div>
+      <p class="note">
+        Les départements que personne ne refuse, d'après
+        <a href="./lieux.html">la carte</a>.
+        <label class="interrupteur">
+          <input type="checkbox" id="lieux-ouverts"> Carte ouverte
+        </label>
+      </p>
+      <p id="message-lieux" role="status" aria-live="polite"></p>
+    </fieldset>
+
+    <fieldset>
       <legend>La liste <span id="compteur" class="discret-inline"></span></legend>
       <div id="liste"></div>
       <p class="note">
@@ -118,6 +131,7 @@
 </main>
 
 <script src="./config.js"></script>
+<script src="./carte.js"></script>
 <script src="./admin.js"></script>
 </body>
 </html>
