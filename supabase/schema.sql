@@ -630,6 +630,8 @@ grant execute on function public.admin_importer(text, jsonb)                    
 --    codes_admin    doit valoir 1  -> sinon, lancer creer_code_admin.py
 --    reglages       doit valoir 1  -> sinon, passer reglages.exemple.sql
 --    participants   0 avant l'amorcage, puis la taille de la famille
+--                   -> python importer_ged.py --ged "D:/.../genealogie.ged" --racine "Prenom Nom"
+--                      (une seule fois ; ensuite, tout passe par admin.html)
 --    presences      remis a 0 par ce script, c'est normal
 --
 select
