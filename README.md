@@ -85,6 +85,24 @@ Sa saisie de présences part avec elle.
 Le dépôt est public : il contient les **outils**, jamais les **données**.
 Le `.ged` n'est jamais copié dans le projet : il est lu là où il se trouve.
 
+### Le code organisateur
+
+```bash
+python creer_code_admin.py
+```
+
+Le code est **tiré au hasard sur ta machine**, affiché une seule fois, puis
+oublié. Seuls un sel et une empreinte SHA-256 partent dans le SQL à coller :
+le code lui-même ne touche jamais Supabase.
+
+C'est ce qui le distingue du code famille. L'éditeur SQL de Supabase
+**conserve l'historique des requêtes** — un code tapé là y reste. Range-le
+dans un gestionnaire de mots de passe ; perdu, il ne se retrouve pas, on en
+refabrique un.
+
+Le code famille, lui, reste en clair et mémorisable : il circule de toute
+façon entre vingt personnes, et doit pouvoir se dicter au téléphone.
+
 **Avant chaque push :**
 
 ```bash
@@ -105,13 +123,14 @@ courants des exemples et des tests sont déclarés dans
 
 1. **Supabase** — projet en région UE, puis coller
    [`supabase/schema.sql`](supabase/schema.sql) dans le SQL Editor.
-2. **Dates et codes** — adapter
-   [`supabase/reglages.exemple.sql`](supabase/reglages.exemple.sql) : dates
-   du séjour, code famille et code organisateur.
-3. **Participants** — amorcer depuis le GEDCOM, puis `admin.html`.
-4. **Clés** — `Project URL` et clé publishable dans [`config.js`](config.js).
-5. **Pages** — Settings → Pages → Deploy from a branch → `main` / `(root)`.
-6. **Tarifs** — copier `config.example.toml` en `config.toml`, à remplir
+2. **Dates et code famille** — adapter
+   [`supabase/reglages.exemple.sql`](supabase/reglages.exemple.sql).
+3. **Code organisateur** — `python creer_code_admin.py`, puis coller le SQL
+   affiché (voir ci-dessous).
+4. **Participants** — amorcer depuis le GEDCOM, puis `admin.html`.
+5. **Clés** — `Project URL` et clé publishable dans [`config.js`](config.js).
+6. **Pages** — Settings → Pages → Deploy from a branch → `main` / `(root)`.
+7. **Tarifs** — copier `config.example.toml` en `config.toml`, à remplir
    quand l'hôtel sera connu.
 
 ```bash

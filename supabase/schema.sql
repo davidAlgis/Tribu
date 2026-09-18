@@ -42,13 +42,13 @@ create table if not exists private.reglages (
 --  Ce code n'est ecrit NULLE PART dans le depot, qui est public.
 --  Il se pose a la main (voir supabase/participants.exemple.sql).
 --
---  Deux roles, donc deux codes distincts :
---    'famille' : saisir ses presences. Il circule dans toute la famille.
---    'admin'   : ajouter et retirer des participants. Toi seul.
+--  Le code FAMILLE. Il circule dans toute la famille, se dicte au
+--  telephone, et n'est donc pas un secret fort par nature : il est
+--  stocke en clair, normalise. Ce qu'il protege, c'est l'acces a la
+--  liste des prenoms et a la saisie -- pas l'administration.
 --
 create table if not exists private.acces (
   code_normalise text primary key,
-  role           text not null default 'famille' check (role in ('famille', 'admin')),
   libelle        text,
   cree_le        timestamptz not null default now()
 );
@@ -70,13 +70,46 @@ $fn$;
 -- Variante booleenne, pratique pour verifier un code a la main dans le
 -- SQL Editor. Elle reste dans `private` : PostgREST ne l'expose donc pas,
 -- et elle ne peut pas servir d'oracle de force brute depuis l'exterieur.
-create or replace function private.code_valide(c text, r text default 'famille')
+create or replace function private.code_valide(c text)
 returns boolean language sql stable
 set search_path = private, pg_temp as $fn$
   select exists (
     select 1 from private.acces a
     where a.code_normalise = private.normaliser_code(c)
-      and a.role = r
+  )
+$fn$;
+
+-- ---------- Le code ORGANISATEUR ----------
+--
+--  Celui-la est d'une autre nature : un seul porteur, jamais dicte, et
+--  c'est le seul secret qui protege la liste des participants. Il n'est
+--  donc PAS stocke en clair.
+--
+--  On garde une empreinte SHA-256 et un sel tire au hasard. Le code lui
+--  meme n'existe que dans le gestionnaire de mots de passe de
+--  l'organisateur : il n'a jamais ete tape dans l'editeur SQL, qui en
+--  conserverait l'historique, ni ecrit dans un fichier.
+--
+--  Il n'est pas normalise, contrairement au code famille : il se copie,
+--  il ne se dicte pas. Cela evite aussi d'avoir a reproduire a
+--  l'identique la normalisation cote Python, ou le moindre ecart
+--  rendrait le code invalide.
+--
+create extension if not exists pgcrypto with schema extensions;
+
+create table if not exists private.acces_admin (
+  id        boolean primary key default true check (id),  -- une seule ligne
+  sel       text not null,
+  empreinte text not null,
+  cree_le   timestamptz not null default now()
+);
+
+create or replace function private.code_admin_valide(c text)
+returns boolean language sql stable
+set search_path = private, extensions, public, pg_temp as $fn$
+  select exists (
+    select 1 from private.acces_admin a
+    where a.empreinte = encode(digest(a.sel || coalesce(c, ''), 'sha256'), 'hex')
   )
 $fn$;
 
@@ -84,7 +117,10 @@ create or replace function private.verifier_code(c text, r text default 'famille
 returns void language plpgsql stable
 set search_path = private, pg_temp as $fn$
 begin
-  if not private.code_valide(c, r) then
+  if not (case when r = 'admin'
+               then private.code_admin_valide(c)
+               else private.code_valide(c)
+          end) then
     raise exception 'CODE_REFUSE' using errcode = 'P0001';
   end if;
 end $fn$;

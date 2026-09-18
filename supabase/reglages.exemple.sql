@@ -38,17 +38,22 @@ on conflict (id) do update
 --  Evite `tribu` et l'annee : le depot s'appelle publiquement Tribu et
 --  les dates sont en base. Prends ce que seule la famille connait.
 --
---  DEUX codes, deux pouvoirs :
+--  Ce fichier ne pose que le code FAMILLE, celui qui circule dans toute
+--  la famille et se dicte au telephone.
 --
---    famille : saisir ses presences. Il circule dans toute la famille.
---    admin   : ajouter et retirer des participants, sur admin.html.
---              Toi seul. Prends-le long et different du premier.
+--  Le code ORGANISATEUR ne se pose PAS ici : il ne doit jamais etre tape
+--  dans cet editeur, qui garde un historique des requetes. Il se fabrique
+--  a part :
+--
+--      python creer_code_admin.py
+--
+--  Ce script tire un code au hasard, l'affiche une fois, et ne produit
+--  qu'un sel et une empreinte a coller. Le code lui-meme ne touche ni
+--  Supabase, ni le depot, ni le disque.
 --
 delete from private.acces;
-insert into private.acces (code_normalise, role, libelle) values
-  (private.normaliser_code('CHANGE MOI'),       'famille', 'Sejour 2027'),
-  (private.normaliser_code('CHANGE MOI AUSSI'), 'admin',   'Organisateur');
+insert into private.acces (code_normalise, libelle)
+values (private.normaliser_code('CHANGE MOI'), 'Sejour 2027');
 
--- Verification (doivent renvoyer true) :
---   select private.code_valide('change moi', 'famille');
---   select private.code_valide('change moi aussi', 'admin');
+-- Verification (doit renvoyer true) :
+--   select private.code_valide('change moi');
