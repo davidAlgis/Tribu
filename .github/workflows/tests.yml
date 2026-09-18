@@ -24,6 +24,10 @@ jobs:
       - name: Lancer les tests
         run: python -m pytest -q
 
+      - name: Verifier que la liste de famille se traduit en SQL
+        # Prenoms inventes : rien de personnel ne transite ici.
+        run: python generer_participants.py --exemple --droits
+
       - name: Verifier que l'export se genere de bout en bout
         # Donnees et tarifs fictifs : rien de personnel ne transite ici.
         run: python run_export.py --source json --input exemple_donnees.json --out /tmp/verification.xlsx

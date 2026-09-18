@@ -1,0 +1,37 @@
+# ============================================================
+#  Tribu - la famille
+# ============================================================
+#
+#  CE FICHIER EST UN MODELE : les prenoms sont inventes.
+#
+#  Copie-le en `famille.txt`, remplace par ta vraie liste, puis :
+#
+#      python generer_participants.py
+#
+#  `famille.txt` n'est pas versionne : le depot est public.
+#
+#  REGLES
+#    * deux tirets par generation  ->  ── enfant, ──── petit-enfant
+#    * `+` reunit un couple sur une ligne
+#    * `(enfant)` ou `(bebe)` en fin de ligne, sinon adulte
+#    * `## Nom` fixe le nom de famille jusqu'au prochain `##`
+#    * une ligne vide ou commencant par # est ignoree
+#
+#  Les droits en decoulent : chacun couvre son conjoint, ses
+#  descendants, et les conjoints de ses descendants.
+# ============================================================
+
+## Durand
+
+Gerard + Simone
+── Sylvain + Nadia
+──── Louise (enfant)
+── Simon
+
+## Petit
+
+Marthe
+── Paul + Alice
+──── Jules (enfant)
+──── Zoe (bebe)
+── Helene

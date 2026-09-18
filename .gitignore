@@ -2,6 +2,12 @@
 *.xlsx
 exports/
 
+# LA FAMILLE - ne doit JAMAIS partir sur un dépôt public.
+# Seuls les fichiers .exemple, avec des prénoms inventés, sont versionnés.
+famille.txt
+participants.sql
+reglages.sql
+
 # Config réelle (tarifs négociés) - seul config.example.toml est versionné
 config.toml
 

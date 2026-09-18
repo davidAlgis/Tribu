@@ -73,14 +73,16 @@ anomalies de saisie.
 
 1. **Supabase** — créer un projet en région UE, puis coller
    [`supabase/schema.sql`](supabase/schema.sql) dans le SQL Editor.
-2. **Participants et code** — adapter
-   [`supabase/participants.exemple.sql`](supabase/participants.exemple.sql)
-   dans le SQL Editor : dates du séjour, code famille, liste des
-   participants et liens de parenté. Ne jamais commiter la version remplie.
-3. **Clés** — reporter `Project URL` et la clé publishable dans
+2. **Dates et code** — adapter
+   [`supabase/reglages.exemple.sql`](supabase/reglages.exemple.sql) dans le
+   SQL Editor. Ne jamais commiter la version remplie.
+3. **Participants** — décrire la famille dans `famille.txt`, puis
+   `python generer_participants.py`, puis coller le `participants.sql`
+   produit (voir ci-dessous).
+4. **Clés** — reporter `Project URL` et la clé publishable dans
    [`config.js`](config.js). Les dates, elles, vivent en base.
-4. **Pages** — Settings → Pages → Deploy from a branch → `main` / `(root)`.
-5. **Tarifs** — copier `config.example.toml` en `config.toml` et le
+5. **Pages** — Settings → Pages → Deploy from a branch → `main` / `(root)`.
+6. **Tarifs** — copier `config.example.toml` en `config.toml` et le
    remplir quand l'hôtel sera connu. `config.toml` est dans le
    `.gitignore`.
 
@@ -109,6 +111,31 @@ aucune ligne en base. Enregistrer remplace intégralement sa saisie, donc
 repasser un jour à « absente » l'efface : on peut revenir corriger autant
 de fois qu'on veut sans jamais créer de doublon.
 
+### Décrire la famille
+
+La liste ne s'écrit **jamais** en SQL. Elle s'écrit dans `famille.txt`, en
+texte, et [`generer_participants.py`](generer_participants.py) en tire le
+SQL :
+
+```
+famille.txt  ──>  python generer_participants.py  ──>  participants.sql
+```
+
+```
+## Durand
+Gerard + Simone
+── Sylvain + Nadia
+──── Louise (enfant)
+── Simon
+```
+
+Deux tirets par génération, `+` pour un couple, `(enfant)` ou `(bebe)` en
+fin de ligne. Voir [`famille.exemple.txt`](famille.exemple.txt).
+
+**Le `+` n'est pas décoratif.** Deux lignes de même niveau sans `+` sont
+frère et sœur, pas un couple — et un parent non marqué perd ses propres
+enfants. Un test couvre précisément ce piège.
+
 ### Qui peut modifier qui
 
 Deux liens décrivent la famille : `parent_id` et `conjoint_id`. Ils
@@ -118,10 +145,13 @@ donc sa femme, ses enfants, leurs compagnons et leurs petits-enfants ;
 un frère n'a aucun droit sur son frère, et personne ne remonte vers ses
 parents.
 
-La requête de vérification à la fin de
-[`participants.exemple.sql`](supabase/participants.exemple.sql) affiche
-l'intégralité des droits obtenus : à lire une fois avant d'ouvrir la
-saisie à la famille.
+```bash
+python generer_participants.py --droits
+```
+
+affiche, pour chaque personne, qui elle peut modifier — sans toucher à la
+base. À lire une fois avant d'ouvrir la saisie à la famille. La même
+vérification figure en fin de `participants.sql`, côté serveur.
 
 **C'est un garde-fou, pas une sécurité.** Tout le monde partage le même
 code : quelqu'un qui le connaît peut se déclarer comme n'importe quel
@@ -140,6 +170,27 @@ brute.
 **Ce code n'est écrit nulle part dans ce dépôt**, qui est public. Il se
 pose à la main dans le SQL Editor de Supabase, et se transmet à la
 famille de vive voix ou par message privé.
+
+### Ce qui ne part jamais sur GitHub
+
+Le dépôt contient les **outils**, jamais les **données**. Trois fichiers
+sont dans le `.gitignore` :
+
+| Fichier | Contenu | Modèle public |
+|---|---|---|
+| `famille.txt` | les vrais prénoms et la parenté | `famille.exemple.txt` |
+| `participants.sql` | le même, en SQL | `supabase/participants.exemple.sql` |
+| `reglages.sql` | le code d'accès | `supabase/reglages.exemple.sql` |
+
+Pour vérifier avant de pousser :
+
+```bash
+git ls-files | xargs grep -li "un_prenom_de_la_famille"
+```
+
+Cette commande ne doit rien renvoyer. Si un prénom réel a été commité par
+erreur, le retirer du fichier ne suffit pas : il reste dans l'historique
+public. Il faut réécrire l'historique, ou plus simplement recréer le dépôt.
 
 Un code mémorisable reste, par construction, devinable par un humain
 déterminé. Il n'est pas là pour ça : il arrête les robots, qui sont la
