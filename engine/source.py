@@ -22,7 +22,7 @@ from engine.models import Personne, Presence
 def _vers_personne(ligne: dict) -> Personne:
     return Personne(
         id=ligne["id"],
-        nom=ligne["nom"],
+        prenom=ligne["prenom"],
         famille=ligne["famille"],
         categorie_age=ligne["categorie_age"],
     )
@@ -30,7 +30,8 @@ def _vers_personne(ligne: dict) -> Personne:
 
 def _vers_presence(ligne: dict) -> Presence:
     return Presence(
-        personne_id=ligne["personne_id"],
+        # La base parle de participant, le moteur de personne.
+        personne_id=ligne.get("participant_id") or ligne["personne_id"],
         jour=date.fromisoformat(ligne["jour"]),
         hebergement=ligne["hebergement"],
         petit_dejeuner=bool(ligne.get("petit_dejeuner", False)),
@@ -51,8 +52,10 @@ def charger_json(chemin: str | Path) -> tuple[dict, list]:
 # On nomme les colonnes au lieu de faire `select=*` : le code d'acces
 # reste ainsi en base et n'entre jamais dans un export.
 COLONNES = {
-    "personnes": "id,nom,famille,categorie_age",
-    "presences": "personne_id,jour,hebergement,petit_dejeuner,dejeuner,diner,vue_mer",
+    # `v_participants` est une vue sur private.participants, lisible par la
+    # seule cle secrete : le schema `private` n'est pas expose par PostgREST.
+    "v_participants": "id,prenom,famille,categorie_age",
+    "presences": "participant_id,jour,hebergement,petit_dejeuner,dejeuner,diner,vue_mer",
 }
 
 
@@ -73,7 +76,7 @@ def _get(url: str, cle: str, table: str) -> list[dict]:
 def charger_supabase(url: str, cle_service_role: str) -> tuple[dict, list]:
     personnes = {
         ligne["id"]: _vers_personne(ligne)
-        for ligne in _get(url, cle_service_role, "personnes")
+        for ligne in _get(url, cle_service_role, "v_participants")
     }
     presences = [_vers_presence(l) for l in _get(url, cle_service_role, "presences")]
     return personnes, presences

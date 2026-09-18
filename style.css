@@ -93,3 +93,85 @@ button:disabled { opacity: 0.5; cursor: default; }
   .note { background: #262728; }
   button { color: #10161f; }
 }
+
+/* ---------- Champ + bouton sur une ligne ---------- */
+.ligne-champ { display: flex; gap: 10px; align-items: stretch; }
+.ligne-champ input { flex: 1; }
+.ligne-champ button { padding: 9px 20px; white-space: nowrap; }
+
+/* ---------- Autocomplétion ---------- */
+.auto { position: relative; }
+
+#suggestions {
+  list-style: none;
+  margin: 4px 0 0;
+  padding: 0;
+  position: absolute;
+  z-index: 10;
+  left: 0;
+  right: 0;
+  background: var(--carte);
+  border: 1px solid var(--trait);
+  border-radius: 8px;
+  overflow: hidden;
+  box-shadow: 0 6px 20px rgba(0, 0, 0, 0.12);
+}
+#suggestions:empty { display: none; }
+
+#suggestions li {
+  padding: 11px 12px;
+  cursor: pointer;
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  border-bottom: 1px solid var(--trait);
+}
+#suggestions li:last-child { border-bottom: 0; }
+#suggestions li:hover, #suggestions li:focus {
+  background: var(--accent);
+  color: #fff;
+  outline: none;
+}
+#suggestions span { color: var(--doux); font-size: 0.87rem; }
+#suggestions li:hover span, #suggestions li:focus span { color: #fff; opacity: 0.85; }
+
+/* ---------- Sélecteur de personne ---------- */
+.pastilles { display: flex; flex-wrap: wrap; gap: 8px; }
+
+.pastille {
+  background: transparent;
+  color: var(--texte);
+  border: 1px solid var(--trait);
+  border-radius: 999px;
+  padding: 8px 15px;
+  font-size: 0.93rem;
+  font-weight: 500;
+}
+.pastille.active {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: #fff;
+}
+.pastille .moi { opacity: 0.7; font-weight: 400; }
+.pastille .vide { color: var(--accent); font-weight: 700; }
+.pastille.active .vide { color: #fff; }
+
+/* ---------- Grille ---------- */
+tr.absente td:first-child { color: var(--doux); }
+tr.absente select { color: var(--doux); }
+
+.actions { display: flex; gap: 12px; align-items: center; flex-wrap: wrap; }
+
+button.discret {
+  background: transparent;
+  color: var(--doux);
+  border: 1px solid var(--trait);
+  font-weight: 500;
+}
+
+@media (prefers-color-scheme: dark) {
+  .pastille.active, button.discret:hover { color: #10161f; }
+  button.discret { color: var(--doux); }
+  #suggestions li:hover, #suggestions li:focus { color: #10161f; }
+  #suggestions li:hover span, #suggestions li:focus span { color: #10161f; }
+}

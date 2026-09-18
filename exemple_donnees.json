@@ -1,11 +1,11 @@
 {
   "_commentaire": "Donnees FICTIVES pour faire tourner le POC. Aucune donnee reelle ne doit etre commitee ici.",
   "personnes": [
-    {"id": "p1", "nom": "Alice", "famille": "Famille A", "categorie_age": "adulte"},
-    {"id": "p2", "nom": "Bruno", "famille": "Famille A", "categorie_age": "adulte"},
-    {"id": "p3", "nom": "Chloe", "famille": "Famille A", "categorie_age": "enfant"},
-    {"id": "p4", "nom": "David", "famille": "Famille B", "categorie_age": "adulte"},
-    {"id": "p5", "nom": "Emma", "famille": "Famille B", "categorie_age": "bebe"}
+    {"id": "p1", "prenom": "Alice", "famille": "Famille A", "categorie_age": "adulte"},
+    {"id": "p2", "prenom": "Bruno", "famille": "Famille A", "categorie_age": "adulte"},
+    {"id": "p3", "prenom": "Chloe", "famille": "Famille A", "categorie_age": "enfant"},
+    {"id": "p4", "prenom": "David", "famille": "Famille B", "categorie_age": "adulte"},
+    {"id": "p5", "prenom": "Emma", "famille": "Famille B", "categorie_age": "bebe"}
   ],
   "presences": [
     {"personne_id": "p1", "jour": "2027-07-10", "hebergement": "chambre", "diner": true, "vue_mer": true},

@@ -10,54 +10,65 @@
 <body>
 <main>
   <h1>Séjour Tribu</h1>
-  <p class="sous-titre">Indique où tu dors chaque nuit et quels repas tu prends. Tout le reste est calculé automatiquement.</p>
+  <p class="sous-titre" id="sous-titre">Indique qui est là, quand, et pour quels repas.</p>
 
-  <form id="formulaire">
+  <!-- ÉTAPE 1 — le code famille ------------------------------------ -->
+  <section id="etape-code">
     <fieldset>
       <legend>Code famille</legend>
-      <div class="grille">
-        <div>
-          <label for="code_acces">Code communiqué par l'organisateur</label>
-          <input type="text" id="code_acces" required maxlength="40" autocomplete="off"
-                 autocapitalize="off" spellcheck="false" placeholder="ex. tribu 2027">
+      <form id="form-code">
+        <label for="code">Code communiqué par l'organisateur</label>
+        <div class="ligne-champ">
+          <input type="text" id="code" required maxlength="40" autocomplete="off"
+                 autocapitalize="off" spellcheck="false" placeholder="ex. les abricots">
+          <button type="submit">Entrer</button>
         </div>
+        <p class="note">
+          Majuscules, accents, espaces et tirets n'ont pas d'importance.
+          Le code est retenu sur cet appareil.
+        </p>
+        <p id="message-code" role="status" aria-live="polite"></p>
+      </form>
+    </fieldset>
+  </section>
+
+  <!-- ÉTAPE 2 — qui es-tu ? ---------------------------------------- -->
+  <section id="etape-prenom" hidden>
+    <fieldset>
+      <legend>Qui es-tu&nbsp;?</legend>
+      <label for="prenom">Commence à taper ton prénom</label>
+      <div class="auto">
+        <input type="text" id="prenom" autocomplete="off" spellcheck="false"
+               placeholder="ex. Syl…" aria-describedby="aide-prenom"
+               role="combobox" aria-expanded="false" aria-controls="suggestions">
+        <ul id="suggestions" role="listbox"></ul>
       </div>
+      <p class="note" id="aide-prenom">
+        Tu pourras aussi remplir pour ton conjoint, tes enfants et leurs familles.
+      </p>
+      <p id="message-prenom" role="status" aria-live="polite"></p>
+    </fieldset>
+  </section>
+
+  <!-- ÉTAPE 3 — la saisie ------------------------------------------ -->
+  <section id="etape-saisie" hidden>
+    <fieldset>
+      <legend>Pour qui remplis-tu&nbsp;?</legend>
+      <div id="personnes" class="pastilles"></div>
       <p class="note">
-        Les majuscules, accents, espaces et tirets n'ont pas d'importance.
-        Le code est retenu sur cet appareil, tu n'auras pas à le ressaisir.
+        Tout le monde est <strong>absent par défaut</strong>. Ne remplis que
+        les jours de présence — et reviens modifier quand tu veux.
       </p>
     </fieldset>
 
     <fieldset>
-      <legend>Qui es-tu&nbsp;?</legend>
-      <div class="grille">
-        <div>
-          <label for="nom">Prénom</label>
-          <input type="text" id="nom" required maxlength="80" autocomplete="off">
-        </div>
-        <div>
-          <label for="famille">Famille</label>
-          <input type="text" id="famille" required maxlength="80" autocomplete="off">
-        </div>
-        <div>
-          <label for="categorie_age">Catégorie d'âge</label>
-          <select id="categorie_age" required>
-            <option value="adulte">Adulte</option>
-            <option value="enfant">Enfant</option>
-            <option value="bebe">Bébé</option>
-          </select>
-        </div>
-      </div>
-    </fieldset>
-
-    <fieldset>
-      <legend>Ton séjour, jour par jour</legend>
+      <legend id="legende-jours">Séjour</legend>
       <div class="defilement">
         <table>
           <thead>
             <tr>
               <th>Jour</th>
-              <th>Je dors…</th>
+              <th>La nuit…</th>
               <th>Vue mer</th>
               <th>Petit-déj.</th>
               <th>Déjeuner</th>
@@ -68,15 +79,18 @@
         </table>
       </div>
       <p class="note">
-        La colonne «&nbsp;je dors…&nbsp;» concerne <strong>la nuit qui suit</strong> le jour indiqué.
-        Les repas sont ceux pris <strong>ce jour-là</strong>. Le jour du départ, choisis
-        «&nbsp;ailleurs&nbsp;» et coche simplement le petit-déjeuner.
+        La colonne «&nbsp;la nuit…&nbsp;» concerne <strong>la nuit qui suit</strong>
+        le jour indiqué. Les repas sont ceux pris <strong>ce jour-là</strong>.
+        Le jour du départ, choisis «&nbsp;ailleurs&nbsp;» et coche le petit-déjeuner.
       </p>
     </fieldset>
 
-    <button type="submit" id="envoyer">Envoyer ma saisie</button>
+    <div class="actions">
+      <button type="button" id="enregistrer">Enregistrer</button>
+      <button type="button" id="changer" class="discret">Changer de personne</button>
+    </div>
     <p id="message" role="status" aria-live="polite"></p>
-  </form>
+  </section>
 </main>
 
 <script src="./config.js"></script>

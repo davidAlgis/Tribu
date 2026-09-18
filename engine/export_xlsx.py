@@ -77,7 +77,7 @@ def exporter(chemin, personnes: dict, prestations, facturation, config: dict) ->
     feuille = _feuille(
         classeur,
         "Detail personne",
-        ["Date", "Famille", "Nom", "Age", "Prestation", "Detail", f"Prix ({devise})"],
+        ["Date", "Famille", "Prenom", "Age", "Prestation", "Detail", f"Prix ({devise})"],
     )
     for ligne in facturation.lignes:
         personne = personnes[ligne.personne_id]
@@ -85,7 +85,7 @@ def exporter(chemin, personnes: dict, prestations, facturation, config: dict) ->
             [
                 ligne.jour,
                 personne.famille,
-                personne.nom,
+                personne.prenom,
                 personne.categorie_age,
                 ligne.libelle,
                 ligne.detail,
@@ -102,7 +102,7 @@ def exporter(chemin, personnes: dict, prestations, facturation, config: dict) ->
     for ligne in facturation.lignes:
         personne = personnes[ligne.personne_id]
         totaux[personne.famille] += ligne.prix
-        membres[personne.famille].add(personne.nom)
+        membres[personne.famille].add(personne.prenom)
     for famille in sorted(totaux):
         feuille.append([famille, len(membres[famille]), round(totaux[famille], 2)])
     feuille.append(["TOTAL", sum(len(m) for m in membres.values()), facturation.total])
@@ -121,10 +121,10 @@ def exporter(chemin, personnes: dict, prestations, facturation, config: dict) ->
     _ajuster(feuille)
 
     # --- 6. Saisies incoherentes ---
-    feuille = _feuille(classeur, "Anomalies", ["Date", "Famille", "Nom", "Probleme"])
+    feuille = _feuille(classeur, "Anomalies", ["Date", "Famille", "Prenom", "Probleme"])
     for anomalie in prestations.anomalies:
         personne = personnes[anomalie.personne_id]
-        feuille.append([anomalie.jour, personne.famille, personne.nom, anomalie.message])
+        feuille.append([anomalie.jour, personne.famille, personne.prenom, anomalie.message])
     if not prestations.anomalies:
         feuille.append(["", "", "", "Aucune anomalie detectee."])
     _formater_dates(feuille)

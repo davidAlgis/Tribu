@@ -9,7 +9,7 @@ from datetime import date
 @dataclass(frozen=True)
 class Personne:
     id: str
-    nom: str
+    prenom: str
     famille: str
     categorie_age: str  # adulte | enfant | bebe
 

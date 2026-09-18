@@ -72,14 +72,15 @@ anomalies de saisie.
 ## Mise en route
 
 1. **Supabase** — créer un projet en région UE, puis coller
-   [`supabase/schema.sql`](supabase/schema.sql) puis
-   [`supabase/code_acces.sql`](supabase/code_acces.sql) dans le SQL Editor,
-   et poser le code famille à la main (dernière section du second fichier).
-2. **Clés** — reporter `Project URL` et la clé `anon public` dans
-   [`config.js`](config.js), ainsi que les dates du séjour.
-3. **Pages** — Settings → Pages → Deploy from a branch → `main` / `(root)`.
-   Le formulaire est alors servi sur `https://<compte>.github.io/tribu/`.
-4. **Tarifs** — copier `config.example.toml` en `config.toml` et le
+   [`supabase/schema.sql`](supabase/schema.sql) dans le SQL Editor.
+2. **Participants et code** — adapter
+   [`supabase/participants.exemple.sql`](supabase/participants.exemple.sql)
+   dans le SQL Editor : dates du séjour, code famille, liste des
+   participants et liens de parenté. Ne jamais commiter la version remplie.
+3. **Clés** — reporter `Project URL` et la clé publishable dans
+   [`config.js`](config.js). Les dates, elles, vivent en base.
+4. **Pages** — Settings → Pages → Deploy from a branch → `main` / `(root)`.
+5. **Tarifs** — copier `config.example.toml` en `config.toml` et le
    remplir quand l'hôtel sera connu. `config.toml` est dans le
    `.gitignore`.
 
@@ -88,13 +89,44 @@ anomalies de saisie.
 Le repo est public (contrainte de GitHub Pages en plan gratuit). Trois
 règles en découlent :
 
-- la clé `anon` dans `config.js` est publique **par conception** ; ce
-  qui protège, c'est le RLS, qui n'autorise que l'insertion — pas la
-  lecture, pas la modification, pas la suppression ;
+- la clé publishable dans `config.js` est publique **par conception** ;
+  ce qui protège, c'est qu'**aucune table n'est accessible directement** :
+  le navigateur ne peut appeler que trois fonctions, qui vérifient le code
+  et les droits à chaque appel ;
 - la clé secrète (`sb_secret_…`) ne doit **jamais** quitter ta machine ;
 - les `.xlsx` générés ne sont jamais commités, et ne sont pas produits
   par GitHub Actions : sur un repo public, les artifacts d'Actions sont
   téléchargeables par n'importe qui.
+
+## Saisie et modification
+
+Le formulaire se parcourt en trois écrans : **code famille**, puis
+**prénom** (avec autocomplétion sur la liste des participants), puis la
+grille du séjour.
+
+**Absent est l'état par défaut.** Une personne qui n'a rien saisi n'a
+aucune ligne en base. Enregistrer remplace intégralement sa saisie, donc
+repasser un jour à « absente » l'efface : on peut revenir corriger autant
+de fois qu'on veut sans jamais créer de doublon.
+
+### Qui peut modifier qui
+
+Deux liens décrivent la famille : `parent_id` et `conjoint_id`. Ils
+suffisent à dériver les droits — chacun couvre **son conjoint, ses
+descendants, et les conjoints de ses descendants**. Un grand-père couvre
+donc sa femme, ses enfants, leurs compagnons et leurs petits-enfants ;
+un frère n'a aucun droit sur son frère, et personne ne remonte vers ses
+parents.
+
+La requête de vérification à la fin de
+[`participants.exemple.sql`](supabase/participants.exemple.sql) affiche
+l'intégralité des droits obtenus : à lire une fois avant d'ouvrir la
+saisie à la famille.
+
+**C'est un garde-fou, pas une sécurité.** Tout le monde partage le même
+code : quelqu'un qui le connaît peut se déclarer comme n'importe quel
+participant. Ce modèle empêche les erreurs, pas la malveillance — un
+choix assumé dans un cadre familial.
 
 ### Code d'accès
 

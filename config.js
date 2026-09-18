@@ -11,7 +11,6 @@ window.CONFIG = {
   SUPABASE_URL: "https://hxytygyppzgjvdmixfqj.supabase.co",
   SUPABASE_ANON_KEY: "sb_publishable_9cgp2cV9ydUKJmcz_erROw_dOqN57NI",
 
-  // Dates du sejour (bornes incluses). A ajuster quand l'hotel sera connu.
-  DATE_DEBUT: "2027-07-10",
-  DATE_FIN: "2027-07-14",
+  // Les dates du sejour ne sont plus ici : elles vivent dans la table
+  // private.reglages, pour pouvoir bouger sans toucher au code.
 };
