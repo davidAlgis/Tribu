@@ -161,6 +161,12 @@ Synthèse hôtel, repas hors pension, détail par personne, total par famille,
 absente. Enregistrer remplace toute sa saisie : on corrige autant de fois
 qu'on veut sans créer de doublon.
 
+**Trois façons de remplir**, selon les cas : « Enregistrer pour X » ne
+touche qu'à X ; « Appliquer à tous » recopie la grille affichée sur toutes
+les personnes qu'on gère, en une transaction et après confirmation nommant
+celles dont la saisie sera remplacée ; sinon on passe de l'une à l'autre
+par les pastilles, avec des valeurs différentes pour chacune.
+
 **Les droits sont un garde-fou, pas une sécurité.** Chacun couvre son
 conjoint, ses descendants et leurs conjoints — mais toute la famille
 partage le même code, donc qui le connaît peut se déclarer comme n'importe

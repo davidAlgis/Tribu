@@ -58,6 +58,7 @@
       <p class="note">
         Tout le monde est <strong>absent par défaut</strong>. Ne remplis que
         les jours de présence — et reviens modifier quand tu veux.
+        Enregistrer ne touche qu'à la personne sélectionnée.
       </p>
     </fieldset>
 
@@ -87,8 +88,10 @@
 
     <div class="actions">
       <button type="button" id="enregistrer">Enregistrer</button>
+      <button type="button" id="appliquer-tous" class="discret" hidden></button>
       <button type="button" id="changer" class="discret">Changer de personne</button>
     </div>
+    <p class="note" id="portee-saisie"></p>
     <p id="message" role="status" aria-live="polite"></p>
   </section>
 </main>

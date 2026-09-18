@@ -322,25 +322,40 @@ begin
   );
 end $fn$;
 
--- ---- 6c. Enregistrer la saisie d'une personne ----
+-- ---- 6c. Enregistrer la saisie ----
 --
---  Remplacement complet : ce que le formulaire envoie devient l'etat
---  exact de cette personne. Decocher un jour le supprime, donc la rend
---  absente. C'est ce qui rend la modification possible a tout moment
---  sans jamais accumuler de doublons.
+--  Remplacement complet : ce que le formulaire envoie devient l'etat exact
+--  de chaque personne visee. Decocher un jour le supprime, donc la rend
+--  absente. C'est ce qui rend la modification possible a tout moment sans
+--  jamais accumuler de doublons.
 --
+--  `p_cibles` est un TABLEAU, parce que la meme grille sert souvent a
+--  plusieurs : une fratrie qui arrive et repart ensemble, des parents qui
+--  prennent les memes repas. Une seule personne, c'est un tableau d'un
+--  element -- le cas courant reste le plus simple a ecrire.
+--
+--  Tout se joue dans une seule transaction : soit toutes les personnes
+--  sont enregistrees, soit aucune. Sans cela, un refus au milieu d'une
+--  application groupee laisserait la famille a moitie saisie, sans moyen
+--  de savoir ou la reprendre.
+--
+drop function if exists public.sejour_enregistrer(text, uuid, uuid, jsonb);
+
 create or replace function public.sejour_enregistrer(
   p_code    text,
   p_acteur  uuid,
-  p_cible   uuid,
+  p_cibles  uuid[],
   p_lignes  jsonb
 )
 returns jsonb
 language plpgsql security definer
 set search_path = private, pg_temp as $fn$
 declare
-  r  private.reglages;
-  nb integer;
+  r      private.reglages;
+  cibles uuid[];
+  cible  uuid;
+  nb     integer;
+  total  integer := 0;
 begin
   perform private.verifier_code(p_code);
 
@@ -349,7 +364,18 @@ begin
     raise exception 'SAISIE_FERMEE' using errcode = 'P0001';
   end if;
 
-  if p_cible not in (select m.id from private.personnes_modifiables(p_acteur) m) then
+  select array_agg(distinct c) into cibles from unnest(coalesce(p_cibles, '{}')) c;
+  if cibles is null then
+    raise exception 'AUCUNE_CIBLE' using errcode = 'P0001';
+  end if;
+
+  -- Les droits sont verifies sur TOUTES les cibles avant la premiere
+  -- ecriture : refuser a mi-parcours reviendrait a n'en enregistrer qu'une
+  -- partie.
+  if exists (
+    select 1 from unnest(cibles) c
+    where c not in (select m.id from private.personnes_modifiables(p_acteur) m)
+  ) then
     raise exception 'DROIT_REFUSE' using errcode = 'P0001';
   end if;
 
@@ -357,31 +383,38 @@ begin
     raise exception 'TROP_DE_LIGNES' using errcode = 'P0001';
   end if;
 
-  delete from public.presences where participant_id = p_cible;
+  foreach cible in array cibles loop
+    delete from public.presences where participant_id = cible;
 
-  insert into public.presences (
-    participant_id, jour, hebergement, petit_dejeuner, dejeuner, diner, vue_mer
-  )
-  select
-    p_cible,
-    (l->>'jour')::date,
-    l->>'hebergement',
-    coalesce((l->>'petit_dejeuner')::boolean, false),
-    coalesce((l->>'dejeuner')::boolean, false),
-    coalesce((l->>'diner')::boolean, false),
-    -- Le supplement vue mer n'existe que pour les chambres.
-    coalesce((l->>'vue_mer')::boolean, false) and l->>'hebergement' = 'chambre'
-  from jsonb_array_elements(coalesce(p_lignes, '[]'::jsonb)) as l
-  where (l->>'jour')::date between r.date_debut and r.date_fin
-    and l->>'hebergement' in ('chambre', 'gite', 'exterieur');
+    insert into public.presences (
+      participant_id, jour, hebergement, petit_dejeuner, dejeuner, diner, vue_mer
+    )
+    select
+      cible,
+      (l->>'jour')::date,
+      l->>'hebergement',
+      coalesce((l->>'petit_dejeuner')::boolean, false),
+      coalesce((l->>'dejeuner')::boolean, false),
+      coalesce((l->>'diner')::boolean, false),
+      -- Le supplement vue mer n'existe que pour les chambres.
+      coalesce((l->>'vue_mer')::boolean, false) and l->>'hebergement' = 'chambre'
+    from jsonb_array_elements(coalesce(p_lignes, '[]'::jsonb)) as l
+    where (l->>'jour')::date between r.date_debut and r.date_fin
+      and l->>'hebergement' in ('chambre', 'gite', 'exterieur');
 
-  get diagnostics nb = row_count;
-  return jsonb_build_object('enregistrees', nb);
+    get diagnostics nb = row_count;
+    total := total + nb;
+  end loop;
+
+  return jsonb_build_object(
+    'personnes', array_length(cibles, 1),
+    'enregistrees', total
+  );
 end $fn$;
 
 grant execute on function public.participants_lister(text)                   to anon;
 grant execute on function public.sejour_charger(text, uuid)                  to anon;
-grant execute on function public.sejour_enregistrer(text, uuid, uuid, jsonb) to anon;
+grant execute on function public.sejour_enregistrer(text, uuid, uuid[], jsonb) to anon;
 
 -- ============================================================
 --  7. La porte de sortie : l'export Python

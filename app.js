@@ -24,6 +24,7 @@ const MESSAGES = {
   DROIT_REFUSE: "Tu n'as pas le droit de modifier cette personne.",
   SAISIE_FERMEE: "La saisie est fermée. Contacte l'organisateur.",
   TROP_DE_LIGNES: "Saisie trop volumineuse.",
+  AUCUNE_CIBLE: "Aucune personne sélectionnée.",
 };
 
 const etat = { code: "", moi: null, donnees: null, cible: null };
@@ -237,7 +238,8 @@ function construireSaisie() {
   }
 
   if (!saisie_ouverte) {
-    document.getElementById("enregistrer").disabled = true;
+    // La grille reste consultable : on ferme l'ecriture, pas la lecture.
+    boutonEnregistrer.disabled = boutonTous.disabled = true;
     message.className = "erreur";
     message.textContent = MESSAGES.SAISIE_FERMEE;
   }
@@ -309,8 +311,25 @@ function selectionnerCible(personne) {
     personne.id === etat.moi.id ? "Ton séjour" : `Le séjour de ${personne.prenom}`;
 
   remplirGrille(personne.id);
+  majBoutons();
   message.className = "";
   message.textContent = "";
+}
+
+// Nommer la personne sur le bouton vaut mieux qu'un « Enregistrer » nu :
+// c'est la seule facon de voir, sans y penser, sur qui porte le clic.
+function majBoutons() {
+  const autres = etat.donnees.modifiables.filter((p) => p.id !== etat.cible.id);
+  boutonEnregistrer.textContent = `Enregistrer pour ${etat.cible.prenom}`;
+
+  boutonTous.hidden = autres.length === 0;
+  boutonTous.textContent = `Appliquer à tous (${etat.donnees.modifiables.length})`;
+
+  portee.textContent = autres.length
+    ? `« Appliquer à tous » recopie cette grille sur ${autres
+        .map((p) => p.prenom)
+        .join(", ")} — leur saisie actuelle est remplacée.`
+    : "";
 }
 
 function remplirGrille(participantId) {
@@ -351,10 +370,12 @@ function lireGrille() {
 }
 
 const boutonEnregistrer = document.getElementById("enregistrer");
+const boutonTous = document.getElementById("appliquer-tous");
+const portee = document.getElementById("portee-saisie");
 
-boutonEnregistrer.addEventListener("click", async () => {
+async function enregistrer(cibles) {
   const lignes = lireGrille();
-  boutonEnregistrer.disabled = true;
+  boutonEnregistrer.disabled = boutonTous.disabled = true;
   message.className = "";
   message.textContent = "Enregistrement…";
 
@@ -362,29 +383,60 @@ boutonEnregistrer.addEventListener("click", async () => {
     await rpc("sejour_enregistrer", {
       p_code: etat.code,
       p_acteur: etat.moi.id,
-      p_cible: etat.cible.id,
+      p_cibles: cibles.map((p) => p.id),
       p_lignes: lignes,
     });
 
     // L'etat local doit refleter la base, sinon changer de personne puis
     // revenir reafficherait l'ancienne saisie.
+    const vises = new Set(cibles.map((p) => p.id));
     etat.donnees.presences = etat.donnees.presences
-      .filter((p) => p.participant_id !== etat.cible.id)
-      .concat(lignes.map((l) => ({ ...l, participant_id: etat.cible.id })));
+      .filter((p) => !vises.has(p.participant_id))
+      .concat(
+        cibles.flatMap((cible) =>
+          lignes.map((l) => ({ ...l, participant_id: cible.id }))
+        )
+      );
 
-    const pastille = zonePersonnes.querySelector(`[data-id="${etat.cible.id}"]`);
-    if (pastille) pastille.querySelector(".vide")?.remove();
+    for (const cible of cibles) {
+      cible.saisi = true;
+      zonePersonnes.querySelector(`[data-id="${cible.id}"] .vide`)?.remove();
+    }
+
+    const qui =
+      cibles.length === 1
+        ? cibles[0].prenom
+        : `${cibles.length} personnes (${cibles.map((p) => p.prenom).join(", ")})`;
 
     message.className = "ok";
     message.textContent = lignes.length
-      ? `${etat.cible.prenom} : ${lignes.length} jour(s) enregistré(s).`
-      : `${etat.cible.prenom} est notée absente sur tout le séjour.`;
+      ? `${qui} : ${lignes.length} jour(s) enregistré(s).`
+      : `${qui} : absent·e sur tout le séjour.`;
   } catch (erreur) {
     message.className = "erreur";
     message.textContent = erreur.message;
   } finally {
-    boutonEnregistrer.disabled = false;
+    boutonEnregistrer.disabled = boutonTous.disabled = false;
   }
+}
+
+boutonEnregistrer.addEventListener("click", () => enregistrer([etat.cible]));
+
+boutonTous.addEventListener("click", () => {
+  const tous = etat.donnees.modifiables;
+  const ecrases = tous.filter((p) => p.id !== etat.cible.id && p.saisi);
+
+  // Ecraser la saisie de quelqu'un d'autre sans le dire serait le meilleur
+  // moyen de faire perdre a un cousin une heure de remplissage.
+  let question = `Appliquer cette grille à ${tous.map((p) => p.prenom).join(", ")} ?`;
+  if (ecrases.length) {
+    question +=
+      `
+
+La saisie déjà faite de ${ecrases.map((p) => p.prenom).join(", ")} ` +
+      `sera remplacée.`;
+  }
+  if (confirm(question)) enregistrer(tous);
 });
 
 document.getElementById("changer").addEventListener("click", () => {
