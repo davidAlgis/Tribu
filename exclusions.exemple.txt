@@ -1,0 +1,29 @@
+# ============================================================
+#  Tribu - qui ne vient pas
+# ============================================================
+#
+#  Copie ce fichier en `exclusions.txt` (non versionne) et liste
+#  les personnes a retirer : une par ligne, "Prenom" ou "Prenom Nom".
+#
+#  Accents, casse et espaces multiples sont ignores : "Chloé" trouve
+#  "Chloe". Si une ligne ne correspond a personne, l'import le signale
+#  plutot que de l'ignorer en silence : c'est ainsi qu'on repere une
+#  faute de frappe.
+#
+#  POURQUOI UN FICHIER SEPARE
+#
+#  `famille.txt` est REGENERE a chaque import du GEDCOM : une ligne
+#  effacee a la main y serait perdue au prochain passage. Les exclusions,
+#  elles, sont rejouees a chaque fois.
+#
+#  RETIRER QUELQU'UN NE COUPE PAS LA BRANCHE
+#
+#  Ses enfants remontent d'un cran et se rattachent a leur grand-parent.
+#  Si son conjoint reste, ils restent sous lui. Les droits demeurent donc
+#  coherents quoi qu'on retire.
+#
+#  Les personnes decedees sont ecartees d'office : inutile de les lister.
+# ============================================================
+
+# Prenom Nom
+# Prenom

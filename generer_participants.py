@@ -20,11 +20,11 @@ Format de `famille.txt`
 -----------------------
 
     ## Famille Durand              <- optionnel : nom de famille du bloc
-    Marie-Odille                   <- génération 0
-    ── Sylvain + Nathalie          <- génération 1, un couple
-    ──── Matthieu (enfant)         <- génération 2, leur fils
-    ──── Noémie (enfant)
-    ── Rémi                        <- génération 1, seul
+    Gerard + Simone                <- génération 0, un couple
+    ── Sylvain + Nadia             <- génération 1, leur fils et sa compagne
+    ──── Louise (enfant)           <- génération 2, leur fille
+    ──── Jules (enfant)
+    ── Simon                       <- génération 1, seul
     # une ligne commençant par # est un commentaire
 
   * l'indentation (deux tirets par génération) donne la filiation ;

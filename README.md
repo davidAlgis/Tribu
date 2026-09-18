@@ -113,13 +113,50 @@ de fois qu'on veut sans jamais créer de doublon.
 
 ### Décrire la famille
 
-La liste ne s'écrit **jamais** en SQL. Elle s'écrit dans `famille.txt`, en
-texte, et [`generer_participants.py`](generer_participants.py) en tire le
-SQL :
+La liste ne s'écrit **jamais** en SQL. Elle vient du fichier GEDCOM de la
+généalogie, qui contient déjà les couples et la filiation :
 
 ```
-famille.txt  ──>  python generer_participants.py  ──>  participants.sql
+  genealogie.ged  ──>  importer_ged.py  ──>  famille.txt  ──>  generer_participants.py  ──>  participants.sql
+  (hors du projet)          ▲                 (éditable)                                      (à coller)
+                            │
+                     exclusions.txt
 ```
+
+```bash
+python importer_ged.py --ged "D:/.../genealogie.ged" --racine "Prénom Nom" --generer
+```
+
+Le `.ged` **reste où il est** : il n'est jamais copié dans le projet.
+`--generer` enchaîne directement sur la génération du SQL.
+
+Sont déduits du GEDCOM, donc jamais devinés : les **couples** (`FAM` /
+`HUSB` / `WIFE`), la **filiation** (`CHIL`), la **catégorie d'âge**
+(calculée depuis `BIRT` à la date du séjour) et les personnes
+**décédées**, écartées d'office.
+
+### Retirer quelqu'un
+
+Une ligne dans `exclusions.txt` — « Prénom » ou « Prénom Nom », accents et
+casse indifférents :
+
+```
+Xavier
+Béatrice
+```
+
+Ce fichier est séparé parce que `famille.txt` est **régénéré** à chaque
+import : une ligne effacée à la main y serait perdue au passage suivant.
+Une exclusion qui ne correspond à personne est signalée plutôt qu'ignorée,
+ce qui rattrape les fautes de frappe.
+
+**Retirer quelqu'un ne coupe pas la branche.** Ses enfants remontent d'un
+cran et se rattachent à leur grand-parent — sauf si son conjoint reste, ce
+qui les garde sous lui. Les droits restent cohérents quoi qu'on retire.
+
+### Écrire la liste à la main
+
+`famille.txt` reste un simple fichier texte, modifiable sans GEDCOM :
 
 ```
 ## Durand
@@ -178,7 +215,9 @@ sont dans le `.gitignore` :
 
 | Fichier | Contenu | Modèle public |
 |---|---|---|
-| `famille.txt` | les vrais prénoms et la parenté | `famille.exemple.txt` |
+| `*.ged` | toute la généalogie | — (reste hors du projet) |
+| `famille.txt` (+ `.bak`) | les vrais prénoms et la parenté | `famille.exemple.txt` |
+| `exclusions.txt` | qui ne vient pas | `exclusions.exemple.txt` |
 | `participants.sql` | le même, en SQL | `supabase/participants.exemple.sql` |
 | `reglages.sql` | le code d'accès | `supabase/reglages.exemple.sql` |
 

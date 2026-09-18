@@ -5,8 +5,14 @@ exports/
 # LA FAMILLE - ne doit JAMAIS partir sur un dépôt public.
 # Seuls les fichiers .exemple, avec des prénoms inventés, sont versionnés.
 famille.txt
+famille.txt.bak
+exclusions.txt
 participants.sql
 reglages.sql
+
+# Un GEDCOM contient toute une genealogie : il reste hors du projet.
+# `importer_ged.py --ged` le lit la ou il est, sans jamais le copier ici.
+*.ged
 
 # Config réelle (tarifs négociés) - seul config.example.toml est versionné
 config.toml

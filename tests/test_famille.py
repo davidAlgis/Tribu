@@ -125,8 +125,8 @@ def test_commentaires_et_lignes_vides_ignores():
     assert len(lire("# rien\n\nJean\n\n# encore rien\n").personnes) == 1
 
 
-@pytest.mark.parametrize("prenom", ["Marie-Odille", "Noémie", "Éliott"])
-def test_prenoms_reels_acceptes(prenom):
+@pytest.mark.parametrize("prenom", ["Marie-Claire", "Noëlle", "Éloi"])
+def test_prenoms_composes_et_accentues_acceptes(prenom):
     assert lire(f"{prenom}\n").personnes[0].prenom == prenom
 
 
