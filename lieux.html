@@ -10,7 +10,10 @@
 <body>
 <main>
   <h1>Où se retrouve-t-on&nbsp;?</h1>
-  <p class="sous-titre">Peins en rouge les départements où tu n'as pas envie d'aller. Le reste reste possible.</p>
+  <p class="sous-titre">
+    Peins en rouge les départements où tu n'as pas envie d'aller, en glissant
+    le doigt. Repasse dessus pour effacer.
+  </p>
 
   <!-- ÉTAPE 1 — le code famille ------------------------------------ -->
   <section id="etape-code">
@@ -58,21 +61,11 @@
         <button type="button" class="pastille" data-vue="famille">Celle de la famille</button>
       </div>
 
-      <div class="reglages-carte">
-        <label for="rayon">Pinceau</label>
-        <input type="range" id="rayon" min="0" max="120" step="10" value="40">
-        <span id="rayon-valeur" class="discret-inline"></span>
-        <label class="interrupteur">
-          <input type="checkbox" id="villes" checked> Villes
-        </label>
-      </div>
-
       <div class="carte-cadre">
         <svg id="carte" role="img" aria-label="Carte des départements français"></svg>
       </div>
 
       <p class="carte-legende" id="carte-legende"></p>
-      <p class="note" id="carte-aide"></p>
 
       <button type="button" id="tout-effacer" class="discret">Tout remettre au vert</button>
     </fieldset>

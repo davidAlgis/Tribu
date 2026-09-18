@@ -153,15 +153,14 @@ const svg = document.getElementById("carte");
 const zonePersonnes = document.getElementById("personnes");
 const legende = document.getElementById("legende-carte");
 const carteLegende = document.getElementById("carte-legende");
-const carteAide = document.getElementById("carte-aide");
 const message = document.getElementById("message");
 const boutonEnregistrer = document.getElementById("enregistrer");
 const boutonTous = document.getElementById("appliquer-tous");
 const portee = document.getElementById("portee-saisie");
 
-const champRayon = document.getElementById("rayon");
-const valeurRayon = document.getElementById("rayon-valeur");
-const champVilles = document.getElementById("villes");
+// En unites du viewBox (large de 1000) : de quoi couvrir deux ou trois
+// departements d'un coup sans deborder sur la region voisine.
+const RAYON_PINCEAU = 38;
 
 const formes = new Map(); // code -> <path>
 let pinceau = null;
@@ -196,21 +195,49 @@ function dessinerCarte() {
 //
 // La couche entiere ignore la souris : sans `pointer-events: none`, un nom
 // de ville interposerait un trou dans lequel le pinceau ne peindrait pas.
+// Largeur approchee d'un nom, en unites du viewBox. Mesurer le texte pour
+// de vrai supposerait de l'avoir deja insere ; cette estimation suffit a
+// decider de quel cote l'ecrire.
+const HAUTEUR_NOM = 19;
+
+function largeurNom(nom) {
+  return nom.length * HAUTEUR_NOM * 0.52;
+}
+
+// Un nom s'ecrit a droite de son point, sauf dans deux cas : pres du bord
+// est, ou il sortirait du cadre, et quand une autre ville se trouve juste
+// derriere, ou il la recouvrirait — c'est le cas de Clermont-Ferrand, dont
+// le nom mesure plus que la distance qui le separe de Lyon.
+function ecrireAGauche(ville, largeur) {
+  if (ville.x + largeurNom(ville.n) > largeur * 0.97) return true;
+
+  return (window.CARTE.villes || []).some(
+    (autre) =>
+      autre !== ville &&
+      autre.x > ville.x &&
+      autre.x - ville.x < largeurNom(ville.n) + 14 &&
+      Math.abs(autre.y - ville.y) < 22
+  );
+}
+
 function dessinerVilles() {
   const couche = document.createElementNS(SVG, "g");
   couche.setAttribute("id", "couche-villes");
-  couche.classList.toggle("masquee", !champVilles.checked);
+
+  const largeur = Number(window.CARTE.viewBox.split(" ")[2]);
 
   for (const ville of window.CARTE.villes || []) {
     const point = document.createElementNS(SVG, "circle");
     point.setAttribute("cx", ville.x);
     point.setAttribute("cy", ville.y);
-    point.setAttribute("r", 3.2);
+    point.setAttribute("r", 5);
     point.classList.add("ville-point");
 
+    const aGauche = ecrireAGauche(ville, largeur);
     const nom = document.createElementNS(SVG, "text");
-    nom.setAttribute("x", ville.x + 6);
-    nom.setAttribute("y", ville.y + 4);
+    nom.setAttribute("x", ville.x + (aGauche ? -9 : 9));
+    nom.setAttribute("y", ville.y + 7);
+    if (aGauche) nom.setAttribute("text-anchor", "end");
     nom.textContent = ville.n;
     nom.classList.add("ville-nom");
 
@@ -245,14 +272,23 @@ function codeSous(evenement) {
   return cible && cible.dataset ? cible.dataset.code : null;
 }
 
-// Le rayon est saisi en unites du viewBox, mais le test de survol travaille
-// en pixels d'ecran : il faut convertir a chaque fois, la carte n'ayant pas
-// la meme taille sur un telephone et sur un ecran.
+// La conversion entre pixels d'ecran et unites du viewBox passe par la
+// matrice du navigateur, et surtout pas par un rapport de largeurs.
+//
+// Le SVG est contraint en hauteur : quand cette contrainte mord, le dessin
+// est centre dans une boite plus large que lui, avec des marges de chaque
+// cote. Une regle de trois sur la largeur ignore ces marges et decale le
+// pinceau d'autant — c'est exactement le defaut constate.
+function versSVG(evenement) {
+  const point = svg.createSVGPoint();
+  point.x = evenement.clientX;
+  point.y = evenement.clientY;
+  return point.matrixTransform(svg.getScreenCTM().inverse());
+}
+
 function rayonEcran() {
-  const rayon = Number(champRayon.value);
-  if (!rayon) return 0;
-  const largeurVue = Number(svg.getAttribute("viewBox").split(" ")[2]);
-  return (rayon * svg.getBoundingClientRect().width) / largeurVue;
+  const matrice = svg.getScreenCTM();
+  return matrice ? RAYON_PINCEAU * matrice.a : 0;
 }
 
 // Tout ce qui passe sous le disque, et pas seulement le point central.
@@ -299,15 +335,11 @@ function appliquer(codes) {
 
 function suivrePinceau(evenement) {
   if (!pinceau) return;
-  const rayon = Number(champRayon.value);
-  const cadre = svg.getBoundingClientRect();
-  const largeurVue = Number(svg.getAttribute("viewBox").split(" ")[2]);
-  const echelle = largeurVue / cadre.width;
-
-  pinceau.setAttribute("cx", (evenement.clientX - cadre.left) * echelle);
-  pinceau.setAttribute("cy", (evenement.clientY - cadre.top) * echelle);
-  pinceau.setAttribute("r", rayon);
-  pinceau.classList.toggle("masquee", rayon === 0 || etat.vue !== "moi");
+  const point = versSVG(evenement);
+  pinceau.setAttribute("cx", point.x);
+  pinceau.setAttribute("cy", point.y);
+  pinceau.setAttribute("r", RAYON_PINCEAU);
+  pinceau.classList.toggle("masquee", etat.vue !== "moi");
 }
 
 svg.addEventListener("pointerdown", (e) => {
@@ -368,12 +400,6 @@ function peindre() {
     carteLegende.innerHTML =
       `<span class="pastille-legende vert"></span> possible ` +
       `<span class="pastille-legende rouge"></span> ${etat.refuses.size} refusé(s)`;
-    carteAide.textContent =
-      Number(champRayon.value) === 0
-        ? "Touche un département pour le peindre, retouche-le pour l'effacer. " +
-          "Élargis le pinceau pour en couvrir plusieurs d'un geste."
-        : "Glisse le doigt pour balayer une région entière, repasse dessus " +
-          "pour effacer. Le curseur règle la largeur du pinceau.";
     return;
   }
 
@@ -394,12 +420,6 @@ function peindre() {
     `<span class="pastille-legende c2"></span> 2 ` +
     `<span class="pastille-legende c3"></span> 3 ou plus`;
 
-  const { repondants, participants } = etat.donnees;
-  carteAide.textContent =
-    `${repondants} personne(s) sur ${participants} se sont prononcées. ` +
-    (acceptes.length === 0
-      ? "Aucun département ne fait l'unanimité : les plus clairs restent les moins contestés."
-      : "Les départements en vert ne sont refusés par personne.");
 }
 
 // ------------------------------------------------------- etape 3, cadre
@@ -479,44 +499,6 @@ document.getElementById("vues").addEventListener("click", (e) => {
   if (pinceau) pinceau.classList.add("masquee");
   peindre();
 });
-
-const MEMOIRE_RAYON = "tribu.rayon";
-const MEMOIRE_VILLES = "tribu.villes";
-
-function majRayon() {
-  const rayon = Number(champRayon.value);
-  valeurRayon.textContent = rayon === 0 ? "précis" : `${rayon / 10}`;
-  try {
-    localStorage.setItem(MEMOIRE_RAYON, champRayon.value);
-  } catch {
-    /* sans importance */
-  }
-}
-
-champRayon.addEventListener("input", () => {
-  majRayon();
-  if (etat.cible) peindre();
-});
-
-champVilles.addEventListener("change", () => {
-  document
-    .getElementById("couche-villes")
-    ?.classList.toggle("masquee", !champVilles.checked);
-  try {
-    localStorage.setItem(MEMOIRE_VILLES, champVilles.checked ? "1" : "0");
-  } catch {
-    /* sans importance */
-  }
-});
-
-try {
-  const rayon = localStorage.getItem(MEMOIRE_RAYON);
-  if (rayon !== null) champRayon.value = rayon;
-  champVilles.checked = localStorage.getItem(MEMOIRE_VILLES) !== "0";
-} catch {
-  /* navigation privee : on garde les valeurs par defaut */
-}
-majRayon();
 
 document.getElementById("tout-effacer").addEventListener("click", () => {
   if (etat.vue !== "moi") return;

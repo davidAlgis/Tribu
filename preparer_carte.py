@@ -9,7 +9,7 @@ niveau de détail.
 CE QUE FAIT CE SCRIPT
 
 Il télécharge les frontières officielles (france-geojson, dérivé de l'IGN),
-garde la métropole, projette les coordonnées en pixels, simplifie les
+garde la France continentale, projette les coordonnées en pixels, simplifie les
 tracés, et écrit un fichier JavaScript de tracés SVG.
 
 POURQUOI PRÉ-CALCULER PLUTÔT QUE CHARGER LE GEOJSON
@@ -40,31 +40,26 @@ SOURCE = (
 )
 SORTIE = Path("carte.js")
 
-# Une quarantaine de reperes suffisent a se situer : assez pour reconnaitre
-# une region d'un coup d'oeil, assez peu pour ne pas noircir la carte.
+# Une vingtaine de reperes suffit a se situer. Au-dela, les noms se
+# chevauchent et il faut les ecrire si petit qu'ils ne se lisent plus --
+# une carte illisible ne repere rien.
+#
+# Deux absences volontaires : Clermont-Ferrand, dont le nom long recouvrait
+# Lyon d'un cote et Limoges de l'autre, et Nancy, collee a Strasbourg.
+# Retirer un repere coute moins qu'un moteur de placement d'etiquettes.
 VILLES = [
-    ("Paris", 48.8566, 2.3522), ("Marseille", 43.2965, 5.3698),
-    ("Lyon", 45.7640, 4.8357), ("Toulouse", 43.6047, 1.4442),
-    ("Nice", 43.7102, 7.2620), ("Nantes", 47.2184, -1.5536),
-    ("Montpellier", 43.6108, 3.8767), ("Strasbourg", 48.5734, 7.7521),
-    ("Bordeaux", 44.8378, -0.5792), ("Lille", 50.6292, 3.0573),
-    ("Rennes", 48.1173, -1.6778), ("Reims", 49.2583, 4.0317),
-    ("Toulon", 43.1242, 5.9280), ("Saint-Etienne", 45.4397, 4.3872),
-    ("Le Havre", 49.4944, 0.1079), ("Grenoble", 45.1885, 5.7245),
-    ("Dijon", 47.3220, 5.0415), ("Angers", 47.4784, -0.5632),
-    ("Nimes", 43.8367, 4.3601), ("Clermont-Ferrand", 45.7772, 3.0870),
-    ("Brest", 48.3904, -4.4861), ("Tours", 47.3941, 0.6848),
-    ("Amiens", 49.8941, 2.2958), ("Limoges", 45.8336, 1.2611),
-    ("Annecy", 45.8992, 6.1294), ("Perpignan", 42.6887, 2.8948),
-    ("Besancon", 47.2378, 6.0241), ("Metz", 49.1193, 6.1757),
-    ("Orleans", 47.9029, 1.9093), ("Rouen", 49.4432, 1.0999),
-    ("Mulhouse", 47.7508, 7.3359), ("Caen", 49.1829, -0.3707),
-    ("Nancy", 48.6921, 6.1844), ("Poitiers", 46.5802, 0.3404),
-    ("La Rochelle", 46.1591, -1.1520), ("Bayonne", 43.4933, -1.4748),
-    ("Pau", 43.2951, -0.3708), ("Ajaccio", 41.9192, 8.7386),
-    ("Chambery", 45.5646, 5.9178), ("Avignon", 43.9493, 4.8055),
-    ("Lorient", 47.7483, -3.3702), ("Troyes", 48.2973, 4.0744),
-    ("Bourges", 47.0810, 2.3988), ("Valence", 44.9333, 4.8924),
+    ("Paris", 48.8566, 2.3522), ("Lille", 50.6292, 3.0573),
+    ("Le Havre", 49.4944, 0.1079), ("Caen", 49.1829, -0.3707),
+    ("Brest", 48.3904, -4.4861), ("Rennes", 48.1173, -1.6778),
+    ("Nantes", 47.2184, -1.5536), ("Tours", 47.3941, 0.6848),
+    ("Orleans", 47.9029, 1.9093), ("Strasbourg", 48.5734, 7.7521),
+    ("Dijon", 47.3220, 5.0415),
+    ("La Rochelle", 46.1591, -1.1520), ("Limoges", 45.8336, 1.2611),
+    ("Lyon", 45.7640, 4.8357),
+    ("Bordeaux", 44.8378, -0.5792), ("Grenoble", 45.1885, 5.7245),
+    ("Bayonne", 43.4933, -1.4748), ("Toulouse", 43.6047, 1.4442),
+    ("Montpellier", 43.6108, 3.8767), ("Marseille", 43.2965, 5.3698),
+    ("Nice", 43.7102, 7.2620),
 ]
 
 LATITUDE_MOYENNE = 46.5  # le milieu de la France metropolitaine
@@ -73,8 +68,14 @@ TOLERANCE = 1.8         # en unites du viewBox : au-dela, le trait se casse
 
 
 def metropole(code: str) -> bool:
-    """Ecarte l'outre-mer : sans cela, la France tiendrait dans un timbre."""
-    return code in ("2A", "2B") or (code.isdigit() and 1 <= int(code) <= 95)
+    """Garde la France continentale.
+
+    L'outre-mer est ecarte, sinon la France tiendrait dans un timbre. La
+    Corse aussi : elle etire l'emprise vers le sud-est et repousse tout le
+    reste, pour deux departements qui ne sont pas le sujet d'un sejour
+    familial en voiture.
+    """
+    return code.isdigit() and 1 <= int(code) <= 95
 
 
 def projeter(lon: float, lat: float) -> tuple[float, float]:
@@ -129,7 +130,7 @@ def main() -> int:
     retenus = [
         f for f in donnees["features"] if metropole(f["properties"]["code"])
     ]
-    print(f"{len(retenus)} departements metropolitains sur {len(donnees['features'])}")
+    print(f"{len(retenus)} departements continentaux sur {len(donnees['features'])}")
 
     # Premiere passe : projeter et mesurer l'emprise.
     bruts = []
