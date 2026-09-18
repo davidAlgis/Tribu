@@ -40,6 +40,33 @@ SOURCE = (
 )
 SORTIE = Path("carte.js")
 
+# Une quarantaine de reperes suffisent a se situer : assez pour reconnaitre
+# une region d'un coup d'oeil, assez peu pour ne pas noircir la carte.
+VILLES = [
+    ("Paris", 48.8566, 2.3522), ("Marseille", 43.2965, 5.3698),
+    ("Lyon", 45.7640, 4.8357), ("Toulouse", 43.6047, 1.4442),
+    ("Nice", 43.7102, 7.2620), ("Nantes", 47.2184, -1.5536),
+    ("Montpellier", 43.6108, 3.8767), ("Strasbourg", 48.5734, 7.7521),
+    ("Bordeaux", 44.8378, -0.5792), ("Lille", 50.6292, 3.0573),
+    ("Rennes", 48.1173, -1.6778), ("Reims", 49.2583, 4.0317),
+    ("Toulon", 43.1242, 5.9280), ("Saint-Etienne", 45.4397, 4.3872),
+    ("Le Havre", 49.4944, 0.1079), ("Grenoble", 45.1885, 5.7245),
+    ("Dijon", 47.3220, 5.0415), ("Angers", 47.4784, -0.5632),
+    ("Nimes", 43.8367, 4.3601), ("Clermont-Ferrand", 45.7772, 3.0870),
+    ("Brest", 48.3904, -4.4861), ("Tours", 47.3941, 0.6848),
+    ("Amiens", 49.8941, 2.2958), ("Limoges", 45.8336, 1.2611),
+    ("Annecy", 45.8992, 6.1294), ("Perpignan", 42.6887, 2.8948),
+    ("Besancon", 47.2378, 6.0241), ("Metz", 49.1193, 6.1757),
+    ("Orleans", 47.9029, 1.9093), ("Rouen", 49.4432, 1.0999),
+    ("Mulhouse", 47.7508, 7.3359), ("Caen", 49.1829, -0.3707),
+    ("Nancy", 48.6921, 6.1844), ("Poitiers", 46.5802, 0.3404),
+    ("La Rochelle", 46.1591, -1.1520), ("Bayonne", 43.4933, -1.4748),
+    ("Pau", 43.2951, -0.3708), ("Ajaccio", 41.9192, 8.7386),
+    ("Chambery", 45.5646, 5.9178), ("Avignon", 43.9493, 4.8055),
+    ("Lorient", 47.7483, -3.3702), ("Troyes", 48.2973, 4.0744),
+    ("Bourges", 47.0810, 2.3988), ("Valence", 44.9333, 4.8924),
+]
+
 LATITUDE_MOYENNE = 46.5  # le milieu de la France metropolitaine
 LARGEUR = 1000           # le viewBox, en unites arbitraires
 TOLERANCE = 1.8         # en unites du viewBox : au-dela, le trait se casse
@@ -151,13 +178,29 @@ def main() -> int:
                 }
             )
 
+    # Les villes passent par la MEME projection que les contours : c'est la
+    # seule facon de garantir qu'un point tombe dans le bon departement.
+    villes = []
+    for nom, lat, lon in sorted(VILLES):
+        x, y = projeter(lon, lat)
+        villes.append(
+            {
+                "n": nom,
+                "x": round((x - xmin) * echelle, 1),
+                "y": round((y - ymin) * echelle, 1),
+            }
+        )
+
     contenu = (
         "// FICHIER GENERE par preparer_carte.py — ne pas editer a la main.\n"
-        "// Contours des departements metropolitains, projetes et simplifies.\n"
+        "// Contours des departements metropolitains, projetes et simplifies,\n"
+        "// et quelques villes pour se reperer.\n"
         "// Source : france-geojson (derive de l'IGN), licence ouverte.\n"
         f"window.CARTE = {{\n"
         f'  viewBox: "0 0 {LARGEUR} {hauteur}",\n'
-        f"  departements: "
+        f"  villes: "
+        + json.dumps(villes, ensure_ascii=False, separators=(",", ":"))
+        + ",\n  departements: "
         + json.dumps(departements, ensure_ascii=False, separators=(",", ":"))
         + "\n};\n"
     )
@@ -169,6 +212,7 @@ def main() -> int:
         f"{points_avant} points ramenes a {points_apres} "
         f"({100 - 100 * points_apres // points_avant} % en moins)"
     )
+    print(f"{len(villes)} villes reperes")
     print(f"{SORTIE} : {taille // 1024} Ko")
     return 0
 

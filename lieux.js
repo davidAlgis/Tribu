@@ -159,7 +159,14 @@ const boutonEnregistrer = document.getElementById("enregistrer");
 const boutonTous = document.getElementById("appliquer-tous");
 const portee = document.getElementById("portee-saisie");
 
+const champRayon = document.getElementById("rayon");
+const valeurRayon = document.getElementById("rayon-valeur");
+const champVilles = document.getElementById("villes");
+
 const formes = new Map(); // code -> <path>
+let pinceau = null;
+
+const SVG = "http://www.w3.org/2000/svg";
 
 function dessinerCarte() {
   svg.setAttribute("viewBox", window.CARTE.viewBox);
@@ -167,18 +174,57 @@ function dessinerCarte() {
   formes.clear();
 
   for (const dep of window.CARTE.departements) {
-    const forme = document.createElementNS("http://www.w3.org/2000/svg", "path");
+    const forme = document.createElementNS(SVG, "path");
     forme.setAttribute("d", dep.d);
     forme.dataset.code = dep.c;
     forme.classList.add("dep");
 
-    const titre = document.createElementNS("http://www.w3.org/2000/svg", "title");
+    const titre = document.createElementNS(SVG, "title");
     titre.textContent = `${dep.c} — ${dep.n}`;
     forme.appendChild(titre);
 
     svg.appendChild(forme);
     formes.set(dep.c, forme);
   }
+
+  dessinerVilles();
+  dessinerPinceau();
+}
+
+// Les villes servent a se reperer : sans elles, difficile de dire si l'on
+// peint au-dessus ou au-dessous de Lyon.
+//
+// La couche entiere ignore la souris : sans `pointer-events: none`, un nom
+// de ville interposerait un trou dans lequel le pinceau ne peindrait pas.
+function dessinerVilles() {
+  const couche = document.createElementNS(SVG, "g");
+  couche.setAttribute("id", "couche-villes");
+  couche.classList.toggle("masquee", !champVilles.checked);
+
+  for (const ville of window.CARTE.villes || []) {
+    const point = document.createElementNS(SVG, "circle");
+    point.setAttribute("cx", ville.x);
+    point.setAttribute("cy", ville.y);
+    point.setAttribute("r", 3.2);
+    point.classList.add("ville-point");
+
+    const nom = document.createElementNS(SVG, "text");
+    nom.setAttribute("x", ville.x + 6);
+    nom.setAttribute("y", ville.y + 4);
+    nom.textContent = ville.n;
+    nom.classList.add("ville-nom");
+
+    couche.append(point, nom);
+  }
+  svg.appendChild(couche);
+}
+
+function dessinerPinceau() {
+  pinceau = document.createElementNS(SVG, "circle");
+  pinceau.setAttribute("id", "pinceau");
+  pinceau.setAttribute("r", 0);
+  pinceau.classList.add("masquee");
+  svg.appendChild(pinceau);
 }
 
 // Peindre par glisse : le premier departement touche decide du sens. S'il
@@ -199,18 +245,101 @@ function codeSous(evenement) {
   return cible && cible.dataset ? cible.dataset.code : null;
 }
 
+// Le rayon est saisi en unites du viewBox, mais le test de survol travaille
+// en pixels d'ecran : il faut convertir a chaque fois, la carte n'ayant pas
+// la meme taille sur un telephone et sur un ecran.
+function rayonEcran() {
+  const rayon = Number(champRayon.value);
+  if (!rayon) return 0;
+  const largeurVue = Number(svg.getAttribute("viewBox").split(" ")[2]);
+  return (rayon * svg.getBoundingClientRect().width) / largeurVue;
+}
+
+// Tout ce qui passe sous le disque, et pas seulement le point central.
+//
+// On echantillonne plutot que de calculer des intersections de polygones :
+// le navigateur sait deja dire ce qu'il y a sous un point, il le fait vite,
+// et il gere les formes concaves sans qu'on ait a s'en occuper.
+function codesSousLePinceau(evenement) {
+  const rayon = rayonEcran();
+  const codes = new Set();
+  const decalages = [[0, 0]];
+
+  if (rayon > 0) {
+    for (const [combien, proportion] of [[6, 0.45], [10, 0.8], [14, 1]]) {
+      for (let i = 0; i < combien; i++) {
+        const angle = (2 * Math.PI * i) / combien + proportion;
+        decalages.push([
+          Math.cos(angle) * rayon * proportion,
+          Math.sin(angle) * rayon * proportion,
+        ]);
+      }
+    }
+  }
+
+  for (const [dx, dy] of decalages) {
+    const element = document.elementFromPoint(
+      evenement.clientX + dx,
+      evenement.clientY + dy
+    );
+    const code = element && element.dataset ? element.dataset.code : null;
+    if (code) codes.add(code);
+  }
+  return codes;
+}
+
+function appliquer(codes) {
+  if (etat.vue !== "moi" || etat.peint === null || codes.size === 0) return;
+  for (const code of codes) {
+    if (etat.peint) etat.refuses.add(code);
+    else etat.refuses.delete(code);
+  }
+  peindre();
+}
+
+function suivrePinceau(evenement) {
+  if (!pinceau) return;
+  const rayon = Number(champRayon.value);
+  const cadre = svg.getBoundingClientRect();
+  const largeurVue = Number(svg.getAttribute("viewBox").split(" ")[2]);
+  const echelle = largeurVue / cadre.width;
+
+  pinceau.setAttribute("cx", (evenement.clientX - cadre.left) * echelle);
+  pinceau.setAttribute("cy", (evenement.clientY - cadre.top) * echelle);
+  pinceau.setAttribute("r", rayon);
+  pinceau.classList.toggle("masquee", rayon === 0 || etat.vue !== "moi");
+}
+
 svg.addEventListener("pointerdown", (e) => {
   if (etat.vue !== "moi") return;
   e.preventDefault();
   etat.peint = null;
+  // Le sens du trace est decide par le departement vise au centre, pas par
+  // l'un des voisins attrapes au bord du pinceau : sinon le meme geste
+  // peindrait ou effacerait selon la position exacte du doigt.
   basculer(codeSous(e));
-  // Sans capture, quitter la forme d'origine interromprait le glisse.
-  svg.setPointerCapture(e.pointerId);
+  appliquer(codesSousLePinceau(e));
+
+  // Sans capture, quitter la forme d'origine interromprait le glisse. Tous
+  // les navigateurs ne l'acceptent pas dans tous les cas : c'est un confort,
+  // pas une condition, et un echec ne doit pas bloquer le trace.
+  try {
+    svg.setPointerCapture(e.pointerId);
+  } catch {
+    /* on peindra tant que le pointeur reste sur la carte */
+  }
 });
 
 svg.addEventListener("pointermove", (e) => {
-  if (etat.peint === null || !svg.hasPointerCapture(e.pointerId)) return;
-  basculer(codeSous(e));
+  suivrePinceau(e);
+  // `etat.peint` non nul signifie qu'un trace est en cours : c'est lui qui
+  // fait foi, et non la capture, qui peut avoir echoue.
+  if (etat.peint === null) return;
+  appliquer(codesSousLePinceau(e));
+});
+
+svg.addEventListener("pointerleave", () => {
+  if (pinceau) pinceau.classList.add("masquee");
 });
 
 for (const fin of ["pointerup", "pointercancel"]) {
@@ -240,7 +369,11 @@ function peindre() {
       `<span class="pastille-legende vert"></span> possible ` +
       `<span class="pastille-legende rouge"></span> ${etat.refuses.size} refusé(s)`;
     carteAide.textContent =
-      "Glisse le doigt pour peindre, repasse dessus pour effacer.";
+      Number(champRayon.value) === 0
+        ? "Touche un département pour le peindre, retouche-le pour l'effacer. " +
+          "Élargis le pinceau pour en couvrir plusieurs d'un geste."
+        : "Glisse le doigt pour balayer une région entière, repasse dessus " +
+          "pour effacer. Le curseur règle la largeur du pinceau.";
     return;
   }
 
@@ -343,8 +476,47 @@ document.getElementById("vues").addEventListener("click", (e) => {
     autre.classList.toggle("active", autre === bouton);
   }
   svg.classList.toggle("lecture", etat.vue !== "moi");
+  if (pinceau) pinceau.classList.add("masquee");
   peindre();
 });
+
+const MEMOIRE_RAYON = "tribu.rayon";
+const MEMOIRE_VILLES = "tribu.villes";
+
+function majRayon() {
+  const rayon = Number(champRayon.value);
+  valeurRayon.textContent = rayon === 0 ? "précis" : `${rayon / 10}`;
+  try {
+    localStorage.setItem(MEMOIRE_RAYON, champRayon.value);
+  } catch {
+    /* sans importance */
+  }
+}
+
+champRayon.addEventListener("input", () => {
+  majRayon();
+  if (etat.cible) peindre();
+});
+
+champVilles.addEventListener("change", () => {
+  document
+    .getElementById("couche-villes")
+    ?.classList.toggle("masquee", !champVilles.checked);
+  try {
+    localStorage.setItem(MEMOIRE_VILLES, champVilles.checked ? "1" : "0");
+  } catch {
+    /* sans importance */
+  }
+});
+
+try {
+  const rayon = localStorage.getItem(MEMOIRE_RAYON);
+  if (rayon !== null) champRayon.value = rayon;
+  champVilles.checked = localStorage.getItem(MEMOIRE_VILLES) !== "0";
+} catch {
+  /* navigation privee : on garde les valeurs par defaut */
+}
+majRayon();
 
 document.getElementById("tout-effacer").addEventListener("click", () => {
   if (etat.vue !== "moi") return;

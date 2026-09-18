@@ -354,3 +354,49 @@ button.retirer:hover { color: #fff; background: var(--erreur); border-color: var
   .pastille-legende.c1 { background: #7a9e5a; }
   .pastille-legende.c2 { background: #b89a4a; }
 }
+
+/* ---------- Pinceau et villes ---------- */
+.reglages-carte {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 16px;
+  margin: 14px 0 4px;
+  font-size: 0.86rem;
+  color: var(--doux);
+}
+.reglages-carte label { margin: 0; }
+.reglages-carte input[type="range"] { width: 130px; accent-color: var(--accent); }
+
+#pinceau {
+  fill: rgba(217, 83, 79, 0.18);
+  stroke: #d9534f;
+  stroke-width: 1.5;
+  /* Sans cela, le disque du pinceau masquerait ce qu'il doit peindre. */
+  pointer-events: none;
+}
+
+/* La couche entière est inerte : un nom de ville ne doit jamais interposer
+   un trou dans lequel le pinceau ne peindrait pas. */
+#couche-villes { pointer-events: none; }
+#couche-villes.masquee, #pinceau.masquee { display: none; }
+
+.ville-point { fill: #1c1d1e; fill-opacity: 0.62; }
+.ville-nom {
+  font-size: 11px;
+  fill: #1c1d1e;
+  fill-opacity: 0.72;
+  font-family: system-ui, sans-serif;
+  paint-order: stroke;
+  stroke: rgba(255, 255, 255, 0.72);
+  stroke-width: 2.4px;
+}
+
+@media (prefers-color-scheme: dark) {
+  .ville-point { fill: #f2f2ee; fill-opacity: 0.75; }
+  .ville-nom {
+    fill: #f2f2ee;
+    fill-opacity: 0.86;
+    stroke: rgba(0, 0, 0, 0.55);
+  }
+}

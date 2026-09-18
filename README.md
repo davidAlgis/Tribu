@@ -31,6 +31,11 @@ départements où il n'a pas envie d'aller — en glissant le doigt, et en
 repassant dessus pour effacer. Le croisement désigne ceux que personne ne
 refuse.
 
+Le curseur **Pinceau** règle la largeur du trait : au maximum, un seul
+balayage couvre une région entière ; en position « précis », on désigne un
+département à la fois. Une quarantaine de **villes repères** situent le
+geste — on sait si l'on peint au-dessus ou au-dessous de Lyon.
+
 Le département comme unité plutôt qu'un dessin libre, pour trois raisons :
 la donnée tient en quelques codes, le croisement est un simple comptage,
 et surtout **la sortie porte un nom**. « Dordogne » se cherche sur un site
@@ -55,7 +60,9 @@ python preparer_carte.py
 
 Télécharge les frontières officielles (france-geojson, dérivé de l'IGN),
 garde la métropole, projette et simplifie, et écrit `carte.js` — 96
-départements, 59 Ko. Le résultat est versionné : une carte de France ne
+départements et 44 villes, 61 Ko. Les villes passent par la **même**
+projection que les contours : c'est la seule façon de garantir qu'un point
+tombe dans le bon département. Le résultat est versionné : une carte de France ne
 contient aucune donnée personnelle. Relancer ne sert qu'à changer le niveau
 de détail (constante `TOLERANCE`).
 </details>
