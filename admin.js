@@ -131,6 +131,7 @@ async function recharger() {
   remplirSelecteurs();
   await rechargerDates();
   await rechargerLieux();
+  await rechargerSauvegardes();
 }
 
 // ---------------------------------------------------------------- noeuds
@@ -567,5 +568,393 @@ interrupteurLieux.addEventListener("change", async () => {
     interrupteurLieux.checked = !interrupteurLieux.checked;
     messageLieux.className = "erreur";
     messageLieux.textContent = erreur.message;
+  }
+});
+
+
+// ------------------------------------------------------ sauvegardes
+//
+// La base ne garde que l'etat courant : « Appliquer a tous », le retrait
+// d'un participant et le reamorcage GEDCOM effacent sans retour. Une copie
+// part donc a la premiere ecriture de chaque semaine, prise juste avant
+// celle-ci (cf. schema.sql, section 11).
+//
+// La COMPARAISON se fait ici, et non en SQL. Deux raisons : la base sert
+// des faits et laisse les derivees au reste du projet, et une fonction
+// JavaScript se met sur un banc d'essai -- ce qu'une fonction PL/pgSQL ne
+// fait pas sans une vraie base sous la main.
+
+// Ce qui identifie une ligne, et ce qu'on ignore en comparant.
+//
+// La cle est NATURELLE, jamais l'`id`. Enregistrer une grille efface les
+// lignes de la personne et les reecrit : chaque `id` change a chaque
+// enregistrement, meme quand la reponse est identique au caractere pres.
+// Comparer sur l'`id` signalerait donc tout comme « retire puis ajoute »,
+// a chaque fois, et la comparaison ne dirait plus rien.
+//
+// `maj_le` part pour la meme raison : il bouge quand la valeur ne bouge pas.
+const COMPARABLES = [
+  {
+    clef: "presences",
+    nom: "Présences",
+    cle: ["participant_id", "jour"],
+    ignorer: ["id", "maj_le"],
+  },
+  {
+    clef: "voeux",
+    nom: "Dates",
+    cle: ["participant_id", "option_id"],
+    ignorer: ["id", "maj_le"],
+  },
+  {
+    clef: "refus_lieu",
+    nom: "Lieux",
+    cle: ["participant_id", "departement"],
+    ignorer: ["id", "maj_le"],
+  },
+];
+
+const CHAMPS_PARTICIPANT = [
+  "prenom",
+  "famille",
+  "categorie_age",
+  "parent_id",
+  "conjoint_id",
+  "invite",
+  "portee",
+];
+const CHAMPS_OPTION = ["libelle", "date_debut", "date_fin"];
+
+// Les noms de colonnes ne sortent pas de la base : « categorie_age » ne
+// veut rien dire pour qui lit la page.
+const NOMS_CHAMPS = {
+  prenom: "prénom",
+  famille: "famille",
+  categorie_age: "âge",
+  parent_id: "rattachement",
+  conjoint_id: "conjoint",
+  invite: "invité",
+  portee: "portée",
+  libelle: "intitulé",
+  date_debut: "date de début",
+  date_fin: "date de fin",
+};
+
+function nommerChamps(champs) {
+  return champs.map((c) => NOMS_CHAMPS[c] || c).join(", ");
+}
+
+// `null` cote base et `undefined` cote JSON disent la meme chose : absent.
+function memeValeur(a, b) {
+  const net = (x) => String(x === null || x === undefined ? "" : x);
+  return net(a) === net(b);
+}
+
+function empreinte(ligne, cle) {
+  // JSON.stringify plutot qu'un separateur : deux valeurs collees
+  // bout a bout pourraient se confondre avec deux autres.
+  return JSON.stringify(cle.map((c) => ligne[c]));
+}
+
+// Les cles triees, sinon deux lignes identiques dont les champs sont
+// ranges autrement passeraient pour differentes.
+function corpsDe(ligne, ignorer) {
+  const garde = {};
+  for (const c of Object.keys(ligne).sort()) {
+    if (!ignorer.includes(c)) garde[c] = ligne[c];
+  }
+  return JSON.stringify(garde);
+}
+
+function indexer(lignes, def) {
+  const index = new Map();
+  for (const ligne of lignes || []) {
+    index.set(empreinte(ligne, def.cle), { ligne, corps: corpsDe(ligne, def.ignorer) });
+  }
+  return index;
+}
+
+// Un decompte par personne, et seulement celles qui ont bouge : ce qui n'a
+// pas change n'a pas besoin d'etre lu.
+function comparerTable(avant, apres, def) {
+  const a = indexer(avant, def);
+  const b = indexer(apres, def);
+  const gens = new Map();
+  const voir = (pid) => {
+    if (!gens.has(pid)) gens.set(pid, { pid, avant: 0, apres: 0, differe: false });
+    return gens.get(pid);
+  };
+
+  for (const [k, v] of a) {
+    const g = voir(v.ligne.participant_id);
+    g.avant += 1;
+    if (!b.has(k) || b.get(k).corps !== v.corps) g.differe = true;
+  }
+  for (const [k, v] of b) {
+    const g = voir(v.ligne.participant_id);
+    g.apres += 1;
+    if (!a.has(k)) g.differe = true;
+  }
+
+  return {
+    avant: a.size,
+    apres: b.size,
+    personnes: [...gens.values()].filter((g) => g.differe),
+  };
+}
+
+// Participants et week-ends gardent leur `id` d'un bout a l'autre : eux,
+// on les compare dessus.
+function comparerParId(avant, apres, champs) {
+  const a = new Map((avant || []).map((x) => [x.id, x]));
+  const b = new Map((apres || []).map((x) => [x.id, x]));
+  const ajoutes = [];
+  const retires = [];
+  const modifies = [];
+
+  for (const [id, x] of b) if (!a.has(id)) ajoutes.push(x);
+  for (const [id, x] of a) {
+    if (!b.has(id)) {
+      retires.push(x);
+      continue;
+    }
+    const y = b.get(id);
+    const changes = champs.filter((c) => !memeValeur(x[c], y[c]));
+    if (changes.length) modifies.push({ avant: x, apres: y, champs: changes });
+  }
+  return { avant: a.size, apres: b.size, ajoutes, retires, modifies };
+}
+
+// Le resultat complet, sans rien du DOM : c'est cette fonction-la qui passe
+// sur le banc d'essai.
+function comparerEtats(avant, apres) {
+  // Les prenoms des deux cotes : quelqu'un de retire depuis n'existe plus
+  // que dans la copie, et il faut pouvoir le nommer quand meme.
+  const noms = new Map();
+  for (const p of avant.participants || []) noms.set(p.id, p.prenom);
+  for (const p of apres.participants || []) noms.set(p.id, p.prenom);
+
+  const participants = comparerParId(avant.participants, apres.participants, CHAMPS_PARTICIPANT);
+  const options = comparerParId(avant.options_date, apres.options_date, CHAMPS_OPTION);
+
+  const tables = COMPARABLES.map((def) => {
+    const r = comparerTable(avant[def.clef], apres[def.clef], def);
+    for (const g of r.personnes) g.prenom = noms.get(g.pid) || "(inconnu)";
+    r.personnes.sort((x, y) => x.prenom.localeCompare(y.prenom, "fr"));
+    return { clef: def.clef, nom: def.nom, ...r };
+  });
+
+  const bouge = (d) => d.ajoutes.length || d.retires.length || d.modifies.length;
+  return {
+    participants,
+    options,
+    tables,
+    identique:
+      !bouge(participants) && !bouge(options) && tables.every((t) => !t.personnes.length),
+  };
+}
+
+// ---------------------------------------------------------- l'affichage
+
+const zoneSauvegardes = document.getElementById("liste-sauvegardes");
+const zoneComparaison = document.getElementById("comparaison");
+const compteurSauvegardes = document.getElementById("compteur-sauvegardes");
+const messageSauvegardes = document.getElementById("message-sauvegardes");
+
+const MOTIFS = {
+  hebdomadaire: "début de semaine",
+  manuelle: "prise à la demande",
+  avant_restauration: "prise avant une restauration",
+};
+
+function afficherInstant(iso) {
+  return new Date(iso).toLocaleString("fr-FR", {
+    weekday: "long",
+    day: "numeric",
+    month: "long",
+    hour: "2-digit",
+    minute: "2-digit",
+  });
+}
+
+async function rechargerSauvegardes() {
+  const liste = await rpc("admin_sauvegardes_lister", { p_code: etat.code });
+  compteurSauvegardes.textContent = liste.length
+    ? `${liste.length} copie(s)`
+    : "aucune copie";
+
+  zoneSauvegardes.textContent = "";
+  zoneComparaison.textContent = "";
+
+  if (!liste.length) {
+    const vide = document.createElement("p");
+    vide.className = "note";
+    vide.textContent =
+      "Aucune copie pour l'instant. La première part toute seule, " +
+      "à la première modification de la semaine.";
+    zoneSauvegardes.appendChild(vide);
+    return;
+  }
+
+  for (const copie of liste) {
+    const c = copie.compteurs;
+    const etiquettes = span("", "etiquettes");
+    etiquettes.append(
+      span(`${c.participants} personnes`, "etiquette"),
+      span(`${c.presences} jours`, "etiquette"),
+      span(`${c.voeux} réponses`, "etiquette"),
+      span(`${c.refus_lieu} refus`, "etiquette")
+    );
+
+    const gauche = document.createElement("div");
+    gauche.append(
+      fort(afficherInstant(copie.prise_le)),
+      etiquettes,
+      span(MOTIFS[copie.motif] || copie.motif, "lien")
+    );
+
+    const boutonComparer = document.createElement("button");
+    boutonComparer.type = "button";
+    boutonComparer.className = "discret";
+    boutonComparer.textContent = "Comparer";
+    boutonComparer.addEventListener("click", () => montrerComparaison(copie));
+
+    const boutonRestaurer = document.createElement("button");
+    boutonRestaurer.type = "button";
+    boutonRestaurer.className = "discret";
+    boutonRestaurer.textContent = "Restaurer";
+    boutonRestaurer.addEventListener("click", () => restaurer(copie));
+
+    const ligne = document.createElement("div");
+    ligne.className = "personne";
+    ligne.append(gauche, boutonComparer, boutonRestaurer);
+    zoneSauvegardes.appendChild(ligne);
+  }
+}
+
+function sousTitre(texte) {
+  const t = document.createElement("p");
+  t.className = "titre-famille";
+  t.textContent = texte;
+  return t;
+}
+
+function ligneDiff(etiquette, texte) {
+  const l = document.createElement("div");
+  l.className = "diff";
+  l.append(span(etiquette, "etiquette"), span(texte, "diff-texte"));
+  return l;
+}
+
+function dessinerComparaison(copie, d) {
+  zoneComparaison.textContent = "";
+
+  const titre = document.createElement("p");
+  titre.className = "note";
+  titre.textContent = `Ce qui a changé depuis la copie du ${afficherInstant(copie.prise_le)}.`;
+  zoneComparaison.appendChild(titre);
+
+  if (d.identique) {
+    const rien = document.createElement("p");
+    rien.className = "note";
+    rien.textContent = "Rien. La base est exactement dans l'état de cette copie.";
+    zoneComparaison.appendChild(rien);
+    return;
+  }
+
+  const p = d.participants;
+  if (p.ajoutes.length || p.retires.length || p.modifies.length) {
+    zoneComparaison.appendChild(sousTitre(`Participants : ${p.avant} → ${p.apres}`));
+    for (const x of p.ajoutes) zoneComparaison.appendChild(ligneDiff("ajouté", x.prenom));
+    for (const x of p.retires) zoneComparaison.appendChild(ligneDiff("retiré", x.prenom));
+    for (const m of p.modifies) {
+      zoneComparaison.appendChild(
+        ligneDiff("modifié", `${m.avant.prenom} — ${nommerChamps(m.champs)}`)
+      );
+    }
+  }
+
+  const o = d.options;
+  if (o.ajoutes.length || o.retires.length || o.modifies.length) {
+    zoneComparaison.appendChild(sousTitre(`Week-ends proposés : ${o.avant} → ${o.apres}`));
+    for (const x of o.ajoutes) zoneComparaison.appendChild(ligneDiff("ajouté", x.libelle));
+    for (const x of o.retires) zoneComparaison.appendChild(ligneDiff("retiré", x.libelle));
+    for (const m of o.modifies) {
+      zoneComparaison.appendChild(
+        ligneDiff("modifié", `${m.avant.libelle} — ${nommerChamps(m.champs)}`)
+      );
+    }
+  }
+
+  for (const t of d.tables) {
+    if (!t.personnes.length) continue;
+    zoneComparaison.appendChild(sousTitre(`${t.nom} : ${t.avant} → ${t.apres}`));
+    for (const g of t.personnes) {
+      // Le mot dit ce qui s'est passe ; les deux nombres disent combien.
+      const quoi = g.avant === 0 ? "ajouté" : g.apres === 0 ? "effacé" : "modifié";
+      zoneComparaison.appendChild(ligneDiff(quoi, `${g.prenom} — ${g.avant} → ${g.apres}`));
+    }
+  }
+}
+
+async function montrerComparaison(copie) {
+  messageSauvegardes.className = "";
+  messageSauvegardes.textContent = "Comparaison…";
+  try {
+    // L'etat courant est relu a chaque fois : comparer contre une version
+    // chargee il y a dix minutes dirait le faux.
+    const [avant, apres] = await Promise.all([
+      rpc("admin_sauvegarde_lire", { p_code: etat.code, p_id: copie.id }),
+      rpc("admin_etat", { p_code: etat.code }),
+    ]);
+    dessinerComparaison(copie, comparerEtats(avant, apres));
+    messageSauvegardes.textContent = "";
+  } catch (erreur) {
+    messageSauvegardes.className = "erreur";
+    messageSauvegardes.textContent = erreur.message;
+  }
+}
+
+async function restaurer(copie) {
+  const c = copie.compteurs;
+  const question =
+    `Revenir à la copie du ${afficherInstant(copie.prise_le)} ?\n\n` +
+    `Toute la base est remplacée : ${c.participants} participants, ` +
+    `${c.presences} jours de présence, ${c.voeux} réponses de dates et ` +
+    `${c.refus_lieu} refus de lieux reprennent leur état d'alors. Ce qui a ` +
+    `été saisi depuis disparaît.\n\n` +
+    `Une copie de l'état actuel est prise juste avant, pour que ce geste-ci ` +
+    `soit lui aussi annulable.`;
+  if (!confirm(question)) return;
+
+  messageSauvegardes.className = "";
+  messageSauvegardes.textContent = "Restauration…";
+  try {
+    const r = await rpc("admin_sauvegarde_restaurer", {
+      p_code: etat.code,
+      p_id: copie.id,
+    });
+    await recharger();
+    messageSauvegardes.className = "ok";
+    messageSauvegardes.textContent =
+      `Restauré : ${r.participants} participants, ${r.presences} jours, ` +
+      `${r.voeux} réponses, ${r.refus_lieu} refus.`;
+  } catch (erreur) {
+    messageSauvegardes.className = "erreur";
+    messageSauvegardes.textContent = erreur.message;
+  }
+}
+
+document.getElementById("sauver-maintenant").addEventListener("click", async () => {
+  messageSauvegardes.className = "";
+  messageSauvegardes.textContent = "Copie en cours…";
+  try {
+    await rpc("admin_sauvegarde_prendre", { p_code: etat.code });
+    await rechargerSauvegardes();
+    messageSauvegardes.className = "ok";
+    messageSauvegardes.textContent = "Copie prise.";
+  } catch (erreur) {
+    messageSauvegardes.className = "erreur";
+    messageSauvegardes.textContent = erreur.message;
   }
 });

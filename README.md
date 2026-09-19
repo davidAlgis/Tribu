@@ -20,7 +20,7 @@ Deux pages pour la famille, une pour toi :
 | [`lieux.html`](lieux.html) | la famille | où l'on n'a pas envie d'aller |
 | [`dates.html`](dates.html) | la famille | quel week-end arrange chacun |
 | [`index.html`](index.html) | la famille | qui vient, quelles nuits, quels repas |
-| [`admin.html`](admin.html) | toi | participants, droits, week-ends, résultat de la carte |
+| [`admin.html`](admin.html) | toi | participants, droits, week-ends, résultat de la carte, retour en arrière |
 
 ---
 
@@ -178,6 +178,69 @@ génération entière deviendrait orpheline et plus personne ne pourrait gérer
 sa présence.
 
 Sa saisie de présences part avec elle.
+
+## Revenir en arrière
+
+Trois gestes effacent beaucoup d'un coup, et aucun n'était réversible :
+« Appliquer à tous » sur les trois pages familiales, le retrait d'un
+participant qui emporte ses saisies, et le réamorçage GEDCOM qui vide la
+liste. La base ne garde que l'état courant — ce qui est remplacé n'existe
+plus nulle part.
+
+Une copie part donc **à la première écriture de chaque semaine**, prise
+juste avant celle-ci. Elle porte l'état tel qu'il était avant le premier
+changement de la semaine : exactement le point de retour qu'on cherche.
+
+Pas de planificateur. `pg_cron` demanderait une extension à activer à la
+main, hors du « coller `schema.sql` et c'est prêt », et prendrait des
+copies identiques les semaines sans activité. Une semaine sans aucune
+modification ne produit aucune copie, puisqu'il n'y aurait rien à y sauver.
+Le bouton **Sauvegarder maintenant** couvre le cas où l'on sent venir une
+opération risquée.
+
+### Comparer
+
+**Comparer** montre ce qui a changé depuis une copie, dans le vocabulaire
+de la page et pas dans celui de la base :
+
+```
+Participants : 20 → 21
+  ajouté    Chloe
+  retiré    Bruno
+  modifié   Lea — prénom, âge
+
+Présences : 140 → 96
+  modifié   Alice — 8 → 8
+  effacé    Bruno — 4 → 0
+```
+
+Seules les personnes qui ont bougé sont listées. Deux nombres plutôt qu'un :
+combien de lignes avant, combien après.
+
+La comparaison se fait **sur la clé naturelle** — la personne et le jour,
+la personne et le week-end, la personne et le département — jamais sur
+l'identifiant de ligne. Enregistrer une grille efface les lignes et les
+réécrit : leurs identifiants changent à chaque fois, même quand la réponse
+est identique au caractère près. Comparer dessus signalerait tout comme
+« retiré puis ajouté », à chaque fois, et ne dirait plus rien. Les
+horodatages sont ignorés pour la même raison.
+
+Le calcul vit dans `admin.js`, pas en SQL : la base sert des faits et
+laisse les dérivées au reste du projet, et une fonction JavaScript se met
+sur un banc d'essai — ce qu'une fonction PL/pgSQL ne fait pas sans une
+vraie base sous la main.
+
+### Restaurer
+
+**Restaurer** remet les cinq tables dans l'état de la copie. Tout ce qui a
+été saisi depuis disparaît, et la confirmation le dit avec les chiffres.
+
+Le geste s'annule : une copie de l'état actuel est prise **avant** la
+restauration. Se tromper de ligne dans la liste ne doit pas être la
+dernière erreur possible.
+
+Douze copies sont gardées par motif, ce qui couvre un trimestre de
+préparation.
 
 ## Confidentialité
 

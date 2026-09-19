@@ -398,6 +398,8 @@ declare
   total  integer := 0;
 begin
   perform private.verifier_code(p_code);
+  -- Le premier changement de la semaine emporte une copie de l'avant.
+  perform private.sauver_si_nouvelle_semaine();
 
   select * into r from private.reglages;
   if not r.saisie_ouverte then
@@ -545,6 +547,8 @@ declare
   famille  text;
 begin
   perform private.verifier_code(p_code, 'admin');
+  -- Le premier changement de la semaine emporte une copie de l'avant.
+  perform private.sauver_si_nouvelle_semaine();
 
   if coalesce(trim(p_prenom), '') = '' then
     raise exception 'PRENOM_VIDE' using errcode = 'P0001';
@@ -608,6 +612,8 @@ language plpgsql security definer
 set search_path = private, pg_temp as $fn$
 begin
   perform private.verifier_code(p_code, 'admin');
+  -- Le premier changement de la semaine emporte une copie de l'avant.
+  perform private.sauver_si_nouvelle_semaine();
   update private.participants
      set prenom = coalesce(nullif(trim(p_prenom), ''), prenom),
          categorie_age = coalesce(p_age, categorie_age)
@@ -635,6 +641,8 @@ declare
   nb integer;
 begin
   perform private.verifier_code(p_code, 'admin');
+  -- Le premier changement de la semaine emporte une copie de l'avant.
+  perform private.sauver_si_nouvelle_semaine();
 
   if p_portee not in ('descendance', 'foyer', 'soi') then
     raise exception 'PORTEE_INCONNUE' using errcode = 'P0001';
@@ -665,6 +673,8 @@ declare
   repreneur uuid;
 begin
   perform private.verifier_code(p_code, 'admin');
+  -- Le premier changement de la semaine emporte une copie de l'avant.
+  perform private.sauver_si_nouvelle_semaine();
 
   select * into partant from private.participants where id = p_id;
   if partant.id is null then
@@ -696,6 +706,8 @@ declare
   nb integer;
 begin
   perform private.verifier_code(p_code, 'admin');
+  -- Le premier changement de la semaine emporte une copie de l'avant.
+  perform private.sauver_si_nouvelle_semaine();
 
   if jsonb_array_length(coalesce(p_participants, '[]'::jsonb)) = 0 then
     raise exception 'LISTE_VIDE' using errcode = 'P0001';
@@ -857,6 +869,8 @@ declare
   nb     integer;
 begin
   perform private.verifier_code(p_code);
+  -- Le premier changement de la semaine emporte une copie de l'avant.
+  perform private.sauver_si_nouvelle_semaine();
 
   select * into r from private.reglages;
   if not r.voeux_ouverts then
@@ -938,6 +952,8 @@ declare
   nouveau uuid := gen_random_uuid();
 begin
   perform private.verifier_code(p_code, 'admin');
+  -- Le premier changement de la semaine emporte une copie de l'avant.
+  perform private.sauver_si_nouvelle_semaine();
 
   if coalesce(trim(p_libelle), '') = '' then
     raise exception 'LIBELLE_VIDE' using errcode = 'P0001';
@@ -960,6 +976,8 @@ declare
   partant private.options_date;
 begin
   perform private.verifier_code(p_code, 'admin');
+  -- Le premier changement de la semaine emporte une copie de l'avant.
+  perform private.sauver_si_nouvelle_semaine();
 
   select * into partant from private.options_date where id = p_id;
   if partant.id is null then
@@ -1096,6 +1114,8 @@ declare
   nb     integer;
 begin
   perform private.verifier_code(p_code);
+  -- Le premier changement de la semaine emporte une copie de l'avant.
+  perform private.sauver_si_nouvelle_semaine();
 
   select * into r from private.reglages;
   if not r.lieux_ouverts then
@@ -1174,7 +1194,318 @@ grant execute on function public.admin_lieux(text)                 to anon;
 grant execute on function public.admin_lieux_ouvrir(text, boolean) to anon;
 
 -- ============================================================
---  11. Etat de la base apres execution
+--  11. Revenir en arriere
+-- ============================================================
+--
+--  Trois gestes effacent beaucoup d'un coup, et aucun n'est reversible :
+--  « Appliquer a tous » sur les trois pages familiales, le retrait d'un
+--  participant qui emporte ses saisies, et le reamorcage GEDCOM qui vide
+--  la liste. La base ne garde que l'etat courant : ce qui est remplace
+--  n'existe plus nulle part.
+--
+--  D'ou un instantane par semaine.
+--
+--  QUAND IL EST PRIS
+--
+--  Pas par un planificateur. pg_cron demanderait une extension a activer
+--  a la main, hors du « coller schema.sql et c'est pret », et prendrait
+--  des copies identiques les semaines sans activite.
+--
+--  Il est pris A LA PREMIERE ECRITURE de chaque semaine, juste avant
+--  qu'elle ait lieu. L'instantane porte donc l'etat tel qu'il etait avant
+--  le premier changement de la semaine : exactement le point de retour
+--  qu'on cherche. Une semaine sans aucune modification n'en produit
+--  aucun, puisqu'il n'y aurait rien a y sauver.
+--
+--  CE QU'IL CONTIENT
+--
+--  Les cinq tables qui portent de la donnee saisie, dans un seul jsonb.
+--  Ce n'est pas la forme la plus compacte ; c'est la plus simple a relire
+--  dans cinq semaines, et vingt personnes tiennent en quelques dizaines
+--  de kilo-octets.
+--
+--  La COMPARAISON n'est pas ici : `admin_etat` sert l'etat courant sous
+--  la meme forme, et admin.js compare les deux. Meme principe que le
+--  reste du projet -- la base sert des faits, les derivees se calculent
+--  ailleurs, la ou elles se testent.
+--
+
+create table if not exists private.sauvegardes (
+  id       uuid primary key default gen_random_uuid(),
+  semaine  date not null,             -- le lundi de la semaine couverte
+  prise_le timestamptz not null default now(),
+  motif    text not null check (motif in ('hebdomadaire', 'manuelle', 'avant_restauration')),
+  contenu  jsonb not null
+);
+
+-- Une seule copie hebdomadaire par semaine ; les manuelles et les
+-- « avant_restauration » peuvent se repeter.
+create unique index if not exists sauvegardes_semaine_idx
+  on private.sauvegardes (semaine) where motif = 'hebdomadaire';
+
+create index if not exists sauvegardes_prise_le_idx
+  on private.sauvegardes (prise_le desc);
+
+-- La table nait APRES le `revoke all` de la section 6 : il ne la couvre
+-- pas. Elle porte une copie complete de tout ce que la base contient de
+-- personnel, donc on la ferme explicitement, comme `voeux` et `refus_lieu`.
+-- Seules les fonctions de cette section y touchent, et elles exigent le
+-- code organisateur.
+revoke all on private.sauvegardes from anon, authenticated;
+
+-- Combien de copies on garde, par motif. Douze semaines couvrent large
+-- pour un sejour qui se prepare sur un trimestre.
+create or replace function private.sauvegardes_purger()
+returns void language sql
+set search_path = private, pg_temp as $fn$
+  delete from private.sauvegardes s
+   where s.id in (
+     select id from (
+       select id, row_number() over (partition by motif order by prise_le desc) as rang
+         from private.sauvegardes
+     ) t
+      where t.rang > 12
+   )
+$fn$;
+
+-- L'etat courant, sous la forme exacte qu'aura l'instantane. Une seule
+-- definition pour les deux : c'est ce qui garantit que comparer une copie
+-- et le present compare bien la meme chose.
+create or replace function private.etat_courant()
+returns jsonb language sql stable
+set search_path = private, pg_temp as $fn$
+  select jsonb_build_object(
+    'participants', coalesce(
+      (select jsonb_agg(to_jsonb(p) order by p.id) from private.participants p), '[]'::jsonb),
+    'options_date', coalesce(
+      (select jsonb_agg(to_jsonb(o) order by o.id) from private.options_date o), '[]'::jsonb),
+    'presences', coalesce(
+      (select jsonb_agg(to_jsonb(x) order by x.participant_id, x.jour) from public.presences x), '[]'::jsonb),
+    'voeux', coalesce(
+      (select jsonb_agg(to_jsonb(v) order by v.participant_id, v.option_id) from public.voeux v), '[]'::jsonb),
+    'refus_lieu', coalesce(
+      (select jsonb_agg(to_jsonb(r) order by r.participant_id, r.departement) from public.refus_lieu r), '[]'::jsonb)
+  )
+$fn$;
+
+-- Appelee au debut de CHAQUE fonction qui ecrit, apres la verification du
+-- code et avant la moindre modification. Ne fait rien si la semaine est
+-- deja couverte : le cout normal est un index scan.
+create or replace function private.sauver_si_nouvelle_semaine()
+returns void language plpgsql
+set search_path = private, pg_temp as $fn$
+declare
+  lundi date := date_trunc('week', now() at time zone 'Europe/Paris')::date;
+begin
+  if exists (
+    select 1 from private.sauvegardes
+     where motif = 'hebdomadaire' and semaine = lundi
+  ) then
+    return;
+  end if;
+
+  -- `on conflict` et non un simple insert : deux personnes qui enregistrent
+  -- a la meme seconde le lundi matin passeraient toutes les deux le test
+  -- ci-dessus.
+  insert into private.sauvegardes (semaine, motif, contenu)
+  values (lundi, 'hebdomadaire', private.etat_courant())
+  on conflict (semaine) where motif = 'hebdomadaire' do nothing;
+
+  perform private.sauvegardes_purger();
+end $fn$;
+
+-- ---- 11a. Ce qu'on a sous la main ----
+--
+--  Les compteurs, jamais le contenu : douze copies completes feraient
+--  plusieurs mega-octets pour une page qui ne veut afficher qu'une liste.
+--
+create or replace function public.admin_sauvegardes_lister(p_code text)
+returns jsonb
+language plpgsql stable security definer
+set search_path = private, pg_temp as $fn$
+begin
+  perform private.verifier_code(p_code, 'admin');
+  return coalesce((
+    select jsonb_agg(jsonb_build_object(
+             'id', s.id,
+             'semaine', s.semaine,
+             'prise_le', s.prise_le,
+             'motif', s.motif,
+             'compteurs', jsonb_build_object(
+               'participants', jsonb_array_length(coalesce(s.contenu->'participants', '[]'::jsonb)),
+               'presences',    jsonb_array_length(coalesce(s.contenu->'presences', '[]'::jsonb)),
+               'voeux',        jsonb_array_length(coalesce(s.contenu->'voeux', '[]'::jsonb)),
+               'refus_lieu',   jsonb_array_length(coalesce(s.contenu->'refus_lieu', '[]'::jsonb)),
+               'options_date', jsonb_array_length(coalesce(s.contenu->'options_date', '[]'::jsonb))
+             )
+           ) order by s.prise_le desc)
+      from private.sauvegardes s
+  ), '[]'::jsonb);
+end $fn$;
+
+-- ---- 11b. Une copie a la demande ----
+--
+--  Avant une operation qu'on sent risquee, sans attendre lundi.
+--
+create or replace function public.admin_sauvegarde_prendre(p_code text)
+returns jsonb
+language plpgsql security definer
+set search_path = private, pg_temp as $fn$
+declare
+  nouveau uuid;
+begin
+  perform private.verifier_code(p_code, 'admin');
+
+  insert into private.sauvegardes (semaine, motif, contenu)
+  values (date_trunc('week', now() at time zone 'Europe/Paris')::date,
+          'manuelle', private.etat_courant())
+  returning id into nouveau;
+
+  perform private.sauvegardes_purger();
+  return jsonb_build_object('id', nouveau);
+end $fn$;
+
+-- ---- 11c. Le contenu d'une copie, et celui du present ----
+--
+--  Meme forme, pour que le navigateur puisse les comparer champ a champ.
+--
+create or replace function public.admin_sauvegarde_lire(p_code text, p_id uuid)
+returns jsonb
+language plpgsql stable security definer
+set search_path = private, pg_temp as $fn$
+declare
+  trouve jsonb;
+begin
+  perform private.verifier_code(p_code, 'admin');
+  select s.contenu into trouve from private.sauvegardes s where s.id = p_id;
+  if trouve is null then
+    raise exception 'SAUVEGARDE_INCONNUE' using errcode = 'P0001';
+  end if;
+  return trouve;
+end $fn$;
+
+create or replace function public.admin_etat(p_code text)
+returns jsonb
+language plpgsql stable security definer
+set search_path = private, pg_temp as $fn$
+begin
+  perform private.verifier_code(p_code, 'admin');
+  return private.etat_courant();
+end $fn$;
+
+-- ---- 11d. Revenir dessus ----
+--
+--  Remplacement complet : apres l'appel, la base est celle de la copie.
+--  Tout ce qui a ete saisi depuis disparait -- d'ou la copie
+--  « avant_restauration » prise juste avant, qui rend le geste lui-meme
+--  annulable. Se tromper de ligne dans la liste ne doit pas etre la
+--  derniere erreur possible.
+--
+--  Les cinq tables sont citees ensemble dans le TRUNCATE parce qu'elles
+--  se referencent : Postgres refuse de vider seule une table dont une
+--  autre depend. Les participants sont reinseres en premier, et leurs
+--  liens croises (parent, conjoint) passent parce que les cles etrangeres
+--  ne sont verifiees qu'en fin d'instruction.
+--
+create or replace function public.admin_sauvegarde_restaurer(p_code text, p_id uuid)
+returns jsonb
+language plpgsql security definer
+set search_path = private, pg_temp as $fn$
+declare
+  c jsonb;
+  n_participants integer;
+  n_presences    integer;
+  n_voeux        integer;
+  n_refus        integer;
+  n_options      integer;
+begin
+  perform private.verifier_code(p_code, 'admin');
+
+  select s.contenu into c from private.sauvegardes s where s.id = p_id;
+  if c is null then
+    raise exception 'SAUVEGARDE_INCONNUE' using errcode = 'P0001';
+  end if;
+
+  insert into private.sauvegardes (semaine, motif, contenu)
+  values (date_trunc('week', now() at time zone 'Europe/Paris')::date,
+          'avant_restauration', private.etat_courant());
+
+  truncate table public.presences, public.voeux, public.refus_lieu,
+                 private.options_date, private.participants;
+
+  insert into private.participants
+    (id, prenom, famille, categorie_age, parent_id, conjoint_id, invite, portee, cree_le)
+  select (l->>'id')::uuid,
+         l->>'prenom',
+         l->>'famille',
+         l->>'categorie_age',
+         nullif(l->>'parent_id', '')::uuid,
+         nullif(l->>'conjoint_id', '')::uuid,
+         coalesce((l->>'invite')::boolean, false),
+         coalesce(nullif(l->>'portee', ''), 'descendance'),
+         coalesce((l->>'cree_le')::timestamptz, now())
+    from jsonb_array_elements(coalesce(c->'participants', '[]'::jsonb)) as l;
+  get diagnostics n_participants = row_count;
+
+  insert into private.options_date (id, libelle, date_debut, date_fin, cree_le)
+  select (l->>'id')::uuid,
+         l->>'libelle',
+         nullif(l->>'date_debut', '')::date,
+         nullif(l->>'date_fin', '')::date,
+         coalesce((l->>'cree_le')::timestamptz, now())
+    from jsonb_array_elements(coalesce(c->'options_date', '[]'::jsonb)) as l;
+  get diagnostics n_options = row_count;
+
+  insert into public.presences
+    (id, participant_id, jour, hebergement, petit_dejeuner, dejeuner, diner, vue_mer, maj_le)
+  select (l->>'id')::uuid,
+         (l->>'participant_id')::uuid,
+         (l->>'jour')::date,
+         l->>'hebergement',
+         coalesce((l->>'petit_dejeuner')::boolean, false),
+         coalesce((l->>'dejeuner')::boolean, false),
+         coalesce((l->>'diner')::boolean, false),
+         coalesce((l->>'vue_mer')::boolean, false),
+         coalesce((l->>'maj_le')::timestamptz, now())
+    from jsonb_array_elements(coalesce(c->'presences', '[]'::jsonb)) as l;
+  get diagnostics n_presences = row_count;
+
+  insert into public.voeux (id, participant_id, option_id, choix, maj_le)
+  select (l->>'id')::uuid,
+         (l->>'participant_id')::uuid,
+         (l->>'option_id')::uuid,
+         l->>'choix',
+         coalesce((l->>'maj_le')::timestamptz, now())
+    from jsonb_array_elements(coalesce(c->'voeux', '[]'::jsonb)) as l;
+  get diagnostics n_voeux = row_count;
+
+  insert into public.refus_lieu (id, participant_id, departement, maj_le)
+  select (l->>'id')::uuid,
+         (l->>'participant_id')::uuid,
+         l->>'departement',
+         coalesce((l->>'maj_le')::timestamptz, now())
+    from jsonb_array_elements(coalesce(c->'refus_lieu', '[]'::jsonb)) as l;
+  get diagnostics n_refus = row_count;
+
+  perform private.sauvegardes_purger();
+
+  return jsonb_build_object(
+    'participants', n_participants,
+    'options_date', n_options,
+    'presences', n_presences,
+    'voeux', n_voeux,
+    'refus_lieu', n_refus
+  );
+end $fn$;
+
+grant execute on function public.admin_sauvegardes_lister(text)          to anon;
+grant execute on function public.admin_sauvegarde_prendre(text)          to anon;
+grant execute on function public.admin_sauvegarde_lire(text, uuid)       to anon;
+grant execute on function public.admin_etat(text)                        to anon;
+grant execute on function public.admin_sauvegarde_restaurer(text, uuid)  to anon;
+
+-- ============================================================
+--  12. Etat de la base apres execution
 -- ============================================================
 --
 --  Affiche ce qui existe reellement, plutot que de le supposer.
@@ -1187,6 +1518,7 @@ grant execute on function public.admin_lieux_ouvrir(text, boolean) to anon;
 --    options_date   les week-ends proposes, poses depuis admin.html
 --    voeux          les reponses de la famille au sondage des dates
 --    refus_lieu     les departements peints en rouge sur la carte
+--    sauvegardes    0 tant que personne n'a rien modifie cette semaine
 --
 select
   (select count(*) from private.participants) as participants,
@@ -1196,4 +1528,5 @@ select
   (select count(*) from private.reglages)     as reglages,
   (select count(*) from private.options_date) as options_date,
   (select count(*) from public.voeux)         as voeux,
-  (select count(*) from public.refus_lieu)    as refus_lieu;
+  (select count(*) from public.refus_lieu)    as refus_lieu,
+  (select count(*) from private.sauvegardes)  as sauvegardes;

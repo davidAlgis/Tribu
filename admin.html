@@ -118,6 +118,23 @@
     </fieldset>
 
     <fieldset>
+      <legend>Revenir en arrière <span id="compteur-sauvegardes" class="discret-inline"></span></legend>
+      <div id="liste-sauvegardes"></div>
+      <div id="comparaison"></div>
+      <div class="actions">
+        <button type="button" id="sauver-maintenant" class="discret">Sauvegarder maintenant</button>
+      </div>
+      <p class="note">
+        Une copie part toute seule à la première modification de chaque semaine,
+        prise juste avant celle-ci. «&nbsp;Comparer&nbsp;» montre ce qui a changé
+        depuis&nbsp;; «&nbsp;Restaurer&nbsp;» remet toute la base dans cet état — et
+        prend d'abord une copie de l'état actuel, pour que ce geste-là s'annule
+        aussi.
+      </p>
+      <p id="message-sauvegardes" role="status" aria-live="polite"></p>
+    </fieldset>
+
+    <fieldset>
       <legend>La liste <span id="compteur" class="discret-inline"></span></legend>
       <div id="liste"></div>
       <p class="note">

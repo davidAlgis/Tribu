@@ -247,6 +247,20 @@ button.retirer {
 }
 button.retirer:hover { color: #fff; background: var(--erreur); border-color: var(--erreur); }
 
+/* ---------- Différences avec une sauvegarde ---------- */
+
+/* Une difference se lit en deux temps : ce qui s'est passe, puis a qui.
+   L'etiquette porte le verbe, le texte porte le nom et les deux nombres. */
+.diff {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  padding: 3px 0;
+  font-size: 0.9rem;
+}
+.diff .diff-texte { color: var(--texte); }
+.diff .etiquette { flex: none; }
+
 /* ---------- Portée des droits ---------- */
 .portee {
   display: flex;
