@@ -266,6 +266,21 @@ les personnes qu'on gère, en une transaction et après confirmation nommant
 celles dont la saisie sera remplacée ; sinon on passe de l'une à l'autre
 par les pastilles, avec des valeurs différentes pour chacune.
 
+**Au-delà d'un foyer, l'avertissement change de ton.** Tant qu'« Appliquer
+à tous » porte sur cinq autres personnes ou moins — deux adultes et trois
+enfants y tiennent — la page les nomme, et c'est suffisant. Passé ce seuil,
+la liste des prénoms devient un mur qu'on ne lit plus : elle cède la place
+au nombre, affiché sous les boutons avant même le clic, avec le décompte de
+celles dont la saisie serait écrasée. Le nombre de personnes touchées est
+une chose ; combien d'entre elles avaient déjà rempli en est une autre, et
+c'est la seule qui ne se rattrape pas. La confirmation suit la même règle
+et rappelle quel bouton prendre si l'on ne voulait répondre que pour soi.
+
+C'est une heuristique d'ergonomie, pas un verrou. Rien n'empêche une
+grand-mère de répondre légitimement pour seize personnes — c'est même
+prévu — ni quelqu'un d'appeler la fonction SQL sans passer par la page.
+Elle attrape le dérapage, pas la malveillance.
+
 **Les droits sont un garde-fou, pas une sécurité.** Chacun couvre son
 conjoint, ses descendants et leurs conjoints — mais toute la famille
 partage le même code, donc qui le connaît peut se déclarer comme n'importe

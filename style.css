@@ -82,6 +82,15 @@ button:disabled { opacity: 0.5; cursor: default; }
   margin-top: 16px;
 }
 
+/* Un avertissement reste une note : meme boite, meme place, meme ton. Seuls
+   le lisere et la couleur du texte changent. Ce n'est pas une erreur --
+   l'action reste permise, et parfois voulue -- c'est une action dont la
+   portee depasse ce qu'on croit cliquer. */
+.note.alerte {
+  border-left-color: var(--erreur);
+  color: var(--texte);
+}
+
 .defilement { overflow-x: auto; }
 
 @media (prefers-color-scheme: dark) {

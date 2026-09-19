@@ -310,16 +310,52 @@ function selectionner(personne) {
   message.textContent = "";
 }
 
+// --------------------------------------------------------- ampleur
+
+// Au-dela de cinq AUTRES personnes, on a quitte son propre foyer : deux
+// adultes et trois enfants tiennent en dessous, une branche entiere non.
+// L'arbre accorde parfois une portee tres large -- une grand-mere figure
+// au-dessus de toute sa descendance -- et « Appliquer a tous » devient
+// alors un bouton qui repond pour des gens qui remplissent la leur de
+// leur cote, sans jamais l'apprendre.
+const FOYER = 5;
+
+// Ce que le clic va reellement faire. `ecrases` est le sous-ensemble qui
+// compte : ecrire chez quelqu'un qui n'a rien saisi se corrige d'un clic,
+// remplacer ce qu'il avait rempli ne se retrouve pas.
+function ampleur() {
+  const tous = etat.donnees.modifiables;
+  const autres = tous.filter((p) => p.id !== etat.cible.id);
+  return {
+    tous,
+    autres,
+    ecrases: autres.filter((p) => p.repondu),
+    large: autres.length > FOYER,
+  };
+}
+
 function majBoutons() {
-  const autres = etat.donnees.modifiables.filter((p) => p.id !== etat.cible.id);
+  const { tous, autres, ecrases, large } = ampleur();
   boutonEnregistrer.textContent = `Enregistrer pour ${etat.cible.prenom}`;
   boutonTous.hidden = autres.length === 0;
-  boutonTous.textContent = `Appliquer à tous (${etat.donnees.modifiables.length})`;
-  portee.textContent = autres.length
-    ? `« Appliquer à tous » recopie ces réponses sur ${autres
-        .map((p) => p.prenom)
-        .join(", ")} — les leurs sont remplacées.`
-    : "";
+  boutonTous.textContent = `Appliquer à tous (${tous.length})`;
+  portee.classList.toggle("alerte", large);
+  if (!autres.length) {
+    portee.textContent = "";
+  } else if (large) {
+    // Passe une poignee, la liste des prenoms devient un mur qu'on ne lit
+    // plus : c'est le nombre qui doit sauter aux yeux, pas les noms.
+    portee.textContent =
+      `Attention : « Appliquer à tous » répond pour ${autres.length} autres personnes` +
+      (ecrases.length
+        ? `, et remplace les réponses déjà données par ${ecrases.length} d'entre elles.`
+        : ", qui n'ont encore rien répondu.") +
+      ` Pour ne toucher qu'à ${etat.cible.prenom}, prends l'autre bouton.`;
+  } else {
+    portee.textContent = `« Appliquer à tous » recopie ces réponses sur ${autres
+      .map((p) => p.prenom)
+      .join(", ")} — les leurs sont remplacées.`;
+  }
 }
 
 function lireChoix() {
@@ -373,12 +409,27 @@ async function enregistrer(cibles) {
 boutonEnregistrer.addEventListener("click", () => enregistrer([etat.cible]));
 
 boutonTous.addEventListener("click", () => {
-  const tous = etat.donnees.modifiables;
-  const ecrases = tous.filter((p) => p.id !== etat.cible.id && p.repondu);
+  const { tous, autres, ecrases, large } = ampleur();
 
-  let question = `Appliquer ces réponses à ${tous.map((p) => p.prenom).join(", ")} ?`;
-  if (ecrases.length) {
-    question += `\n\nLes réponses de ${ecrases.map((p) => p.prenom).join(", ")} seront remplacées.`;
+  // Ecraser la saisie de quelqu'un d'autre sans le dire serait le meilleur
+  // moyen de faire perdre a un cousin une heure de remplissage. Passe le
+  // seuil, on renonce a enumerer : on annonce le nombre, on rappelle ce qui
+  // ne se rattrape pas, et on nomme la sortie de secours.
+  let question;
+  if (large) {
+    question =
+      `Appliquer ces réponses à ${autres.length} autres personnes ?` +
+      (ecrases.length
+        ? `\n\n${ecrases.length} d'entre elles ont déjà répondu : ${ecrases
+            .map((p) => p.prenom)
+            .join(", ")}.\nCe qu'elles ont fait sera remplacé, et ne se retrouvera pas.`
+        : "") +
+      `\n\nSi tu ne voulais répondre que pour toi, annule et prends « Enregistrer pour ${etat.cible.prenom} ».`;
+  } else {
+    question = `Appliquer ces réponses à ${tous.map((p) => p.prenom).join(", ")} ?`;
+    if (ecrases.length) {
+      question += `\n\nLes réponses de ${ecrases.map((p) => p.prenom).join(", ")} seront remplacées.`;
+    }
   }
   if (confirm(question)) enregistrer(tous);
 });

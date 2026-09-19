@@ -336,20 +336,56 @@ function selectionnerCible(personne) {
   message.textContent = "";
 }
 
+// --------------------------------------------------------- ampleur
+
+// Au-dela de cinq AUTRES personnes, on a quitte son propre foyer : deux
+// adultes et trois enfants tiennent en dessous, une branche entiere non.
+// L'arbre accorde parfois une portee tres large -- une grand-mere figure
+// au-dessus de toute sa descendance -- et « Appliquer a tous » devient
+// alors un bouton qui repond pour des gens qui remplissent la leur de
+// leur cote, sans jamais l'apprendre.
+const FOYER = 5;
+
+// Ce que le clic va reellement faire. `ecrases` est le sous-ensemble qui
+// compte : ecrire chez quelqu'un qui n'a rien saisi se corrige d'un clic,
+// remplacer ce qu'il avait rempli ne se retrouve pas.
+function ampleur() {
+  const tous = etat.donnees.modifiables;
+  const autres = tous.filter((p) => p.id !== etat.cible.id);
+  return {
+    tous,
+    autres,
+    ecrases: autres.filter((p) => p.saisi),
+    large: autres.length > FOYER,
+  };
+}
+
 // Nommer la personne sur le bouton vaut mieux qu'un « Enregistrer » nu :
 // c'est la seule facon de voir, sans y penser, sur qui porte le clic.
 function majBoutons() {
-  const autres = etat.donnees.modifiables.filter((p) => p.id !== etat.cible.id);
+  const { tous, autres, ecrases, large } = ampleur();
   boutonEnregistrer.textContent = `Enregistrer pour ${etat.cible.prenom}`;
 
   boutonTous.hidden = autres.length === 0;
-  boutonTous.textContent = `Appliquer à tous (${etat.donnees.modifiables.length})`;
+  boutonTous.textContent = `Appliquer à tous (${tous.length})`;
 
-  portee.textContent = autres.length
-    ? `« Appliquer à tous » recopie cette grille sur ${autres
-        .map((p) => p.prenom)
-        .join(", ")} — leur saisie actuelle est remplacée.`
-    : "";
+  portee.classList.toggle("alerte", large);
+  if (!autres.length) {
+    portee.textContent = "";
+  } else if (large) {
+    // Passe une poignee, la liste des prenoms devient un mur qu'on ne lit
+    // plus : c'est le nombre qui doit sauter aux yeux, pas les noms.
+    portee.textContent =
+      `Attention : « Appliquer à tous » remplit la grille de ${autres.length} autres personnes` +
+      (ecrases.length
+        ? `, et remplace la saisie déjà faite par ${ecrases.length} d'entre elles.`
+        : ", qui n'ont encore rien saisi.") +
+      ` Pour ne toucher qu'à ${etat.cible.prenom}, prends l'autre bouton.`;
+  } else {
+    portee.textContent = `« Appliquer à tous » recopie cette grille sur ${autres
+      .map((p) => p.prenom)
+      .join(", ")} — leur saisie actuelle est remplacée.`;
+  }
 }
 
 function remplirGrille(participantId) {
@@ -443,18 +479,31 @@ async function enregistrer(cibles) {
 boutonEnregistrer.addEventListener("click", () => enregistrer([etat.cible]));
 
 boutonTous.addEventListener("click", () => {
-  const tous = etat.donnees.modifiables;
-  const ecrases = tous.filter((p) => p.id !== etat.cible.id && p.saisi);
+  const { tous, autres, ecrases, large } = ampleur();
 
   // Ecraser la saisie de quelqu'un d'autre sans le dire serait le meilleur
-  // moyen de faire perdre a un cousin une heure de remplissage.
-  let question = `Appliquer cette grille à ${tous.map((p) => p.prenom).join(", ")} ?`;
-  if (ecrases.length) {
-    question +=
-      `
+  // moyen de faire perdre a un cousin une heure de remplissage. Passe le
+  // seuil, on renonce a enumerer : on annonce le nombre, on rappelle ce qui
+  // ne se rattrape pas, et on nomme la sortie de secours.
+  let question;
+  if (large) {
+    question =
+      `Appliquer cette grille à ${autres.length} autres personnes ?` +
+      (ecrases.length
+        ? `\n\n${ecrases.length} d'entre elles ont déjà rempli la leur : ${ecrases
+            .map((p) => p.prenom)
+            .join(", ")}.\nCe qu'elles ont fait sera remplacé, et ne se retrouvera pas.`
+        : "") +
+      `\n\nSi tu ne voulais répondre que pour toi, annule et prends « Enregistrer pour ${etat.cible.prenom} ».`;
+  } else {
+    question = `Appliquer cette grille à ${tous.map((p) => p.prenom).join(", ")} ?`;
+    if (ecrases.length) {
+      question +=
+        `
 
 La saisie déjà faite de ${ecrases.map((p) => p.prenom).join(", ")} ` +
-      `sera remplacée.`;
+        `sera remplacée.`;
+    }
   }
   if (confirm(question)) enregistrer(tous);
 });
