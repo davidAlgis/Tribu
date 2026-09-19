@@ -26,6 +26,12 @@ dans un carnet, pas dans un message que tu t'envoies — il n'a aucune
 raison de se trouver ailleurs que là et dans ta tête au moment où tu le
 tapes sur admin.html.
 
+Et surtout pas dans l'éditeur SQL de Supabase, y compris pour le vérifier :
+`select private.code_admin_valide('...')` l'y écrirait en clair, et
+l'historique le garderait — c'est précisément ce que tout le dispositif
+ci-dessus sert à éviter. La vérification se fait sur `admin.html`, qui est
+faite pour ça et qui ne laisse aucune trace côté serveur.
+
 Perdu, il ne se retrouve pas : on en refabrique un, ce script prend dix
 secondes.
 """
@@ -109,8 +115,11 @@ def main() -> int:
     print("-" * largeur)
     print("  Ce SQL ne contient pas le code : ni l'historique de l'editeur")
     print("  Supabase, ni une sauvegarde de la base ne le revelera.")
-    print(f"  Verification (doit renvoyer true, en remplacant par ton code) :")
-    print("     select private.code_admin_valide('...');")
+    print()
+    print("  Pour verifier qu'il fonctionne : ouvre admin.html et tape-le.")
+    print("  Surtout pas `select private.code_admin_valide('...')` dans")
+    print("  l'editeur SQL -- ce serait ecrire le code exactement la ou tout")
+    print("  ce qui precede s'applique a ne pas le mettre.")
     return 0
 
 

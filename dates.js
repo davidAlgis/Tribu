@@ -108,6 +108,27 @@ const listeSuggestions = document.getElementById("suggestions");
 const messagePrenom = document.getElementById("message-prenom");
 let annuaire = [];
 
+// ---------------------------------------------------------------- noeuds
+
+// Prenoms, familles et intitules viennent de la base, et la base tient ce
+// que le GEDCOM lui a donne : des chaines qu'aucun humain n'a relues.
+// Passees a innerHTML, elles seraient interpretees comme du balisage -- un
+// « <img src=x onerror=...> » dans un champ nom s'executerait alors chez
+// toute la famille, avec le code d'acces a portee de main. On fabrique donc
+// les noeuds un par un : textContent pose du texte, et rien d'autre.
+function fort(texte) {
+  const element = document.createElement("strong");
+  element.textContent = texte;
+  return element;
+}
+
+function span(texte, classe) {
+  const element = document.createElement("span");
+  element.textContent = texte;
+  if (classe) element.className = classe;
+  return element;
+}
+
 function suggerer() {
   const saisi = champPrenom.value.trim().toLowerCase();
   listeSuggestions.innerHTML = "";
@@ -124,7 +145,7 @@ function suggerer() {
     const item = document.createElement("li");
     item.setAttribute("role", "option");
     item.tabIndex = 0;
-    item.innerHTML = `<strong>${personne.prenom}</strong> <span>${personne.famille}</span>`;
+    item.append(fort(personne.prenom), " ", span(personne.famille));
     item.addEventListener("click", () => choisirPersonne(personne));
     item.addEventListener("keydown", (e) => {
       if (e.key === "Enter") choisirPersonne(personne);
@@ -194,10 +215,9 @@ function construire() {
     pastille.type = "button";
     pastille.className = "pastille";
     pastille.dataset.id = personne.id;
-    pastille.innerHTML =
-      personne.prenom +
-      (personne.id === etat.moi.id ? " <span class='moi'>(toi)</span>" : "") +
-      (personne.repondu ? "" : " <span class='vide'>•</span>");
+    pastille.append(personne.prenom);
+    if (personne.id === etat.moi.id) pastille.append(" ", span("(toi)", "moi"));
+    if (!personne.repondu) pastille.append(" ", span("•", "vide"));
     pastille.addEventListener("click", () => selectionner(personne));
     zonePersonnes.appendChild(pastille);
   }
@@ -225,10 +245,14 @@ function construireOptions(options) {
       option.date_debut && option.date_fin
         ? `du ${afficherJour(option.date_debut)} au ${afficherJour(option.date_fin)}`
         : "";
-    titre.innerHTML =
-      `<strong>${option.libelle}</strong>` +
-      (periode ? `<span class="lien">${periode}</span>` : "") +
-      `<span class="lien">${option.oui} oui · ${option.peut_etre} si besoin · ${option.non} non</span>`;
+    titre.append(fort(option.libelle));
+    if (periode) titre.append(span(periode, "lien"));
+    titre.append(
+      span(
+        `${option.oui} oui · ${option.peut_etre} si besoin · ${option.non} non`,
+        "lien"
+      )
+    );
 
     const boutons = document.createElement("div");
     boutons.className = "choix";

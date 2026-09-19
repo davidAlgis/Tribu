@@ -133,6 +133,27 @@ async function recharger() {
   await rechargerLieux();
 }
 
+// ---------------------------------------------------------------- noeuds
+
+// Prenoms, familles et intitules viennent de la base, et la base tient ce
+// que le GEDCOM lui a donne : des chaines qu'aucun humain n'a relues.
+// Passees a innerHTML, elles seraient interpretees comme du balisage -- un
+// « <img src=x onerror=...> » dans un champ nom s'executerait alors chez
+// toute la famille, avec le code d'acces a portee de main. On fabrique donc
+// les noeuds un par un : textContent pose du texte, et rien d'autre.
+function fort(texte) {
+  const element = document.createElement("strong");
+  element.textContent = texte;
+  return element;
+}
+
+function span(texte, classe) {
+  const element = document.createElement("span");
+  element.textContent = texte;
+  if (classe) element.className = classe;
+  return element;
+}
+
 function parId(id) {
   return etat.participants.find((p) => p.id === id);
 }
@@ -163,17 +184,19 @@ function dessinerListe() {
       const ligne = document.createElement("div");
       ligne.className = "personne";
 
+      const etiquettes = span("", "etiquettes");
+      if (personne.categorie_age !== "adulte") {
+        etiquettes.append(span(AGES[personne.categorie_age], "etiquette"));
+      }
+      if (personne.invite) etiquettes.append(span("invité", "etiquette"));
+      if (personne.a_saisi) etiquettes.append(span("a saisi", "etiquette ok"));
+
       const gauche = document.createElement("div");
-      gauche.innerHTML =
-        `<strong>${personne.prenom}</strong>` +
-        `<span class="etiquettes">` +
-        (personne.categorie_age === "adulte"
-          ? ""
-          : `<span class="etiquette">${AGES[personne.categorie_age]}</span>`) +
-        (personne.invite ? `<span class="etiquette">invité</span>` : "") +
-        (personne.a_saisi ? `<span class="etiquette ok">a saisi</span>` : "") +
-        `</span>` +
-        `<span class="lien">${decrireLien(personne)}</span>`;
+      gauche.append(
+        fort(personne.prenom),
+        etiquettes,
+        span(decrireLien(personne), "lien")
+      );
 
       gauche.appendChild(selecteurPortee(personne));
 
@@ -396,15 +419,19 @@ async function rechargerDates() {
     // accepte a contrecoeur ne vaut pas celui que tout le monde choisit.
     const score = option.oui + option.peut_etre / 2;
 
+    const etiquettes = span("", "etiquettes");
+    etiquettes.append(
+      span(`${option.oui} oui`, "etiquette ok"),
+      span(`${option.peut_etre} si besoin`, "etiquette"),
+      span(`${option.non} non`, "etiquette")
+    );
+
     const gauche = document.createElement("div");
-    gauche.innerHTML =
-      `<strong>${option.libelle}</strong>` +
-      `<span class="etiquettes">` +
-      `<span class="etiquette ok">${option.oui} oui</span>` +
-      `<span class="etiquette">${option.peut_etre} si besoin</span>` +
-      `<span class="etiquette">${option.non} non</span>` +
-      `</span>` +
-      `<span class="lien">${periode} · score ${score.toFixed(1)} sur ${donnees.participants}</span>`;
+    gauche.append(
+      fort(option.libelle),
+      etiquettes,
+      span(`${periode} · score ${score.toFixed(1)} sur ${donnees.participants}`, "lien")
+    );
 
     const retirer = document.createElement("button");
     retirer.type = "button";

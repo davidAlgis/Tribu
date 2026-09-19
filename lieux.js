@@ -100,6 +100,27 @@ const listeSuggestions = document.getElementById("suggestions");
 const messagePrenom = document.getElementById("message-prenom");
 let annuaire = [];
 
+// ---------------------------------------------------------------- noeuds
+
+// Prenoms, familles et intitules viennent de la base, et la base tient ce
+// que le GEDCOM lui a donne : des chaines qu'aucun humain n'a relues.
+// Passees a innerHTML, elles seraient interpretees comme du balisage -- un
+// « <img src=x onerror=...> » dans un champ nom s'executerait alors chez
+// toute la famille, avec le code d'acces a portee de main. On fabrique donc
+// les noeuds un par un : textContent pose du texte, et rien d'autre.
+function fort(texte) {
+  const element = document.createElement("strong");
+  element.textContent = texte;
+  return element;
+}
+
+function span(texte, classe) {
+  const element = document.createElement("span");
+  element.textContent = texte;
+  if (classe) element.className = classe;
+  return element;
+}
+
 champPrenom.addEventListener("input", () => {
   const saisi = champPrenom.value.trim().toLowerCase();
   listeSuggestions.innerHTML = "";
@@ -112,7 +133,7 @@ champPrenom.addEventListener("input", () => {
     const item = document.createElement("li");
     item.setAttribute("role", "option");
     item.tabIndex = 0;
-    item.innerHTML = `<strong>${personne.prenom}</strong> <span>${personne.famille}</span>`;
+    item.append(fort(personne.prenom), " ", span(personne.famille));
     item.addEventListener("click", () => choisirPersonne(personne));
     item.addEventListener("keydown", (e) => {
       if (e.key === "Enter") choisirPersonne(personne);
@@ -410,6 +431,9 @@ function peindre() {
       forme.classList.toggle("refuse", etat.refuses.has(code));
       forme.classList.remove("chaleur-1", "chaleur-2", "chaleur-3");
     }
+    // innerHTML est sans risque ici, et seulement ici : ce gabarit ne
+    // recoit que des nombres calcules sur place, jamais de texte venu de
+    // la base. Y glisser un nom de departement demanderait span().
     carteLegende.innerHTML =
       `<span class="pastille-legende vert"></span> on peut y aller ` +
       `<span class="pastille-legende rouge"></span> ${etat.refuses.size} refusé(s)`;
@@ -427,6 +451,7 @@ function peindre() {
   }
 
   const acceptes = [...formes.keys()].filter((c) => !(totaux[c] > 0));
+  // Meme remarque : des nombres, rien que des nombres.
   carteLegende.innerHTML =
     `<span class="pastille-legende vert"></span> aucun refus (${acceptes.length}) ` +
     `<span class="pastille-legende c1"></span> 1 ` +
@@ -446,10 +471,9 @@ function construire() {
     pastille.type = "button";
     pastille.className = "pastille";
     pastille.dataset.id = personne.id;
-    pastille.innerHTML =
-      personne.prenom +
-      (personne.id === etat.moi.id ? " <span class='moi'>(toi)</span>" : "") +
-      (personne.repondu ? "" : " <span class='vide'>•</span>");
+    pastille.append(personne.prenom);
+    if (personne.id === etat.moi.id) pastille.append(" ", span("(toi)", "moi"));
+    if (!personne.repondu) pastille.append(" ", span("•", "vide"));
     pastille.addEventListener("click", () => selectionner(personne));
     zonePersonnes.appendChild(pastille);
   }

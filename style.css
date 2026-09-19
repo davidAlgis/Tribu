@@ -7,6 +7,7 @@
   --accent: #2f5597;
   --ok: #2f7a4f;
   --erreur: #b3261e;
+  --survol: #eaeae4;
 }
 
 * { box-sizing: border-box; }
@@ -88,6 +89,7 @@ button:disabled { opacity: 0.5; cursor: default; }
     --fond: #18191a; --carte: #212223; --trait: #3a3b3c;
     --texte: #e8e8e3; --doux: #9b9b93; --accent: #6f9ae8;
     --ok: #7bc496; --erreur: #ef8a82;
+    --survol: #2e2f31;
   }
   input[type="text"], select { background: #2a2b2c; }
   .note { background: #262728; }
@@ -168,12 +170,23 @@ button.discret {
   border: 1px solid var(--trait);
   font-weight: 500;
 }
+/* Le texte passe en pleine couleur sur un fond a peine marque. Un survol
+   doit toujours ajouter du contraste : sans fond pose ici, une couleur de
+   texte claire ou sombre finit forcement par se confondre avec l'un des
+   deux themes. */
+button.discret:hover {
+  background: var(--survol);
+  color: var(--texte);
+  border-color: var(--doux);
+}
 
 @media (prefers-color-scheme: dark) {
-  .pastille.active, button.discret:hover { color: #10161f; }
+  .pastille.active { color: #10161f; }
   button.discret { color: var(--doux); }
   #suggestions li:hover, #suggestions li:focus { color: #10161f; }
   #suggestions li:hover span, #suggestions li:focus span { color: #10161f; }
+  /* --erreur passe au saumon clair en sombre : le blanc n'y tient plus. */
+  button.retirer:hover { color: #10161f; }
 }
 
 /* ---------- Page d'administration ---------- */

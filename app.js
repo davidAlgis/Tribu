@@ -144,6 +144,27 @@ function preparerAutocompletion(participants) {
   annuaire = participants;
 }
 
+// ---------------------------------------------------------------- noeuds
+
+// Prenoms, familles et intitules viennent de la base, et la base tient ce
+// que le GEDCOM lui a donne : des chaines qu'aucun humain n'a relues.
+// Passees a innerHTML, elles seraient interpretees comme du balisage -- un
+// « <img src=x onerror=...> » dans un champ nom s'executerait alors chez
+// toute la famille, avec le code d'acces a portee de main. On fabrique donc
+// les noeuds un par un : textContent pose du texte, et rien d'autre.
+function fort(texte) {
+  const element = document.createElement("strong");
+  element.textContent = texte;
+  return element;
+}
+
+function span(texte, classe) {
+  const element = document.createElement("span");
+  element.textContent = texte;
+  if (classe) element.className = classe;
+  return element;
+}
+
 // Deux personnes peuvent porter le meme prenom : on affiche la famille pour
 // lever l'ambiguite, et c'est l'identifiant qui est retenu, jamais le texte.
 function suggerer() {
@@ -163,7 +184,7 @@ function suggerer() {
     const item = document.createElement("li");
     item.setAttribute("role", "option");
     item.tabIndex = 0;
-    item.innerHTML = `<strong>${personne.prenom}</strong> <span>${personne.famille}</span>`;
+    item.append(fort(personne.prenom), " ", span(personne.famille));
     item.addEventListener("click", () => choisirPersonne(personne));
     item.addEventListener("keydown", (e) => {
       if (e.key === "Enter") choisirPersonne(personne);
@@ -228,10 +249,9 @@ function construireSaisie() {
     pastille.type = "button";
     pastille.className = "pastille";
     pastille.dataset.id = personne.id;
-    pastille.innerHTML =
-      `${personne.prenom}` +
-      (personne.id === etat.moi.id ? " <span class='moi'>(toi)</span>" : "") +
-      (personne.saisi ? "" : " <span class='vide'>•</span>");
+    pastille.append(personne.prenom);
+    if (personne.id === etat.moi.id) pastille.append(" ", span("(toi)", "moi"));
+    if (!personne.saisi) pastille.append(" ", span("•", "vide"));
     pastille.title = personne.saisi ? "Déjà saisi" : "Rien de saisi pour l'instant";
     pastille.addEventListener("click", () => selectionnerCible(personne));
     zonePersonnes.appendChild(pastille);
