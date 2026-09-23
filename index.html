@@ -18,10 +18,17 @@
   <h1>Séjour Tribu</h1>
   <p class="sous-titre" id="sous-titre">Indique qui est là, quand, et pour quels repas.</p>
 
+  <!-- Reste affiché une fois le code accepté : c'est le signe que la page
+       a bougé, là où deux champs de texte au même endroit ne le disent
+       pas. -->
+  <p id="fil" class="fil" role="status" hidden>
+    <strong>✓ Code accepté.</strong> Reste à dire qui tu es.
+  </p>
+
   <!-- ÉTAPE 1 — le code famille ------------------------------------ -->
   <section id="etape-code">
     <fieldset>
-      <legend>Code famille</legend>
+      <legend>Étape 1 — code famille</legend>
       <form id="form-code">
         <label for="code">Code communiqué par l'organisateur</label>
         <div class="ligne-champ">
@@ -40,8 +47,8 @@
 
   <!-- ÉTAPE 2 — qui es-tu ? ---------------------------------------- -->
   <section id="etape-prenom" hidden>
-    <fieldset>
-      <legend>Qui es-tu&nbsp;?</legend>
+    <fieldset class="panneau-saisie surgit">
+      <legend>Étape 2 — qui es-tu&nbsp;?</legend>
       <label for="prenom">Commence à taper ton prénom</label>
       <div class="auto">
         <input type="text" id="prenom" autocomplete="off" spellcheck="false"

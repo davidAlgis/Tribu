@@ -277,6 +277,58 @@ button.retirer {
 }
 button.retirer:hover { color: #fff; background: var(--erreur); border-color: var(--erreur); }
 
+/* Meme forme que le bouton de retrait, autre intention : corriger n'est
+   pas supprimer, et le survol ne doit pas passer au rouge. */
+button.modifier {
+  background: transparent;
+  color: var(--doux);
+  border: 1px solid var(--trait);
+  border-radius: 6px;
+  padding: 4px 10px;
+  font-size: 0.9rem;
+  line-height: 1.2;
+  flex: none;
+}
+button.modifier:hover {
+  color: #fff;
+  background: var(--accent);
+  border-color: var(--accent);
+}
+
+/* Le prenom se corrige la ou il se lit : le champ prend la place du nom,
+   pas celle de la page. */
+.renommage { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+.renommage input { flex: 1; min-width: 120px; }
+.renommage button { padding: 7px 14px; font-size: 0.9rem; }
+
+/* ---------- Le fil des étapes ---------- */
+
+/* Code famille puis prénom : deux champs de texte, au même endroit, dans
+   un cadre identique. On tape le code, la page répond… et rien ne semble
+   avoir bougé. Le fil apparaît à l'acceptation et ne repart plus : il y a
+   désormais quelque chose qui n'y était pas. */
+.fil {
+  margin: 0 0 18px;
+  padding: 10px 14px;
+  border-left: 4px solid var(--ok);
+  border-radius: 0 6px 6px 0;
+  background: #eaf3ed;
+  color: var(--texte);
+  font-size: 0.92rem;
+}
+.fil strong { color: var(--ok); }
+
+/* Et le panneau qui arrive se signale une fois, brièvement. Sous
+   `prefers-reduced-motion`, rien ne bouge : l'animation est un renfort,
+   jamais le seul message. */
+@media (prefers-reduced-motion: no-preference) {
+  .surgit { animation: surgit 0.3s ease-out; }
+}
+@keyframes surgit {
+  from { opacity: 0; transform: translateY(-8px); }
+  to { opacity: 1; transform: none; }
+}
+
 /* ---------- Les deux panneaux de la page des dates ---------- */
 
 /* L'un se remplit, l'autre se lit -- et ca doit se voir de loin. Deux

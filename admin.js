@@ -201,6 +201,14 @@ function dessinerListe() {
 
       gauche.appendChild(selecteurPortee(personne));
 
+      const renommer = document.createElement("button");
+      renommer.type = "button";
+      renommer.className = "modifier";
+      renommer.textContent = "✎";
+      renommer.title = `Renommer ${personne.prenom}`;
+      renommer.setAttribute("aria-label", `Renommer ${personne.prenom}`);
+      renommer.addEventListener("click", () => editerPrenom(personne, gauche));
+
       const retirer = document.createElement("button");
       retirer.type = "button";
       retirer.className = "retirer";
@@ -209,9 +217,78 @@ function dessinerListe() {
       retirer.setAttribute("aria-label", `Retirer ${personne.prenom}`);
       retirer.addEventListener("click", () => demanderRetrait(personne));
 
-      ligne.append(gauche, retirer);
+      ligne.append(gauche, renommer, retirer);
       zoneListe.appendChild(ligne);
     }
+  }
+}
+
+// ---------------------------------------------------------- renommer
+//
+// Une faute de frappe dans un prenom n'obligeait qu'a retirer la personne
+// et a la recreer -- ce qui emportait ses presences et cassait les liens
+// de parente autour d'elle. Le RPC existait ; il n'avait pas de bouton.
+
+function editerPrenom(personne, zone) {
+  const champ = document.createElement("input");
+  champ.type = "text";
+  champ.value = personne.prenom;
+  champ.maxLength = 40;
+  champ.setAttribute("aria-label", `Nouveau prénom pour ${personne.prenom}`);
+
+  const valider = document.createElement("button");
+  valider.type = "button";
+  valider.textContent = "Renommer";
+
+  const annuler = document.createElement("button");
+  annuler.type = "button";
+  annuler.className = "discret";
+  annuler.textContent = "Annuler";
+
+  const bloc = document.createElement("div");
+  bloc.className = "renommage";
+  bloc.append(champ, valider, annuler);
+
+  // On remplace le contenu de la ligne plutot que d'ouvrir une boite :
+  // le nom se corrige la ou il se lit.
+  zone.replaceChildren(bloc);
+  champ.focus();
+  champ.select();
+
+  annuler.addEventListener("click", dessinerListe);
+  valider.addEventListener("click", () => renommer(personne, champ.value));
+  champ.addEventListener("keydown", (e) => {
+    if (e.key === "Enter") renommer(personne, champ.value);
+    if (e.key === "Escape") dessinerListe();
+  });
+}
+
+async function renommer(personne, saisi) {
+  const neuf = saisi.trim();
+  if (!neuf || neuf === personne.prenom) return dessinerListe();
+
+  message.className = "";
+  message.textContent = "Renommage…";
+  try {
+    // `p_age: null` : la fonction garde la categorie d'age telle quelle.
+    const r = await rpc("admin_modifier", {
+      p_code: etat.code,
+      p_id: personne.id,
+      p_prenom: neuf,
+      p_age: null,
+    });
+    const ancien = personne.prenom;
+    await recharger();
+    message.className = "ok";
+    message.textContent =
+      `« ${ancien} » devient « ${r.prenom} ».` +
+      // `famille` porte le prenom du chef de branche : quand c'est lui
+      // qu'on renomme, le libelle suit pour toute sa descendance.
+      (r.branche ? ` La branche du même nom suit : ${r.branche} personne(s).` : "");
+  } catch (erreur) {
+    message.className = "erreur";
+    message.textContent = erreur.message;
+    dessinerListe();
   }
 }
 

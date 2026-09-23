@@ -517,10 +517,17 @@ document.getElementById("changer").addEventListener("click", () => {
 
 // ------------------------------------------------------------ affichage
 
+const fil = document.getElementById("fil");
+
 function montrer(id) {
   for (const section of document.querySelectorAll("main section")) {
     section.hidden = section.id !== id;
   }
+  // Les deux premieres etapes se ressemblent : un fieldset, un champ de
+  // texte, au meme endroit. Le focus change, mais ca ne se voit pas -- et
+  // pas du tout sur un telephone. Le fil, lui, apparait et ne repart plus :
+  // la page ne ressemble plus a ce qu'elle etait.
+  if (fil) fil.hidden = id === "etape-code";
 }
 
 // Le code est deja connu de cet appareil : on saute la premiere etape.

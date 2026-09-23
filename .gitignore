@@ -7,6 +7,13 @@ exports/
 exclusions.txt
 reglages.sql
 
+# L'import du tableur est un script de circonstance : il a servi une fois,
+# pour verser un fichier qui n'existe que chez l'organisateur. Il reste sur
+# le disque, pas dans le depot -- avec le test qui l'accompagne, sans quoi
+# la CI chercherait un module absent.
+importer_presences.py
+tests/test_import_presences.py
+
 # Le tableur des presences porte les vrais prenoms, comme le GEDCOM.
 # `importer_presences.py --csv` le lit la ou il est. Le filtre est large
 # a dessein : aucun CSV n'a de raison d'entrer dans ce depot.

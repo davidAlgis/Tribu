@@ -610,18 +610,49 @@ create or replace function public.admin_modifier(
 returns jsonb
 language plpgsql security definer
 set search_path = private, pg_temp as $fn$
+declare
+  avant   private.participants;
+  neuf    text;
+  branche integer := 0;
 begin
   perform private.verifier_code(p_code, 'admin');
   -- Le premier changement de la semaine emporte une copie de l'avant.
   perform private.sauver_si_nouvelle_semaine();
-  update private.participants
-     set prenom = coalesce(nullif(trim(p_prenom), ''), prenom),
-         categorie_age = coalesce(p_age, categorie_age)
-   where id = p_id;
-  if not found then
+
+  select * into avant from private.participants where id = p_id;
+  if avant.id is null then
     raise exception 'INCONNU' using errcode = 'P0001';
   end if;
-  return jsonb_build_object('id', p_id);
+
+  neuf := coalesce(nullif(trim(p_prenom), ''), avant.prenom);
+
+  update private.participants
+     set prenom = neuf,
+         categorie_age = coalesce(p_age, categorie_age)
+   where id = p_id;
+
+  -- Un prenom ne vit qu'a UN endroit, et tout le reste designe la personne
+  -- par son identifiant : les presences, les voeux, les refus de lieu, les
+  -- liens de parente suivent d'eux-memes. Il y a une exception, et une
+  -- seule : `famille` est une COPIE du prenom du chef de branche, posee au
+  -- moment de l'amorcage.
+  --
+  -- Sans ce rattrapage, corriger « Marie-Odille » en « Marie-Odile »
+  -- laisserait l'ancienne orthographe en tete de la liste et dans les
+  -- totaux de l'export, pour toute sa descendance, indefiniment.
+  --
+  -- On ne recopie que si la personne renommee est bien celle qui donne son
+  -- nom a la branche : son `famille` valait son propre prenom. Deux chefs
+  -- de branche homonymes seraient renommes ensemble -- mais leurs totaux
+  -- etaient deja confondus dans l'export, qui groupe sur ce meme libelle.
+  if avant.famille = avant.prenom and neuf <> avant.prenom then
+    update private.participants
+       set famille = neuf
+     where famille = avant.prenom;
+    get diagnostics branche = row_count;
+  end if;
+
+  return jsonb_build_object('id', p_id, 'prenom', neuf, 'branche', branche);
 end $fn$;
 
 -- ---- 8c bis. Restreindre la portee de quelqu'un ----
