@@ -10,6 +10,12 @@
 const { SUPABASE_URL, SUPABASE_ANON_KEY } = window.CONFIG;
 
 const REPAS = ["petit_dejeuner", "dejeuner", "diner"];
+
+// Le petit-dejeuner ne se coche pas : il suit la nuit d'avant, et seulement
+// si c'etait une CHAMBRE. L'hotel le sert, le gite non -- on y fait son cafe
+// soi-meme. C'est la regle que `engine/rules.py` applique pour reconnaitre
+// une demi-pension, et celle que l'import du tableur pose deja.
+const REPAS_COCHABLES = ["dejeuner", "diner"];
 // Une seule question : OU L'ON DORT. Ne pas etre la du tout n'est pas un
 // choix a faire dans la liste -- c'est une journee ou l'on n'a rien coche.
 //
@@ -284,7 +290,14 @@ function construireGrille(jours) {
     ligne.dataset.jour = jour;
 
     const cJour = document.createElement("td");
-    cJour.textContent = afficherJour(jour);
+    cJour.append(afficherJour(jour));
+    // Le petit-dejeuner n'a plus de case, mais il ne doit pas disparaitre
+    // pour autant : la mention parait sous le jour ou il est pris.
+    const herite = document.createElement("span");
+    herite.className = "herite";
+    herite.textContent = "petit-déjeuner compris";
+    herite.hidden = true;
+    cJour.appendChild(herite);
     ligne.appendChild(cJour);
 
     const cChoix = document.createElement("td");
@@ -294,7 +307,7 @@ function construireGrille(jours) {
     cChoix.appendChild(choix);
     ligne.appendChild(cChoix);
 
-    for (const champ of REPAS) {
+    for (const champ of REPAS_COCHABLES) {
       const cellule = document.createElement("td");
       const caseACocher = document.createElement("input");
       caseACocher.type = "checkbox";
@@ -303,29 +316,47 @@ function construireGrille(jours) {
       // Cocher un repas suffit desormais a declarer une presence : la ligne
       // doit donc se relire a chaque case, pas seulement au changement de
       // la nuit.
-      caseACocher.addEventListener("change", () => appliquerContraintes(ligne));
+      caseACocher.addEventListener("change", appliquerContraintes);
       cellule.appendChild(caseACocher);
       ligne.appendChild(cellule);
     }
 
-    choix.addEventListener("change", () => appliquerContraintes(ligne));
+    choix.addEventListener("change", appliquerContraintes);
     corpsJours.appendChild(ligne);
   }
 }
 
 // Absente = rien du tout : ni nuit, ni repas. Le supplement vue mer, lui,
 // n'existe que pour les chambres.
-function appliquerContraintes(ligne) {
-  const hebergement = ligne.querySelector('[data-champ="hebergement"]').value;
+// La grille se relit ENTIERE a chaque changement, jamais ligne par ligne :
+// le petit-dejeuner d'un jour depend de la nuit du jour d'avant, et une
+// regle posee sur une seule ligne ne voit pas sa voisine.
+function appliquerContraintes() {
+  const lignes = [...corpsJours.querySelectorAll("tr")];
 
-  // Les repas ne dependent de rien : on peut passer dejeuner sans dormir
-  // sur place, et c'est meme le cas de tous ceux qui logent a cote.
-  //
-  // Rien de coche et pas de nuit sur place : cette journee ne dit rien,
-  // donc la personne n'est pas la. C'est griser la ligne qui le montre,
-  // pas un choix a faire dans une liste.
-  const unRepas = REPAS.some((r) => ligne.querySelector(`[data-champ="${r}"]`).checked);
-  ligne.classList.toggle("absente", hebergement === "exterieur" && !unRepas);
+  lignes.forEach((ligne, i) => {
+    const hebergement = ligne.querySelector('[data-champ="hebergement"]').value;
+    const veille = i > 0 ? lignes[i - 1] : null;
+    const enChambreLaVeille =
+      veille && veille.querySelector('[data-champ="hebergement"]').value === "chambre";
+
+    ligne.querySelector(".herite").hidden = !enChambreLaVeille;
+
+    // Les repas ne dependent de rien : on peut passer dejeuner sans dormir
+    // sur place, et c'est meme le cas de tous ceux qui logent a cote.
+    //
+    // Rien de coche, pas de nuit sur place, et pas de petit-dejeuner herite
+    // de la veille : cette journee ne dit rien, donc la personne n'est pas
+    // la. C'est griser la ligne qui le montre, pas un choix a faire dans
+    // une liste.
+    const unRepas = REPAS_COCHABLES.some(
+      (r) => ligne.querySelector(`[data-champ="${r}"]`).checked
+    );
+    ligne.classList.toggle(
+      "absente",
+      hebergement === "exterieur" && !unRepas && !enChambreLaVeille
+    );
+  });
 }
 
 function selectionnerCible(personne) {
@@ -415,34 +446,43 @@ function remplirGrille(participantId) {
       : presence.vue_mer && presence.hebergement === "chambre"
         ? CHAMBRE_VUE_MER
         : presence.hebergement;
-    for (const repas of REPAS) champ(repas).checked = presence ? presence[repas] : false;
-
-    appliquerContraintes(ligne);
+    for (const repas of REPAS_COCHABLES) {
+      champ(repas).checked = presence ? presence[repas] : false;
+    }
   }
+
+  // Une seule passe, a la fin : chaque ligne a besoin de la precedente.
+  appliquerContraintes();
 }
 
 function lireGrille() {
-  const lignes = [];
-  for (const ligne of corpsJours.querySelectorAll("tr")) {
+  const jours = [...corpsJours.querySelectorAll("tr")].map((ligne) => {
     const champ = (nom) => ligne.querySelector(`[data-champ="${nom}"]`);
     const choisi = champ("hebergement").value;
     const vueMer = choisi === CHAMBRE_VUE_MER;
-    const hebergement = vueMer ? "chambre" : choisi;
-    const repas = Object.fromEntries(REPAS.map((r) => [r, champ(r).checked]));
-
-    // Pas de nuit sur place et aucun repas : il n'y a rien a declarer. On
-    // n'ecrit aucune ligne -- absent est l'etat par defaut de la base, et
-    // poser une ligne vide reviendrait a le contredire.
-    if (hebergement === "exterieur" && !Object.values(repas).some(Boolean)) continue;
-
-    lignes.push({
+    return {
       jour: ligne.dataset.jour,
-      hebergement,
+      hebergement: vueMer ? "chambre" : choisi,
       vue_mer: vueMer,
-      ...repas,
-    });
+      petit_dejeuner: false, // pose juste apres, d'apres la nuit d'avant
+      dejeuner: champ("dejeuner").checked,
+      diner: champ("diner").checked,
+    };
+  });
+
+  // Le petit-dejeuner du lendemain d'une nuit en chambre. Il peut tomber
+  // sur un jour ou rien n'est coche : on part apres avoir dejeune, sans
+  // rien prendre d'autre.
+  for (let i = 1; i < jours.length; i += 1) {
+    if (jours[i - 1].hebergement === "chambre") jours[i].petit_dejeuner = true;
   }
-  return lignes;
+
+  // Ce qui ne dit rien ne produit aucune ligne -- absent est l'etat par
+  // defaut de la base, et poser une ligne vide reviendrait a le contredire.
+  return jours.filter(
+    (j) =>
+      j.hebergement !== "exterieur" || j.petit_dejeuner || j.dejeuner || j.diner
+  );
 }
 
 const boutonEnregistrer = document.getElementById("enregistrer");

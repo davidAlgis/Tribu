@@ -412,7 +412,17 @@ une colonne entière, désactivée les trois quarts du temps puisque seule une
 chambre peut l'avoir. La base, elle, garde deux champs — un hébergement et
 un supplément — parce que c'est ainsi que l'hôtel facture.
 
-Les repas se cochent librement, sans avoir à
+**Le petit-déjeuner n'a pas de case** : il vient avec la nuit en chambre, et
+seulement avec elle — l'hôtel le sert, le gîte non, on y fait son café
+soi-même. La mention « petit-déjeuner compris » paraît sous le jour où il
+est pris, c'est-à-dire le lendemain matin.
+
+C'est la règle que [`engine/rules.py`](engine/rules.py) applique pour
+reconnaître une demi-pension, et celle que l'import du tableur pose déjà.
+Les deux chemins — la grille et l'import — produisent les mêmes lignes sur
+les mêmes séjours ; c'est vérifié cas par cas.
+
+Les autres repas se cochent librement, sans avoir à
 répondre d'abord sur la nuit : venir déjeuner sans dormir là est le cas de
 tous ceux qui logent à côté.
 

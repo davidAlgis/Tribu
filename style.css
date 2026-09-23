@@ -208,6 +208,15 @@ button:disabled { opacity: 0.5; cursor: default; }
 
 /* ---------- Grille ---------- */
 tr.absente td:first-child { color: var(--doux); }
+
+/* Le petit-dejeuner n'a plus de case a cocher : il vient avec la nuit en
+   chambre. La mention parait sous le jour ou il est pris, pour qu'il ne
+   disparaisse pas de la grille en meme temps que sa colonne. */
+.herite {
+  display: block;
+  font-size: 0.78rem;
+  color: var(--ok);
+}
 tr.absente select { color: var(--doux); }
 
 .actions { display: flex; gap: 12px; align-items: center; flex-wrap: wrap; }
