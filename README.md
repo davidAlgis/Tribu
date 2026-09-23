@@ -212,6 +212,68 @@ sa présence.
 
 Sa saisie de présences part avec elle.
 
+## Reprendre un tableur existant
+
+Le séjour a d'abord vécu dans un tableur, et il s'y trouvait déjà soixante
+lignes de présences. Les ressaisir une à une sur `index.html` aurait été
+long et fautif.
+
+```bash
+python importer_presences.py --csv "D:/chemin/vers/presences.csv" --debut 2026-10-24 --apercu
+python importer_presences.py --csv "D:/chemin/vers/presences.csv" --debut 2026-10-24
+```
+
+`--apercu` n'écrit rien. `--debut` est la date de la première colonne.
+**Le CSV reste où il est** : comme le GEDCOM, il porte les vrais prénoms et
+n'a rien à faire dans un dépôt public.
+
+L'import ne touche qu'aux personnes citées dans le fichier. Réimporter une
+branche corrigée n'efface pas le reste.
+
+<details>
+<summary>Le petit-déjeuner, qui n'est pas dans la source</summary>
+
+Un tableur de présences note en général le déjeuner, le dîner et la nuit.
+Pas le petit-déjeuner — et sans lui, [`engine/rules.py`](engine/rules.py)
+ne voit que des « nuits seules » et facture tous les repas hors pension.
+
+Il est donc posé le lendemain de chaque nuit **en chambre**, et seulement
+là : l'hôtel le sert, le gîte non.
+
+Ce n'est pas une commodité. Un tableur de ce genre calcule lui-même ses
+colonnes Pension-Complète, Demi-Pension et Restauration-Hors-Pension, et
+c'est la seule règle qui fasse retomber le moteur exactement dessus — sur
+les soixante lignes, sans un écart. Les tests l'épinglent sur les deux
+hébergements : changer la règle sans les changer casserait la facturation
+en silence.
+</details>
+
+<details>
+<summary>Ce que l'import ne conserve pas</summary>
+
+L'identifiant d'hébergement donne la catégorie et le supplément :
+`chambre_…` une chambre, `chambre_vue_mer_…` une chambre avec vue,
+`gîte_…` un gîte, `Exterieur` une présence sans nuit.
+
+**Le numéro se perd.** La base retient trois catégories, pas quinze
+logements : qui dort dans quel gîte reste dans le tableur. C'est un choix
+du schéma — la base ne stocke que ce qui sert à facturer.
+</details>
+
+<details>
+<summary>Le rattachement aux prénoms</summary>
+
+La base ne stocke pas les noms de famille : `importer_ged.py` met dans
+`famille` le prénom du chef de branche. Le rapprochement se fait donc sur
+le **prénom**.
+
+Quand deux personnes le partagent, le script s'arrête et demande laquelle,
+en montrant leur branche et leur foyer. Il ne tranche jamais seul —
+c'est le genre de supposition qui fait manger quelqu'un à la place d'un
+autre pendant cinq jours. `--lier "Prénom Nom=UUID"` répond sans être
+interrogé, pour rejouer l'import sans reprendre les mêmes choix.
+</details>
+
 ## Revenir en arrière
 
 Trois gestes effacent beaucoup d'un coup, et aucun n'était réversible :

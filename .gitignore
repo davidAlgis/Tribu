@@ -7,6 +7,11 @@ exports/
 exclusions.txt
 reglages.sql
 
+# Le tableur des presences porte les vrais prenoms, comme le GEDCOM.
+# `importer_presences.py --csv` le lit la ou il est. Le filtre est large
+# a dessein : aucun CSV n'a de raison d'entrer dans ce depot.
+*.csv
+
 # Un GEDCOM contient toute une genealogie : il reste hors du projet.
 # `importer_ged.py --ged` le lit la ou il est, sans jamais le copier ici.
 *.ged

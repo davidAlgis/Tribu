@@ -742,6 +742,87 @@ begin
   return jsonb_build_object('importes', nb);
 end $fn$;
 
+-- ---- 8f. L'import des presences deja connues ----
+--
+--  Le sejour a d'abord ete tenu dans un tableur, et il s'y trouve deja
+--  soixante lignes de presences. Les ressaisir a la main sur index.html
+--  serait long et fautif.
+--
+--  Cette fonction fait pour les presences ce que `admin_importer` fait
+--  pour la liste : elle remplace, pour les SEULES personnes citees, ce
+--  qu'elles avaient declare. Celles qui ne sont pas dans l'envoi ne sont
+--  pas touchees -- reimporter une branche corrigee ne doit pas effacer le
+--  reste.
+--
+--  Elle renvoie `recues` ET `ecrites`. L'ecart entre les deux est le seul
+--  moyen de voir que des lignes sont tombees hors des dates du sejour :
+--  sans ce couple, un import a cote de la plaque ressemblerait a un
+--  succes.
+--
+create or replace function public.admin_presences_importer(p_code text, p_lignes jsonb)
+returns jsonb
+language plpgsql security definer
+set search_path = private, pg_temp as $fn$
+declare
+  r      private.reglages;
+  cibles uuid[];
+  nb     integer;
+begin
+  perform private.verifier_code(p_code, 'admin');
+
+  -- Le premier changement de la semaine emporte une copie de l'avant.
+  perform private.sauver_si_nouvelle_semaine();
+
+  select * into r from private.reglages;
+
+  select array_agg(distinct (l->>'participant_id')::uuid)
+    into cibles
+    from jsonb_array_elements(coalesce(p_lignes, '[]'::jsonb)) as l;
+
+  if cibles is null then
+    raise exception 'AUCUNE_CIBLE' using errcode = 'P0001';
+  end if;
+
+  -- On le dit tout de suite et clairement. Sans ce controle, un
+  -- identifiant errone remonterait sous forme de violation de cle
+  -- etrangere, message que personne ne rattache a « le rapprochement des
+  -- prenoms s'est trompe ».
+  if exists (
+    select 1 from unnest(cibles) c
+     where not exists (select 1 from private.participants p where p.id = c)
+  ) then
+    raise exception 'PARTICIPANT_INCONNU' using errcode = 'P0001';
+  end if;
+
+  delete from public.presences where participant_id = any(cibles);
+
+  insert into public.presences
+    (participant_id, jour, hebergement, petit_dejeuner, dejeuner, diner, vue_mer)
+  select (l->>'participant_id')::uuid,
+         (l->>'jour')::date,
+         l->>'hebergement',
+         coalesce((l->>'petit_dejeuner')::boolean, false),
+         coalesce((l->>'dejeuner')::boolean, false),
+         coalesce((l->>'diner')::boolean, false),
+         -- Le supplement vue mer n'existe que pour les chambres.
+         coalesce((l->>'vue_mer')::boolean, false) and l->>'hebergement' = 'chambre'
+    from jsonb_array_elements(p_lignes) as l
+   where (l->>'jour')::date between r.date_debut and r.date_fin
+     and l->>'hebergement' in ('chambre', 'gite', 'exterieur');
+
+  get diagnostics nb = row_count;
+
+  return jsonb_build_object(
+    'personnes', array_length(cibles, 1),
+    'recues', jsonb_array_length(p_lignes),
+    'ecrites', nb,
+    'date_debut', r.date_debut,
+    'date_fin', r.date_fin
+  );
+end $fn$;
+
+grant execute on function public.admin_presences_importer(text, jsonb) to anon;
+
 grant execute on function public.admin_lister(text)                                         to anon;
 grant execute on function public.admin_ajouter(text, text, text, uuid, uuid, boolean, text) to anon;
 grant execute on function public.admin_modifier(text, uuid, text, text)                     to anon;
