@@ -89,8 +89,9 @@ parfaite.
 
 Chacun voit les totaux de la famille, **jamais les noms**.
 
-Sous les week-ends, **« Où en est le choix »** donne le résultat courant, et
-il est visible de tous : le classement, une barre par week-end — vert pour
+Juste sous le choix de la personne, avant même la liste des week-ends,
+**« Où en est le choix »** donne le résultat courant, et il est visible de
+tous : le classement, une barre par week-end — vert pour
 les oui, bleu pour les « si besoin », rouge pour les non, gris pour ceux qui
 n'ont rien dit — et le nombre de gens qui se sont prononcés. Le score compte
 chaque « si besoin » pour un demi : un week-end que tout le monde accepte à
