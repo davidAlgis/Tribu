@@ -21,7 +21,8 @@
        a bougé, là où deux champs de texte au même endroit ne le disent
        pas. -->
   <p id="fil" class="fil" role="status" hidden>
-    <strong>✓ Code accepté.</strong> Reste à dire qui tu es.
+    <strong>✓ Code accepté.</strong>
+    <span id="fil-suite">Reste à dire qui tu es.</span>
   </p>
 
   <!-- ÉTAPE 1 — le code famille ------------------------------------ -->
@@ -51,7 +52,7 @@
       <label for="prenom">Commence à taper ton prénom</label>
       <div class="auto">
         <input type="text" id="prenom" autocomplete="off" spellcheck="false"
-               placeholder="Ton prénom..." aria-describedby="aide-prenom"
+               placeholder="Ton prénom..."
                role="combobox" aria-expanded="false" aria-controls="suggestions">
         <ul id="suggestions" role="listbox"></ul>
       </div>

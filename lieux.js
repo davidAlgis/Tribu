@@ -663,7 +663,13 @@ function montrer(id) {
   // texte, au meme endroit. Le focus change, mais ca ne se voit pas -- et
   // pas du tout sur un telephone. Le fil, lui, apparait et ne repart plus :
   // la page ne ressemble plus a ce qu'elle etait.
-  if (fil) fil.hidden = id === "etape-code";
+  if (fil) {
+    fil.hidden = id === "etape-code";
+    // La relance ne vaut que tant qu'il reste quelque chose a faire : une
+    // fois la personne choisie, « reste a dire qui tu es » serait faux.
+    const suite = document.getElementById("fil-suite");
+    if (suite) suite.hidden = id !== "etape-prenom";
+  }
 }
 
 if (champCode.value) {

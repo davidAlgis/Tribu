@@ -238,9 +238,9 @@ const message = document.getElementById("message");
 function construireSaisie() {
   const { date_debut, date_fin, saisie_ouverte, modifiables } = etat.donnees;
 
-  document.getElementById("sous-titre").textContent =
-    `Du ${afficherJour(date_debut)} au ${afficherJour(date_fin)}.`;
-
+  // Le sous-titre portait les dates du sejour. Il a ete retire de la page,
+  // et rien ne s'en trouve perdu : chaque ligne de la grille porte son
+  // jour. Ecrire dans un element absent arretait la saisie net.
   construireGrille(listerJours(date_debut, date_fin));
 
   zonePersonnes.innerHTML = "";
@@ -527,7 +527,13 @@ function montrer(id) {
   // texte, au meme endroit. Le focus change, mais ca ne se voit pas -- et
   // pas du tout sur un telephone. Le fil, lui, apparait et ne repart plus :
   // la page ne ressemble plus a ce qu'elle etait.
-  if (fil) fil.hidden = id === "etape-code";
+  if (fil) {
+    fil.hidden = id === "etape-code";
+    // La relance ne vaut que tant qu'il reste quelque chose a faire : une
+    // fois la personne choisie, « reste a dire qui tu es » serait faux.
+    const suite = document.getElementById("fil-suite");
+    if (suite) suite.hidden = id !== "etape-prenom";
+  }
 }
 
 // Le code est deja connu de cet appareil : on saute la premiere etape.
