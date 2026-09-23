@@ -18,7 +18,7 @@ Deux pages pour la famille, une pour toi :
 | Page | Qui | Quoi |
 |---|---|---|
 | [`lieux.html`](lieux.html) | la famille | où l'on n'a pas envie d'aller |
-| [`dates.html`](dates.html) | la famille | quel week-end arrange chacun |
+| [`dates.html`](dates.html) | la famille | quel week-end arrange chacun, et où en est le choix |
 | [`index.html`](index.html) | la famille | qui vient, quelles nuits, quels repas |
 | [`admin.html`](admin.html) | toi | participants, droits, week-ends, résultat de la carte, retour en arrière |
 
@@ -87,9 +87,26 @@ recliquer sur sa réponse l'annule. « Si besoin » n'est pas du remplissage :
 c'est ce qui départage deux week-ends quand personne n'a de disponibilité
 parfaite.
 
-Chacun voit les totaux de la famille, **jamais les noms**. Toi seul vois le
-score, qui compte les « si besoin » pour moitié : un week-end que tout le
-monde accepte à contrecœur ne vaut pas celui que tout le monde choisit.
+Chacun voit les totaux de la famille, **jamais les noms**.
+
+Sous les week-ends, **« Où en est le choix »** donne le résultat courant, et
+il est visible de tous : le classement, une barre par week-end — vert pour
+les oui, bleu pour les « si besoin », rouge pour les non, gris pour ceux qui
+n'ont rien dit — et le nombre de gens qui se sont prononcés. Le score compte
+chaque « si besoin » pour un demi : un week-end que tout le monde accepte à
+contrecœur ne vaut pas celui que tout le monde choisit.
+
+Ce score était réservé à `admin.html`. Le réserver ne protégeait rien : il se
+déduit des trois compteurs que la page affichait déjà, et n'importe qui
+pouvait le refaire de tête. Ce qui lui manquait, c'était le dénominateur —
+« 7 oui » ne dit rien tant qu'on ignore si la famille compte huit personnes
+ou vingt. La page annonce donc aussi combien ont répondu, et signale quand
+c'est encore trop peu pour arrêter quoi que ce soit.
+
+À égalité, celui qui bloque le moins de monde s'affiche en premier, mais
+l'égalité est annoncée plutôt que masquée derrière un classement arbitraire.
+Deux week-ends au même score partagent la première place, et il n'y a pas de
+deuxième.
 
 L'interrupteur **Sondage ouvert** ferme les réponses une fois la date
 arrêtée.

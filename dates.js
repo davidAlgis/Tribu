@@ -190,6 +190,9 @@ async function choisirPersonne(personne) {
 
 const zonePersonnes = document.getElementById("personnes");
 const zoneOptions = document.getElementById("options");
+const zoneClassement = document.getElementById("classement");
+const verdict = document.getElementById("verdict");
+const participation = document.getElementById("participation");
 const legende = document.getElementById("legende-voeux");
 const message = document.getElementById("message");
 const boutonEnregistrer = document.getElementById("enregistrer");
@@ -204,10 +207,14 @@ function construire() {
       "Aucun week-end n'est encore proposé. Reviens plus tard.";
     legende.textContent = "Rien à choisir pour l'instant";
     boutonEnregistrer.disabled = true;
+    zoneClassement.textContent = "";
+    verdict.textContent = "";
+    participation.textContent = "";
     return;
   }
 
   construireOptions(options);
+  dessinerRapport();
 
   zonePersonnes.innerHTML = "";
   for (const personne of modifiables) {
@@ -449,4 +456,155 @@ function montrer(id) {
 
 if (champCode.value) {
   document.getElementById("form-code").requestSubmit();
+}
+
+// ----------------------------------------------------------- rapport
+//
+// Ou en est le choix, pour tout le monde et pas seulement pour
+// l'organisateur.
+//
+// Le score etait jusqu'ici reserve a admin.html. Le reserver n'avait aucun
+// effet : il se deduit des trois compteurs que la page affiche deja, et
+// n'importe qui pouvait le refaire de tete. Autant le poser proprement, et
+// avec ce qui lui manquait pour vouloir dire quelque chose -- combien de
+// gens se sont prononces.
+//
+// Toujours aucun nom : des totaux, et rien d'autre.
+
+// Un « si besoin » vaut un demi « oui ». Un week-end que tout le monde
+// accepte a contrecoeur ne vaut pas celui que tout le monde choisit.
+// Meme calcul que sur admin.html : il n'existe qu'un seul classement.
+function score(option) {
+  return option.oui + option.peut_etre / 2;
+}
+
+function classer(options, participants) {
+  const lignes = (options || []).map((o) => {
+    const repondu = o.oui + o.peut_etre + o.non;
+    return {
+      ...o,
+      score: score(o),
+      repondu,
+      // Ceux qui n'ont rien dit sur CE week-end. Ils comptent : un week-end
+      // en tete avec trois reponses sur vingt n'est pas un resultat.
+      muets: Math.max(0, (participants || 0) - repondu),
+    };
+  });
+
+  lignes.sort(
+    (a, b) =>
+      b.score - a.score ||
+      // A egalite, celui qui bloque le moins de monde passe devant.
+      a.non - b.non ||
+      String(a.date_debut || "").localeCompare(String(b.date_debut || "")) ||
+      a.libelle.localeCompare(b.libelle, "fr")
+  );
+
+  // Le rang suit le SCORE, pas la position : deux week-ends au meme score
+  // partagent la premiere place, et il n'y a pas de deuxieme.
+  let rang = 0;
+  let precedent = null;
+  lignes.forEach((l, i) => {
+    if (precedent === null || l.score !== precedent) rang = i + 1;
+    l.rang = rang;
+    precedent = l.score;
+  });
+
+  return {
+    lignes,
+    tete: lignes.filter((l) => l.rang === 1),
+    // Personne n'a rien dit : il n'y a pas de resultat, et le dire vaut
+    // mieux que de couronner un week-end a zero point.
+    vide: lignes.every((l) => l.repondu === 0),
+  };
+}
+
+function nombre(n) {
+  return n.toLocaleString("fr-FR", { maximumFractionDigits: 1 });
+}
+
+function ordinal(rang) {
+  return rang === 1 ? "1er" : `${rang}e`;
+}
+
+// Ce qu'il faut retenir en une phrase, avant le detail.
+function verdictTexte(classement) {
+  if (classement.vide) {
+    return "Personne n'a encore répondu : le classement apparaîtra ici dès les premières réponses.";
+  }
+  const tete = classement.tete;
+  const pts = `${nombre(tete[0].score)} point(s)`;
+  if (tete.length === 1) {
+    return `« ${tete[0].libelle} » tient la corde, avec ${pts} sur ${tete[0].repondu} réponse(s).`;
+  }
+  const noms = tete.map((l) => `« ${l.libelle} »`).join(" et ");
+  return `${tete.length} week-ends à égalité avec ${pts} : ${noms}. Le premier de la liste bloque le moins de monde.`;
+}
+
+function participationTexte(donnees) {
+  const total = donnees.participants || 0;
+  const repondants = donnees.repondants || 0;
+  if (!total) return "";
+  if (!repondants) return `personne n'a répondu sur ${total}`;
+  // Sous la moitie, le classement est une tendance, pas un resultat : le
+  // dire evite qu'on arrete une date sur trois reponses.
+  const reserve = repondants * 2 < total ? " — encore peu, le classement peut bouger" : "";
+  return `${repondants} personne(s) sur ${total} ont répondu${reserve}`;
+}
+
+// La barre ne porte aucune information que les chiffres en dessous ne
+// donnent pas : elle est donc masquee aux lecteurs d'ecran, qui liraient
+// autrement une suite de vides.
+function barre(ligne, base) {
+  const b = document.createElement("div");
+  b.className = "barre";
+  b.setAttribute("aria-hidden", "true");
+  const segments = [
+    ["b-oui", ligne.oui],
+    ["b-peut-etre", ligne.peut_etre],
+    ["b-non", ligne.non],
+    ["b-muet", ligne.muets],
+  ];
+  for (const [classe, n] of segments) {
+    if (!n) continue;
+    const seg = document.createElement("span");
+    seg.className = classe;
+    seg.style.width = `${(n / base) * 100}%`;
+    b.appendChild(seg);
+  }
+  return b;
+}
+
+function dessinerRapport() {
+  const donnees = etat.donnees;
+  const classement = classer(donnees.options, donnees.participants);
+
+  participation.textContent = participationTexte(donnees);
+
+  verdict.className = classement.vide ? "note" : "note resultat";
+  verdict.textContent = verdictTexte(classement);
+
+  zoneClassement.textContent = "";
+  for (const ligne of classement.lignes) {
+    const item = document.createElement("li");
+
+    const titre = document.createElement("div");
+    titre.className = "rang-titre";
+    titre.append(span(ordinal(ligne.rang), "etiquette"), fort(ligne.libelle));
+    if (ligne.date_debut && ligne.date_fin) {
+      titre.append(
+        span(`du ${afficherJour(ligne.date_debut)} au ${afficherJour(ligne.date_fin)}`, "lien")
+      );
+    }
+
+    const chiffres = document.createElement("div");
+    chiffres.className = "rang-chiffres";
+    chiffres.textContent =
+      `${nombre(ligne.score)} pt · ${ligne.oui} oui · ${ligne.peut_etre} si besoin · ` +
+      `${ligne.non} non` +
+      (ligne.muets ? ` · ${ligne.muets} sans réponse` : "");
+
+    item.append(titre, barre(ligne, donnees.participants || ligne.repondu || 1), chiffres);
+    zoneClassement.appendChild(item);
+  }
 }

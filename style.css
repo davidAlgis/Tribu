@@ -247,6 +247,53 @@ button.retirer {
 }
 button.retirer:hover { color: #fff; background: var(--erreur); border-color: var(--erreur); }
 
+/* ---------- Rapport du sondage ---------- */
+
+.classement {
+  list-style: none;
+  margin: 0 0 12px;
+  padding: 0;
+}
+.classement li {
+  padding: 10px 0;
+  border-bottom: 1px solid var(--trait);
+}
+.classement li:last-child { border-bottom: 0; }
+
+.rang-titre { display: flex; align-items: baseline; flex-wrap: wrap; gap: 8px; }
+.rang-titre .lien { color: var(--doux); font-size: 0.83rem; }
+
+/* Les memes couleurs que les boutons de reponse : vert pour oui, bleu pour
+   « si besoin », rouge pour non, et le gris du fond pour ceux qui n'ont rien
+   dit. La barre se lit donc sans legende, comme la carte. */
+.barre {
+  display: flex;
+  height: 9px;
+  border-radius: 5px;
+  overflow: hidden;
+  background: var(--trait);
+  margin: 7px 0 5px;
+}
+.barre span { display: block; }
+.b-oui { background: var(--ok); }
+.b-peut-etre { background: var(--accent); }
+.b-non { background: var(--erreur); }
+.b-muet { background: var(--trait); }
+
+/* Le verdict n'est ni une alerte ni une note de bas de page : c'est la
+   reponse a la question que la page pose. Le lisere le dit sans crier --
+   d'ou l'accent, la ou `.alerte` prend le rouge. */
+.note.resultat {
+  border-left-color: var(--accent);
+  color: var(--texte);
+}
+
+.rang-chiffres {
+  font-size: 0.82rem;
+  color: var(--doux);
+  font-variant-numeric: tabular-nums;
+}
+
 /* ---------- Différences avec une sauvegarde ---------- */
 
 /* Une difference se lit en deux temps : ce qui s'est passe, puis a qui.

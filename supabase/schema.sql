@@ -804,6 +804,14 @@ begin
   return jsonb_build_object(
     'voeux_ouverts', r.voeux_ouverts,
 
+    -- Combien de monde en tout, et combien se sont prononces. Sans ces deux
+    -- nombres, « 2 oui » se lit pareil dans une famille de quatre et dans
+    -- une famille de vingt, et un classement fonde sur trois reponses
+    -- passerait pour un resultat. Ce sont des comptes, jamais des noms --
+    -- les memes que sert deja `lieux_charger`.
+    'participants', (select count(*) from private.participants),
+    'repondants', (select count(distinct participant_id) from public.voeux),
+
     -- Les totaux sont renvoyes a tout le monde, mais jamais les noms : voir
     -- que le premier week-end tient la corde aide a se decider, savoir qui
     -- a dit non ne regarde personne.
