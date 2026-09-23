@@ -20,7 +20,7 @@ Trois pages pour la famille, une pour toi :
 | [`lieux.html`](lieux.html) | la famille | où l'on n'a pas envie d'aller |
 | [`dates.html`](dates.html) | la famille | quel week-end arrange chacun, et où en est le choix |
 | [`index.html`](index.html) | la famille | qui vient, quelles nuits, quels repas |
-| [`admin.html`](admin.html) | toi | participants, droits, week-ends, résultat de la carte, retour en arrière |
+| [`admin.html`](admin.html) | toi | dates du séjour, participants, droits, week-ends, résultat de la carte, retour en arrière |
 
 Les trois pages familiales portent le même menu en tête — **Le lieu**, **La
 date**, **Les présences** — dans l'ordre où les décisions se prennent. Celle
@@ -213,6 +213,27 @@ c'est ce qui rend le réglage lisible. Restreindre quelqu'un **ne retire
 rien aux autres** — ses enfants gardent la main sur leurs propres foyers.
 Et personne ne perd jamais la main sur sa propre présence.
 
+## Les dates du séjour
+
+Le panneau **Le séjour**, en tête de `admin.html`. Deux champs, un bouton.
+
+Elles ne vivaient jusqu'ici que dans `private.reglages`, donc dans
+l'éditeur SQL. C'est peu, et c'est mal placé : ce sont elles qui bornent la
+grille de saisie et qui **filtrent tout ce qui s'écrit** dans les
+présences. Laissées sur les valeurs d'exemple, elles font échouer un import
+entier sans que rien n'explique pourquoi.
+
+Déplacer les dates ne déplace pas ce qui a déjà été saisi. Les journées
+tombées hors des nouvelles bornes restent en base, invisibles du formulaire
+et absentes de l'export. Le panneau les compte et le dit — il ne les efface
+pas : ce serait décider à ta place.
+
+L'interrupteur **Saisie ouverte** ferme le formulaire des présences une
+fois tout le monde passé. La colonne existait depuis le début et
+`sejour_enregistrer` la respectait, mais rien ne permettait de la basculer :
+le sondage des dates et la carte avaient leur interrupteur, le formulaire
+des présences non.
+
 ## Corriger un prénom
 
 Le bouton ✎ en face de la personne, sur `admin.html`. Le nom devient un
@@ -349,7 +370,8 @@ courants des exemples et des tests sont déclarés dans
 1. **Supabase** — projet en région UE, puis coller
    [`supabase/schema.sql`](supabase/schema.sql) dans le SQL Editor.
 2. **Dates et code famille** — adapter
-   [`supabase/reglages.exemple.sql`](supabase/reglages.exemple.sql).
+   [`supabase/reglages.exemple.sql`](supabase/reglages.exemple.sql). Les
+   dates se corrigent ensuite depuis `admin.html`, sans repasser par le SQL.
 3. **Code organisateur** — `python creer_code_admin.py`, puis coller le SQL
    affiché (voir ci-dessous).
 4. **Participants** — amorcer la base depuis le GEDCOM, une seule fois :

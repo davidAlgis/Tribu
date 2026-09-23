@@ -69,6 +69,8 @@ const MESSAGES = {
   LIBELLE_VIDE: "Il manque l'intitulé du week-end.",
   DATES_INVERSEES: "La date de fin précède la date de début.",
   LISTE_VIDE: "La liste envoyée est vide.",
+  DATES_MANQUANTES: "Il manque une des deux dates du séjour.",
+  REGLAGES_ABSENTS: "Les réglages du séjour sont absents de la base.",
 };
 
 const etat = { code: "", participants: [], type: "famille" };
@@ -129,6 +131,7 @@ async function recharger() {
   etat.participants = await rpc("admin_lister", { p_code: etat.code });
   dessinerListe();
   remplirSelecteurs();
+  await rechargerSejour();
   await rechargerDates();
   await rechargerLieux();
   await rechargerSauvegardes();
@@ -1028,5 +1031,82 @@ document.getElementById("sauver-maintenant").addEventListener("click", async () 
   } catch (erreur) {
     messageSauvegardes.className = "erreur";
     messageSauvegardes.textContent = erreur.message;
+  }
+});
+
+
+// ---------------------------------------------------------- le sejour
+//
+// Deux dates, et rien d'autre -- mais ce sont elles qui bornent la grille
+// de saisie et qui filtrent tout ce qui s'ecrit dans `presences`. Laissees
+// sur les valeurs d'exemple, elles font echouer un import entier sans que
+// rien n'explique pourquoi. Elles ne vivaient que dans l'editeur SQL.
+
+const champDebut = document.getElementById("sejour-debut");
+const champFin = document.getElementById("sejour-fin");
+const resumeSejour = document.getElementById("sejour-resume");
+const messageSejour = document.getElementById("message-sejour");
+const interrupteurSaisie = document.getElementById("saisie-ouverte");
+
+// Deplacer les dates ne deplace pas ce qui a ete saisi. Les journees qui
+// tombent hors des nouvelles bornes restent en base, invisibles du
+// formulaire et ignorees a l'export : on ne les efface pas, mais on ne les
+// tait pas non plus.
+function direHorsSejour(combien) {
+  messageSejour.className = combien ? "erreur" : "";
+  messageSejour.textContent = combien
+    ? `${combien} journée(s) déjà saisies tombent hors de ces dates : ` +
+      `elles n'apparaissent plus dans le formulaire et sortent de l'export.`
+    : "";
+}
+
+async function rechargerSejour() {
+  const d = await rpc("admin_sejour", { p_code: etat.code });
+  champDebut.value = d.date_debut;
+  champFin.value = d.date_fin;
+  interrupteurSaisie.checked = d.saisie_ouverte;
+  resumeSejour.textContent =
+    `${d.jours} jour(s), ${d.presences} journée(s) saisie(s)`;
+  direHorsSejour(d.presences_hors);
+}
+
+document.getElementById("sejour-enregistrer").addEventListener("click", async () => {
+  messageSejour.className = "";
+  messageSejour.textContent = "Enregistrement…";
+  try {
+    const d = await rpc("admin_sejour_dates", {
+      p_code: etat.code,
+      p_debut: champDebut.value || null,
+      p_fin: champFin.value || null,
+    });
+    await recharger();
+    if (!d.presences_hors) {
+      messageSejour.className = "ok";
+      messageSejour.textContent =
+        `Séjour du ${afficherJour(d.date_debut)} au ${afficherJour(d.date_fin)}` +
+        ` — ${d.jours} jour(s).`;
+    }
+  } catch (erreur) {
+    messageSejour.className = "erreur";
+    messageSejour.textContent = erreur.message;
+  }
+});
+
+interrupteurSaisie.addEventListener("change", async () => {
+  try {
+    await rpc("admin_saisie_ouvrir", {
+      p_code: etat.code,
+      p_ouvert: interrupteurSaisie.checked,
+    });
+    messageSejour.className = "ok";
+    messageSejour.textContent = interrupteurSaisie.checked
+      ? "Saisie ouverte."
+      : "Saisie close : la famille ne peut plus remplir ses présences.";
+  } catch (erreur) {
+    // Le serveur n'a pas suivi : la case doit revenir a ce qu'elle etait,
+    // sans quoi elle montrerait un etat que la base ne connait pas.
+    interrupteurSaisie.checked = !interrupteurSaisie.checked;
+    messageSejour.className = "erreur";
+    messageSejour.textContent = erreur.message;
   }
 });

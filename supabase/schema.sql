@@ -870,6 +870,101 @@ end $fn$;
 
 grant execute on function public.admin_presences_importer(text, jsonb) to anon;
 
+-- ---- 8g. Les dates du sejour ----
+--
+--  Elles vivaient dans `private.reglages` et ne se changeaient que par
+--  l'editeur SQL. C'est peu, et c'est mal place : ce sont elles qui
+--  bornent la grille de saisie et qui filtrent tout ce qui s'ecrit dans
+--  `presences`. Les laisser sur les dates d'exemple fait echouer un import
+--  entier sans qu'on comprenne pourquoi.
+--
+--  `saisie_ouverte` les accompagne. La colonne existait depuis le debut,
+--  `sejour_enregistrer` la respecte -- mais aucune fonction ne permettait
+--  de la basculer. Le sondage des dates et la carte avaient leur
+--  interrupteur ; le formulaire des presences, non.
+--
+create or replace function public.admin_sejour(p_code text)
+returns jsonb
+language plpgsql stable security definer
+set search_path = private, pg_temp as $fn$
+declare
+  r private.reglages;
+begin
+  perform private.verifier_code(p_code, 'admin');
+  select * into r from private.reglages;
+  if r.id is null then
+    raise exception 'REGLAGES_ABSENTS' using errcode = 'P0001';
+  end if;
+
+  return jsonb_build_object(
+    'date_debut', r.date_debut,
+    'date_fin', r.date_fin,
+    'jours', (r.date_fin - r.date_debut) + 1,
+    'saisie_ouverte', r.saisie_ouverte,
+    'presences', (select count(*) from public.presences),
+    -- Ce qui a ete saisi hors des bornes actuelles. Zero en temps normal ;
+    -- non nul apres un deplacement des dates, et il faut le dire.
+    'presences_hors', (
+      select count(*) from public.presences p
+       where p.jour not between r.date_debut and r.date_fin
+    )
+  );
+end $fn$;
+
+create or replace function public.admin_sejour_dates(p_code text, p_debut date, p_fin date)
+returns jsonb
+language plpgsql security definer
+set search_path = private, pg_temp as $fn$
+declare
+  hors integer;
+begin
+  perform private.verifier_code(p_code, 'admin');
+  -- Le premier changement de la semaine emporte une copie de l'avant.
+  perform private.sauver_si_nouvelle_semaine();
+
+  if p_debut is null or p_fin is null then
+    raise exception 'DATES_MANQUANTES' using errcode = 'P0001';
+  end if;
+  if p_fin < p_debut then
+    raise exception 'DATES_INVERSEES' using errcode = 'P0001';
+  end if;
+
+  update private.reglages set date_debut = p_debut, date_fin = p_fin;
+  if not found then
+    raise exception 'REGLAGES_ABSENTS' using errcode = 'P0001';
+  end if;
+
+  -- Deplacer les dates ne deplace pas ce qui a ete saisi. Les journees
+  -- tombees hors des nouvelles bornes restent en base, invisibles du
+  -- formulaire et ignorees du prochain import : on ne les efface pas -- ce
+  -- serait decider a la place de l'organisateur -- mais on les compte, et
+  -- l'interface le dit.
+  select count(*) into hors
+    from public.presences p
+   where p.jour not between p_debut and p_fin;
+
+  return jsonb_build_object(
+    'date_debut', p_debut,
+    'date_fin', p_fin,
+    'jours', (p_fin - p_debut) + 1,
+    'presences_hors', hors
+  );
+end $fn$;
+
+create or replace function public.admin_saisie_ouvrir(p_code text, p_ouvert boolean)
+returns jsonb
+language plpgsql security definer
+set search_path = private, pg_temp as $fn$
+begin
+  perform private.verifier_code(p_code, 'admin');
+  update private.reglages set saisie_ouverte = p_ouvert;
+  return jsonb_build_object('saisie_ouverte', p_ouvert);
+end $fn$;
+
+grant execute on function public.admin_sejour(text)                    to anon;
+grant execute on function public.admin_sejour_dates(text, date, date)  to anon;
+grant execute on function public.admin_saisie_ouvrir(text, boolean)    to anon;
+
 grant execute on function public.admin_lister(text)                                         to anon;
 grant execute on function public.admin_ajouter(text, text, text, uuid, uuid, boolean, text) to anon;
 grant execute on function public.admin_modifier(text, uuid, text, text)                     to anon;

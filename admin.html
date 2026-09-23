@@ -32,6 +32,31 @@
   <section id="etape-liste" hidden>
 
     <fieldset>
+      <legend>Le séjour <span id="sejour-resume" class="discret-inline"></span></legend>
+      <div class="grille">
+        <div>
+          <label for="sejour-debut">Premier jour</label>
+          <input type="date" id="sejour-debut">
+        </div>
+        <div>
+          <label for="sejour-fin">Dernier jour</label>
+          <input type="date" id="sejour-fin">
+        </div>
+      </div>
+      <div class="actions">
+        <button type="button" id="sejour-enregistrer">Enregistrer les dates</button>
+      </div>
+      <p class="note">
+        Ces deux dates bornent la grille de <a href="./index.html">saisie</a> et
+        filtrent tout ce qui s'écrit&nbsp;: une présence en dehors est refusée.
+        <label class="interrupteur">
+          <input type="checkbox" id="saisie-ouverte"> Saisie ouverte
+        </label>
+      </p>
+      <p id="message-sejour" role="status" aria-live="polite"></p>
+    </fieldset>
+
+    <fieldset>
       <legend>Ajouter quelqu'un</legend>
 
       <div class="grille">

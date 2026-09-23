@@ -88,7 +88,7 @@ legend { font-weight: 600; padding: 0 8px; }
 
 label { display: block; font-size: 0.9rem; color: var(--doux); margin-bottom: 4px; }
 
-input[type="text"], select {
+input[type="text"], input[type="date"], select {
   width: 100%;
   padding: 9px 10px;
   border: 1px solid var(--trait);
