@@ -4,7 +4,7 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="robots" content="noindex">
-  <title>Tribu — saisie des présences</title>
+  <title>Tribu</title>
   <link rel="stylesheet" href="./style.css">
 </head>
 <body>
@@ -16,7 +16,6 @@
   </nav>
 
   <h1>Séjour Tribu</h1>
-  <p class="sous-titre" id="sous-titre">Indique qui est là, quand, et pour quels repas.</p>
 
   <!-- Reste affiché une fois le code accepté : c'est le signe que la page
        a bougé, là où deux champs de texte au même endroit ne le disent
@@ -52,13 +51,10 @@
       <label for="prenom">Commence à taper ton prénom</label>
       <div class="auto">
         <input type="text" id="prenom" autocomplete="off" spellcheck="false"
-               placeholder="ex. Syl…" aria-describedby="aide-prenom"
+               placeholder="Ton prénom..." aria-describedby="aide-prenom"
                role="combobox" aria-expanded="false" aria-controls="suggestions">
         <ul id="suggestions" role="listbox"></ul>
       </div>
-      <p class="note" id="aide-prenom">
-        Tu pourras aussi remplir pour ton conjoint, tes enfants et leurs familles.
-      </p>
       <p id="message-prenom" role="status" aria-live="polite"></p>
     </fieldset>
   </section>
