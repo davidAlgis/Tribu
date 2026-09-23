@@ -929,7 +929,15 @@ begin
     raise exception 'DATES_INVERSEES' using errcode = 'P0001';
   end if;
 
-  update private.reglages set date_debut = p_debut, date_fin = p_fin;
+  -- `where id` sur une table qui n'a qu'une ligne : ce n'est pas une
+  -- precaution, c'est une obligation. Supabase charge `safeupdate` pour le
+  -- role qui sert l'API, et elle refuse tout UPDATE sans clause WHERE --
+  -- « UPDATE requires a WHERE clause ». Le commentaire de `admin_importer`
+  -- ne parlait que des DELETE ; l'extension arrete les deux.
+  -- `id` vaut toujours `true` (cf. section 1), la clause designe donc la
+  -- ligne unique sans rien exclure.
+  update private.reglages set date_debut = p_debut, date_fin = p_fin
+   where id;
   if not found then
     raise exception 'REGLAGES_ABSENTS' using errcode = 'P0001';
   end if;
@@ -957,7 +965,8 @@ language plpgsql security definer
 set search_path = private, pg_temp as $fn$
 begin
   perform private.verifier_code(p_code, 'admin');
-  update private.reglages set saisie_ouverte = p_ouvert;
+  -- `where id` : safeupdate refuse un UPDATE sans clause WHERE.
+  update private.reglages set saisie_ouverte = p_ouvert where id;
   return jsonb_build_object('saisie_ouverte', p_ouvert);
 end $fn$;
 
@@ -1239,7 +1248,8 @@ language plpgsql security definer
 set search_path = private, pg_temp as $fn$
 begin
   perform private.verifier_code(p_code, 'admin');
-  update private.reglages set voeux_ouverts = p_ouvert;
+  -- `where id` : safeupdate refuse un UPDATE sans clause WHERE.
+  update private.reglages set voeux_ouverts = p_ouvert where id;
   return jsonb_build_object('voeux_ouverts', p_ouvert);
 end $fn$;
 
@@ -1429,7 +1439,8 @@ language plpgsql security definer
 set search_path = private, pg_temp as $fn$
 begin
   perform private.verifier_code(p_code, 'admin');
-  update private.reglages set lieux_ouverts = p_ouvert;
+  -- `where id` : safeupdate refuse un UPDATE sans clause WHERE.
+  update private.reglages set lieux_ouverts = p_ouvert where id;
   return jsonb_build_object('lieux_ouverts', p_ouvert);
 end $fn$;
 
