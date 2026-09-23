@@ -404,7 +404,22 @@ Synthèse hôtel, repas hors pension, détail par personne, total par famille,
 
 ## Points à connaître
 
-**Absent est l'état par défaut.** Sans ligne en base, une personne est
+**Absent est l'état par défaut, et ça se voit dans la grille.** La colonne
+de gauche ne demande qu'une chose — **où l'on dort** : « pas sur place »,
+« en chambre », « en gîte ». Les repas se cochent librement, sans avoir à
+répondre d'abord sur la nuit : venir déjeuner sans dormir là est le cas de
+tous ceux qui logent à côté.
+
+Une journée dont rien n'est coché et qui n'a pas de nuit sur place est
+grisée, et ne produit aucune ligne. L'absence ne se déclare pas, elle se
+constate.
+
+Il y avait auparavant un quatrième choix, « absente », à côté d'« ailleurs ».
+Les deux disaient presque la même chose — ni l'une ni l'autre ne dort sur
+place — et il fallait sortir d'« absente » avant de pouvoir cocher quoi que
+ce soit.
+
+Sans ligne en base, une personne est
 absente. Enregistrer remplace toute sa saisie : on corrige autant de fois
 qu'on veut sans créer de doublon.
 

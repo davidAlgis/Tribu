@@ -10,13 +10,17 @@
 const { SUPABASE_URL, SUPABASE_ANON_KEY } = window.CONFIG;
 
 const REPAS = ["petit_dejeuner", "dejeuner", "diner"];
-const ABSENT = "absent"; // valeur d'interface : ne produit aucune ligne en base
-
+// Trois choix, et non quatre. « Absente » et « ailleurs » disaient presque
+// la meme chose -- ni l'une ni l'autre ne dort sur place -- et il fallait
+// sortir de « absente » avant de pouvoir cocher le moindre repas, alors
+// que venir dejeuner sans dormir la est un cas courant.
+//
+// Ce qui reste, c'est OU L'ON DORT. Ne pas etre la du tout n'est plus un
+// choix a faire : c'est une journee ou l'on n'a rien coche.
 const HEBERGEMENTS = [
-  [ABSENT, "absente"],
+  ["exterieur", "pas sur place"],
   ["chambre", "en chambre"],
   ["gite", "en gîte"],
-  ["exterieur", "ailleurs"],
 ];
 
 const MESSAGES = {
@@ -291,6 +295,10 @@ function construireGrille(jours) {
       caseACocher.type = "checkbox";
       caseACocher.dataset.champ = champ;
       caseACocher.setAttribute("aria-label", `${champ} du ${jour}`);
+      // Cocher un repas suffit desormais a declarer une presence : la ligne
+      // doit donc se relire a chaque case, pas seulement au changement de
+      // la nuit.
+      caseACocher.addEventListener("change", () => appliquerContraintes(ligne));
       cellule.appendChild(caseACocher);
       ligne.appendChild(cellule);
     }
@@ -304,19 +312,21 @@ function construireGrille(jours) {
 // n'existe que pour les chambres.
 function appliquerContraintes(ligne) {
   const hebergement = ligne.querySelector('[data-champ="hebergement"]').value;
-  const absente = hebergement === ABSENT;
 
-  for (const repas of REPAS) {
-    const c = ligne.querySelector(`[data-champ="${repas}"]`);
-    c.disabled = absente;
-    if (absente) c.checked = false;
-  }
-
+  // Les repas ne dependent de rien : on peut passer dejeuner sans dormir
+  // sur place, et c'est meme le cas de tous ceux qui logent a cote.
+  //
+  // Le supplement vue mer, lui, tient a la chambre -- la base le refuse
+  // aussi, et deux endroits valent mieux qu'un pour une regle de l'hotel.
   const vueMer = ligne.querySelector('[data-champ="vue_mer"]');
   vueMer.disabled = hebergement !== "chambre";
   if (vueMer.disabled) vueMer.checked = false;
 
-  ligne.classList.toggle("absente", absente);
+  // Rien de coche et pas de nuit sur place : cette journee ne dit rien,
+  // donc la personne n'est pas la. C'est griser la ligne qui le montre,
+  // pas un choix a faire dans une liste.
+  const unRepas = REPAS.some((r) => ligne.querySelector(`[data-champ="${r}"]`).checked);
+  ligne.classList.toggle("absente", hebergement === "exterieur" && !unRepas);
 }
 
 function selectionnerCible(personne) {
@@ -399,8 +409,9 @@ function remplirGrille(participantId) {
     const presence = saisies.get(ligne.dataset.jour);
     const champ = (nom) => ligne.querySelector(`[data-champ="${nom}"]`);
 
-    // Absent par defaut : sans ligne en base, la journee reste vide.
-    champ("hebergement").value = presence ? presence.hebergement : ABSENT;
+    // Absent par defaut : sans ligne en base, la journee reste vide, et
+    // « pas sur place » est ce que dit une journee dont on n'a rien dit.
+    champ("hebergement").value = presence ? presence.hebergement : "exterieur";
     champ("vue_mer").checked = presence ? presence.vue_mer : false;
     for (const repas of REPAS) champ(repas).checked = presence ? presence[repas] : false;
 
@@ -413,13 +424,18 @@ function lireGrille() {
   for (const ligne of corpsJours.querySelectorAll("tr")) {
     const champ = (nom) => ligne.querySelector(`[data-champ="${nom}"]`);
     const hebergement = champ("hebergement").value;
-    if (hebergement === ABSENT) continue;
+    const repas = Object.fromEntries(REPAS.map((r) => [r, champ(r).checked]));
+
+    // Pas de nuit sur place et aucun repas : il n'y a rien a declarer. On
+    // n'ecrit aucune ligne -- absent est l'etat par defaut de la base, et
+    // poser une ligne vide reviendrait a le contredire.
+    if (hebergement === "exterieur" && !Object.values(repas).some(Boolean)) continue;
 
     lignes.push({
       jour: ligne.dataset.jour,
       hebergement,
       vue_mer: champ("vue_mer").checked,
-      ...Object.fromEntries(REPAS.map((r) => [r, champ(r).checked])),
+      ...repas,
     });
   }
   return lignes;
