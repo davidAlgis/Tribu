@@ -1,4 +1,14 @@
 :root {
+  /* Le site est clair, et seulement clair.
+     `color-scheme` ne colore rien ici : il dit au navigateur de dessiner
+     SES elements en clair -- la liste deroulante d'un <select>, la case a
+     cocher, l'ascenseur, le remplissage automatique. Sans cette ligne, un
+     systeme regle en sombre les rendrait sombres par-dessus une page
+     claire, et la liste des hebergements deviendrait illisible.
+     Il n'y a donc plus de bloc `prefers-color-scheme` : en ajouter un
+     reintroduirait un theme a moitie, celui du navigateur restant clair. */
+  color-scheme: light;
+
   --fond: #f7f7f5;
   --carte: #ffffff;
   --trait: #dcdcd6;
@@ -94,22 +104,6 @@ button:disabled { opacity: 0.5; cursor: default; }
 
 .defilement { overflow-x: auto; }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --fond: #18191a; --carte: #212223; --trait: #3a3b3c;
-    --texte: #e8e8e3; --doux: #9b9b93; --accent: #6f9ae8;
-    --ok: #7bc496; --erreur: #ef8a82;
-    --survol: #2e2f31;
-    /* Nettement plus sombre que la page, pas legerement : en sombre, deux
-       gris voisins ne se distinguent plus des qu'on recule de l'ecran. Le
-       bandeau se creuse. */
-    --bandeau: #101317;
-  }
-  input[type="text"], select { background: #2a2b2c; }
-  .note { background: #262728; }
-  button { color: #10161f; }
-}
-
 /* ---------- Champ + bouton sur une ligne ---------- */
 .ligne-champ { display: flex; gap: 10px; align-items: stretch; }
 .ligne-champ input { flex: 1; }
@@ -192,15 +186,6 @@ button.discret:hover {
   background: var(--survol);
   color: var(--texte);
   border-color: var(--doux);
-}
-
-@media (prefers-color-scheme: dark) {
-  .pastille.active { color: #10161f; }
-  button.discret { color: var(--doux); }
-  #suggestions li:hover, #suggestions li:focus { color: #10161f; }
-  #suggestions li:hover span, #suggestions li:focus span { color: #10161f; }
-  /* --erreur passe au saumon clair en sombre : le blanc n'y tient plus. */
-  button.retirer:hover { color: #10161f; }
 }
 
 /* ---------- Page d'administration ---------- */
@@ -410,10 +395,6 @@ fieldset.panneau-resultat .note {
 .choix button.choix-oui.actif { background: var(--ok); }
 .choix button.choix-non.actif { background: var(--erreur); }
 
-@media (prefers-color-scheme: dark) {
-  .choix button.actif { color: #10161f; }
-}
-
 .interrupteur {
   display: inline-flex;
   align-items: center;
@@ -485,18 +466,6 @@ fieldset.panneau-resultat .note {
 .pastille-legende.c2 { background: #e0b167; }
 .pastille-legende.c3 { background: #c0392b; }
 
-@media (prefers-color-scheme: dark) {
-  .dep { fill: #4a8965; stroke: #1c1d1e; }
-  #carte:not(.lecture) .dep:hover { fill: #579a73; }
-  .dep.refuse, .dep.chaleur-3 { fill: #a8382f; }
-  .dep.chaleur-1 { fill: #7e9257; }
-  .dep.chaleur-2 { fill: #a87f42; }
-  .pastille-legende.vert { background: #4a8965; }
-  .pastille-legende.rouge, .pastille-legende.c3 { background: #a8382f; }
-  .pastille-legende.c1 { background: #7e9257; }
-  .pastille-legende.c2 { background: #a87f42; }
-}
-
 /* ---------- Pinceau et villes ---------- */
 
 #pinceau {
@@ -530,8 +499,6 @@ fieldset.panneau-resultat .note {
   stroke-width: 5.5px;
   stroke-linejoin: round;
 }
-
-
 
 /* ---------- Tutoriel sous la carte ---------- */
 .tutoriel {
