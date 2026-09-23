@@ -406,7 +406,13 @@ Synthèse hôtel, repas hors pension, détail par personne, total par famille,
 
 **Absent est l'état par défaut, et ça se voit dans la grille.** La colonne
 de gauche ne demande qu'une chose — **où l'on dort** : « pas sur place »,
-« en chambre », « en gîte ». Les repas se cochent librement, sans avoir à
+« en chambre », « en chambre, vue mer », « en gîte ». La vue mer y figure
+comme une variante de chambre, et non comme une case à part : elle tenait
+une colonne entière, désactivée les trois quarts du temps puisque seule une
+chambre peut l'avoir. La base, elle, garde deux champs — un hébergement et
+un supplément — parce que c'est ainsi que l'hôtel facture.
+
+Les repas se cochent librement, sans avoir à
 répondre d'abord sur la nuit : venir déjeuner sans dormir là est le cas de
 tous ceux qui logent à côté.
 

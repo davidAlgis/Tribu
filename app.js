@@ -10,16 +10,21 @@
 const { SUPABASE_URL, SUPABASE_ANON_KEY } = window.CONFIG;
 
 const REPAS = ["petit_dejeuner", "dejeuner", "diner"];
-// Trois choix, et non quatre. « Absente » et « ailleurs » disaient presque
-// la meme chose -- ni l'une ni l'autre ne dort sur place -- et il fallait
-// sortir de « absente » avant de pouvoir cocher le moindre repas, alors
-// que venir dejeuner sans dormir la est un cas courant.
+// Une seule question : OU L'ON DORT. Ne pas etre la du tout n'est pas un
+// choix a faire dans la liste -- c'est une journee ou l'on n'a rien coche.
 //
-// Ce qui reste, c'est OU L'ON DORT. Ne pas etre la du tout n'est plus un
-// choix a faire : c'est une journee ou l'on n'a rien coche.
+// La vue mer est une VARIANTE DE CHAMBRE, pas une option a cote. Elle
+// tenait une colonne entiere, desactivee les trois quarts du temps puisque
+// seule une chambre peut l'avoir. La base, elle, garde deux champs -- un
+// hebergement et un supplement -- parce que c'est ainsi que l'hotel
+// facture. `CHAMBRE_VUE_MER` est donc une valeur d'interface, dépliée en
+// deux a l'enregistrement et repliee a la relecture.
+const CHAMBRE_VUE_MER = "chambre+vue_mer";
+
 const HEBERGEMENTS = [
   ["exterieur", "pas sur place"],
   ["chambre", "en chambre"],
+  [CHAMBRE_VUE_MER, "en chambre, vue mer"],
   ["gite", "en gîte"],
 ];
 
@@ -289,7 +294,7 @@ function construireGrille(jours) {
     cChoix.appendChild(choix);
     ligne.appendChild(cChoix);
 
-    for (const champ of ["vue_mer", ...REPAS]) {
+    for (const champ of REPAS) {
       const cellule = document.createElement("td");
       const caseACocher = document.createElement("input");
       caseACocher.type = "checkbox";
@@ -316,12 +321,6 @@ function appliquerContraintes(ligne) {
   // Les repas ne dependent de rien : on peut passer dejeuner sans dormir
   // sur place, et c'est meme le cas de tous ceux qui logent a cote.
   //
-  // Le supplement vue mer, lui, tient a la chambre -- la base le refuse
-  // aussi, et deux endroits valent mieux qu'un pour une regle de l'hotel.
-  const vueMer = ligne.querySelector('[data-champ="vue_mer"]');
-  vueMer.disabled = hebergement !== "chambre";
-  if (vueMer.disabled) vueMer.checked = false;
-
   // Rien de coche et pas de nuit sur place : cette journee ne dit rien,
   // donc la personne n'est pas la. C'est griser la ligne qui le montre,
   // pas un choix a faire dans une liste.
@@ -411,8 +410,11 @@ function remplirGrille(participantId) {
 
     // Absent par defaut : sans ligne en base, la journee reste vide, et
     // « pas sur place » est ce que dit une journee dont on n'a rien dit.
-    champ("hebergement").value = presence ? presence.hebergement : "exterieur";
-    champ("vue_mer").checked = presence ? presence.vue_mer : false;
+    champ("hebergement").value = !presence
+      ? "exterieur"
+      : presence.vue_mer && presence.hebergement === "chambre"
+        ? CHAMBRE_VUE_MER
+        : presence.hebergement;
     for (const repas of REPAS) champ(repas).checked = presence ? presence[repas] : false;
 
     appliquerContraintes(ligne);
@@ -423,7 +425,9 @@ function lireGrille() {
   const lignes = [];
   for (const ligne of corpsJours.querySelectorAll("tr")) {
     const champ = (nom) => ligne.querySelector(`[data-champ="${nom}"]`);
-    const hebergement = champ("hebergement").value;
+    const choisi = champ("hebergement").value;
+    const vueMer = choisi === CHAMBRE_VUE_MER;
+    const hebergement = vueMer ? "chambre" : choisi;
     const repas = Object.fromEntries(REPAS.map((r) => [r, champ(r).checked]));
 
     // Pas de nuit sur place et aucun repas : il n'y a rien a declarer. On
@@ -434,7 +438,7 @@ function lireGrille() {
     lignes.push({
       jour: ligne.dataset.jour,
       hebergement,
-      vue_mer: champ("vue_mer").checked,
+      vue_mer: vueMer,
       ...repas,
     });
   }
