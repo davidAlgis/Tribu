@@ -1314,10 +1314,19 @@ begin
 
   -- `on conflict` et non un simple insert : deux personnes qui enregistrent
   -- a la meme seconde le lundi matin passeraient toutes les deux le test
-  -- ci-dessus.
+  -- ci-dessus, et la seconde casserait sur l'index unique -- donc sur son
+  -- enregistrement, qui n'y est pour rien.
+  --
+  -- Sans cible : la forme precise serait `on conflict (semaine) where motif
+  -- = 'hebdomadaire'`, qui demande a Postgres d'inferer l'index partiel. Si
+  -- l'inference echouait, elle echouerait a la PREMIERE ECRITURE d'une
+  -- semaine, des mois apres l'installation, sur le dos de quelqu'un qui
+  -- remplit ses vacances. La forme nue ne peut pas echouer, et il n'y a de
+  -- toute facon qu'une seule contrainte a heurter : la cle primaire tire un
+  -- uuid au hasard.
   insert into private.sauvegardes (semaine, motif, contenu)
   values (lundi, 'hebdomadaire', private.etat_courant())
-  on conflict (semaine) where motif = 'hebdomadaire' do nothing;
+  on conflict do nothing;
 
   perform private.sauvegardes_purger();
 end $fn$;
