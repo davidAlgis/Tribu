@@ -13,7 +13,7 @@ Pensions, tarifs et totaux sont recalculés par
 [`engine/rules.py`](engine/rules.py), seul endroit où vivent les règles.
 Les Excel ne sont qu'une sortie : plus une seule formule à maintenir.
 
-Deux pages pour la famille, une pour toi :
+Trois pages pour la famille, une pour toi :
 
 | Page | Qui | Quoi |
 |---|---|---|
@@ -21,6 +21,13 @@ Deux pages pour la famille, une pour toi :
 | [`dates.html`](dates.html) | la famille | quel week-end arrange chacun, et où en est le choix |
 | [`index.html`](index.html) | la famille | qui vient, quelles nuits, quels repas |
 | [`admin.html`](admin.html) | toi | participants, droits, week-ends, résultat de la carte, retour en arrière |
+
+Les trois pages familiales portent le même menu en tête — **Le lieu**, **La
+date**, **Les présences** — dans l'ordre où les décisions se prennent. Celle
+qu'on regarde y est remplie.
+
+`admin.html` n'y figure pas : elle ne s'ouvre pas avec le code famille, et
+l'annoncer à toute la famille ne ferait qu'inviter à la pousser.
 
 ---
 

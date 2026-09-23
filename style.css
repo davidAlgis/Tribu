@@ -33,6 +33,46 @@ body {
 
 main { max-width: 900px; margin: 0 auto; }
 
+/* ---------- Menu principal ---------- */
+
+/* Les trois pages sont trois etapes d'une meme decision -- ou, quand, qui --
+   et elles se prennent dans cet ordre. Le menu les montre ainsi, et remplit
+   celle qu'on regarde.
+   Meme forme que les pastilles de personnes : la famille connait deja ce
+   vocabulaire, une pastille pleine veut dire « c'est celle-la ».
+   `admin.html` n'y figure pas : elle ne s'ouvre pas avec le code famille,
+   et l'annoncer ici ne ferait qu'inviter a la pousser. */
+.menu {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin: 0 0 22px;
+}
+.menu a {
+  padding: 7px 15px;
+  border: 1px solid var(--trait);
+  border-radius: 999px;
+  background: var(--carte);
+  color: var(--doux);
+  font-size: 0.93rem;
+  font-weight: 500;
+  text-decoration: none;
+  white-space: nowrap;
+}
+.menu a:hover {
+  background: var(--survol);
+  color: var(--texte);
+  border-color: var(--doux);
+}
+/* `aria-current` porte l'information, et le style s'y accroche : un seul
+   endroit a tenir a jour, et les lecteurs d'ecran annoncent la page
+   courante sans qu'on ait rien a ajouter. */
+.menu a[aria-current="page"] {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: #fff;
+}
+
 h1 { font-size: 1.6rem; margin: 0 0 4px; }
 h2 { font-size: 1.05rem; margin: 0 0 12px; }
 .sous-titre { color: var(--doux); margin: 0 0 28px; }
