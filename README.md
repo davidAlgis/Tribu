@@ -82,26 +82,32 @@ sur `admin.html` : intitulé, date de début, date de fin. La famille répond
 sur `dates.html`, avec le même code et le même prénom que pour les
 présences.
 
-Trois réponses possibles par week-end : **Oui**, **Si besoin**, **Non** —
-recliquer sur sa réponse l'annule. « Si besoin » n'est pas du remplissage :
-c'est ce qui départage deux week-ends quand personne n'a de disponibilité
-parfaite.
+Deux réponses par week-end : **Oui** ou **Non** — recliquer sur sa réponse
+l'annule, et ne rien cocher vaut « pas encore répondu ».
+
+Il y en a eu trois. « Si besoin » se voulait la nuance qui départage deux
+week-ends ; c'est devenu le refuge de qui ne voulait pas trancher, et le
+dépouillement héritait de l'indécision. Une réponse binaire oblige à se
+prononcer, et rend le résultat lisible sans pondération à expliquer.
 
 Chacun voit les totaux de la famille, **jamais les noms**.
 
 Sous les week-ends, **« Où en est le choix »** donne le résultat courant, et
 il est visible de tous : le classement, une barre par week-end — vert pour
-les oui, bleu pour les « si besoin », rouge pour les non, gris pour ceux qui
-n'ont rien dit — et le nombre de gens qui se sont prononcés. Le score compte
-chaque « si besoin » pour un demi : un week-end que tout le monde accepte à
-contrecœur ne vaut pas celui que tout le monde choisit.
+les oui, rouge pour les non, gris pour ceux qui n'ont rien dit — et le nombre
+de gens qui se sont prononcés. Le classement suit le nombre de **oui** :
+combien de personnes peuvent venir.
 
-Ce score était réservé à `admin.html`. Le réserver ne protégeait rien : il se
-déduit des trois compteurs que la page affichait déjà, et n'importe qui
-pouvait le refaire de tête. Ce qui lui manquait, c'était le dénominateur —
-« 7 oui » ne dit rien tant qu'on ignore si la famille compte huit personnes
-ou vingt. La page annonce donc aussi combien ont répondu, et signale quand
-c'est encore trop peu pour arrêter quoi que ce soit.
+Ce résultat était réservé à `admin.html`. Le réserver ne protégeait rien : il
+se déduit des compteurs que la page affichait déjà. Ce qui lui manquait,
+c'était le dénominateur — « 7 oui » ne dit rien tant qu'on ignore si la
+famille compte huit personnes ou vingt. La page annonce donc aussi combien
+ont répondu, et signale quand c'est encore trop peu pour arrêter quoi que ce
+soit.
+
+Les deux panneaux ne se ressemblent pas, et c'est voulu : celui du haut se
+remplit — carte pleine, bord accentué — celui du bas se lit — fond de page,
+trait discontinu. On ne cherche pas où cliquer dans un panneau d'affichage.
 
 À égalité, celui qui bloque le moins de monde s'affiche en premier, mais
 l'égalité est annoncée plutôt que masquée derrière un classement arbitraire.

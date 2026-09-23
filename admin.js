@@ -416,14 +416,9 @@ async function rechargerDates() {
         ? `${afficherJour(option.date_debut)} → ${afficherJour(option.date_fin)}`
         : "sans dates";
 
-    // Les « si besoin » comptent pour moitie : un week-end que tout le monde
-    // accepte a contrecoeur ne vaut pas celui que tout le monde choisit.
-    const score = option.oui + option.peut_etre / 2;
-
     const etiquettes = span("", "etiquettes");
     etiquettes.append(
       span(`${option.oui} oui`, "etiquette ok"),
-      span(`${option.peut_etre} si besoin`, "etiquette"),
       span(`${option.non} non`, "etiquette")
     );
 
@@ -431,7 +426,7 @@ async function rechargerDates() {
     gauche.append(
       fort(option.libelle),
       etiquettes,
-      span(`${periode} · score ${score.toFixed(1)} sur ${donnees.participants}`, "lien")
+      span(`${periode} · ${option.oui} oui sur ${donnees.participants}`, "lien")
     );
 
     const retirer = document.createElement("button");
@@ -440,7 +435,7 @@ async function rechargerDates() {
     retirer.textContent = "✕";
     retirer.setAttribute("aria-label", `Retirer ${option.libelle}`);
     retirer.addEventListener("click", async () => {
-      const repondu = option.oui + option.peut_etre + option.non;
+      const repondu = option.oui + option.non;
       const question =
         `Retirer « ${option.libelle} » ?` +
         (repondu ? `

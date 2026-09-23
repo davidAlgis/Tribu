@@ -8,11 +8,12 @@
 
 const { SUPABASE_URL, SUPABASE_ANON_KEY } = window.CONFIG;
 
-// Trois reponses, et non deux : « si besoin » est ce qui departage deux
-// week-ends quand personne n'a de disponibilite parfaite.
+// Deux reponses, et deux seulement. Une troisieme, tiede, servait de
+// refuge : on la cochait pour ne pas trancher, et le depouillement
+// heritait de l'indecision. Oui ou non oblige a se prononcer -- et rend le
+// resultat lisible sans ponderation a expliquer.
 const CHOIX = [
   ["oui", "Oui"],
-  ["peut_etre", "Si besoin"],
   ["non", "Non"],
 ];
 
@@ -256,7 +257,7 @@ function construireOptions(options) {
     if (periode) titre.append(span(periode, "lien"));
     titre.append(
       span(
-        `${option.oui} oui · ${option.peut_etre} si besoin · ${option.non} non`,
+        `${option.oui} oui · ${option.non} non`,
         "lien"
       )
     );
@@ -471,19 +472,15 @@ if (champCode.value) {
 //
 // Toujours aucun nom : des totaux, et rien d'autre.
 
-// Un « si besoin » vaut un demi « oui ». Un week-end que tout le monde
-// accepte a contrecoeur ne vaut pas celui que tout le monde choisit.
-// Meme calcul que sur admin.html : il n'existe qu'un seul classement.
-function score(option) {
-  return option.oui + option.peut_etre / 2;
-}
-
+// Le classement se lit sur le nombre de OUI : combien de personnes
+// peuvent venir. Il n'y a plus de ponderation a expliquer depuis que la
+// reponse est binaire -- le score et le compte des oui sont le meme
+// nombre, autant n'en garder qu'un.
 function classer(options, participants) {
   const lignes = (options || []).map((o) => {
-    const repondu = o.oui + o.peut_etre + o.non;
+    const repondu = o.oui + o.non;
     return {
       ...o,
-      score: score(o),
       repondu,
       // Ceux qui n'ont rien dit sur CE week-end. Ils comptent : un week-end
       // en tete avec trois reponses sur vingt n'est pas un resultat.
@@ -493,21 +490,21 @@ function classer(options, participants) {
 
   lignes.sort(
     (a, b) =>
-      b.score - a.score ||
+      b.oui - a.oui ||
       // A egalite, celui qui bloque le moins de monde passe devant.
       a.non - b.non ||
       String(a.date_debut || "").localeCompare(String(b.date_debut || "")) ||
       a.libelle.localeCompare(b.libelle, "fr")
   );
 
-  // Le rang suit le SCORE, pas la position : deux week-ends au meme score
-  // partagent la premiere place, et il n'y a pas de deuxieme.
+  // Le rang suit le nombre de OUI, pas la position : deux week-ends a
+  // egalite partagent la premiere place, et il n'y a pas de deuxieme.
   let rang = 0;
   let precedent = null;
   lignes.forEach((l, i) => {
-    if (precedent === null || l.score !== precedent) rang = i + 1;
+    if (precedent === null || l.oui !== precedent) rang = i + 1;
     l.rang = rang;
-    precedent = l.score;
+    precedent = l.oui;
   });
 
   return {
@@ -517,10 +514,6 @@ function classer(options, participants) {
     // mieux que de couronner un week-end a zero point.
     vide: lignes.every((l) => l.repondu === 0),
   };
-}
-
-function nombre(n) {
-  return n.toLocaleString("fr-FR", { maximumFractionDigits: 1 });
 }
 
 function ordinal(rang) {
@@ -533,12 +526,12 @@ function verdictTexte(classement) {
     return "Personne n'a encore répondu : le classement apparaîtra ici dès les premières réponses.";
   }
   const tete = classement.tete;
-  const pts = `${nombre(tete[0].score)} point(s)`;
+  const oui = `${tete[0].oui} oui`;
   if (tete.length === 1) {
-    return `« ${tete[0].libelle} » tient la corde, avec ${pts} sur ${tete[0].repondu} réponse(s).`;
+    return `« ${tete[0].libelle} » tient la corde, avec ${oui} sur ${tete[0].repondu} réponse(s).`;
   }
   const noms = tete.map((l) => `« ${l.libelle} »`).join(" et ");
-  return `${tete.length} week-ends à égalité avec ${pts} : ${noms}. Le premier de la liste bloque le moins de monde.`;
+  return `${tete.length} week-ends à égalité avec ${oui} : ${noms}. Le premier de la liste est refusé par moins de monde.`;
 }
 
 function participationTexte(donnees) {
@@ -561,7 +554,6 @@ function barre(ligne, base) {
   b.setAttribute("aria-hidden", "true");
   const segments = [
     ["b-oui", ligne.oui],
-    ["b-peut-etre", ligne.peut_etre],
     ["b-non", ligne.non],
     ["b-muet", ligne.muets],
   ];
@@ -600,8 +592,7 @@ function dessinerRapport() {
     const chiffres = document.createElement("div");
     chiffres.className = "rang-chiffres";
     chiffres.textContent =
-      `${nombre(ligne.score)} pt · ${ligne.oui} oui · ${ligne.peut_etre} si besoin · ` +
-      `${ligne.non} non` +
+      `${ligne.oui} oui · ${ligne.non} non` +
       (ligne.muets ? ` · ${ligne.muets} sans réponse` : "");
 
     item.append(titre, barre(ligne, donnees.participants || ligne.repondu || 1), chiffres);

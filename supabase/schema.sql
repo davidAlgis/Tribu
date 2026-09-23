@@ -782,10 +782,26 @@ create table if not exists public.voeux (
   id             uuid primary key default gen_random_uuid(),
   participant_id uuid not null references private.participants(id) on delete cascade,
   option_id      uuid not null references private.options_date(id) on delete cascade,
-  choix          text not null check (choix in ('oui', 'peut_etre', 'non')),
+  choix          text not null check (choix in ('oui', 'non')),
   maj_le         timestamptz not null default now(),
   unique (participant_id, option_id)
 );
+
+-- « Si besoin » a existe, et n'existe plus : la reponse est binaire.
+--
+--  Une reponse « si besoin » deja donnee n'est ni un oui ni un non. La
+--  convertir lui ferait dire ce qu'elle n'a pas dit -- « oui » gonflerait
+--  le resultat, « non » le plomberait. On l'efface : la personne repasse
+--  en « pas repondu », sa pastille reprend son point, et on lui redemande.
+delete from public.voeux where choix = 'peut_etre';
+
+--  `create table if not exists` ne touche pas a une table deja en place :
+--  son CHECK garderait les trois valeurs, et la premiere reponse binaire
+--  passerait sans que rien n'empeche une troisieme de revenir par une
+--  autre porte.
+alter table public.voeux drop constraint if exists voeux_choix_check;
+alter table public.voeux add constraint voeux_choix_check
+  check (choix in ('oui', 'non'));
 
 revoke all on public.voeux from anon, authenticated;
 grant select on public.voeux to service_role;
@@ -823,8 +839,6 @@ begin
                'date_fin', o.date_fin,
                'oui', (select count(*) from public.voeux v
                         where v.option_id = o.id and v.choix = 'oui'),
-               'peut_etre', (select count(*) from public.voeux v
-                        where v.option_id = o.id and v.choix = 'peut_etre'),
                'non', (select count(*) from public.voeux v
                         where v.option_id = o.id and v.choix = 'non')
              ) order by o.date_debut nulls last, o.libelle)
@@ -903,7 +917,7 @@ begin
     insert into public.voeux (participant_id, option_id, choix)
     select cible, (l->>'option_id')::uuid, l->>'choix'
     from jsonb_array_elements(coalesce(p_choix, '[]'::jsonb)) as l
-    where l->>'choix' in ('oui', 'peut_etre', 'non')
+    where l->>'choix' in ('oui', 'non')
       -- Une option supprimee entre-temps est ignoree plutot que de faire
       -- echouer toute la saisie.
       and exists (select 1 from private.options_date o where o.id = (l->>'option_id')::uuid);
@@ -937,8 +951,6 @@ begin
                'date_fin', o.date_fin,
                'oui', (select count(*) from public.voeux v
                         where v.option_id = o.id and v.choix = 'oui'),
-               'peut_etre', (select count(*) from public.voeux v
-                        where v.option_id = o.id and v.choix = 'peut_etre'),
                'non', (select count(*) from public.voeux v
                         where v.option_id = o.id and v.choix = 'non')
              ) order by o.date_debut nulls last, o.libelle)
