@@ -290,14 +290,7 @@ function construireGrille(jours) {
     ligne.dataset.jour = jour;
 
     const cJour = document.createElement("td");
-    cJour.append(afficherJour(jour));
-    // Le petit-dejeuner n'a plus de case, mais il ne doit pas disparaitre
-    // pour autant : la mention parait sous le jour ou il est pris.
-    const herite = document.createElement("span");
-    herite.className = "herite";
-    herite.textContent = "petit-déjeuner compris";
-    herite.hidden = true;
-    cJour.appendChild(herite);
+    cJour.textContent = afficherJour(jour);
     ligne.appendChild(cJour);
 
     const cChoix = document.createElement("td");
@@ -336,11 +329,12 @@ function appliquerContraintes() {
 
   lignes.forEach((ligne, i) => {
     const hebergement = ligne.querySelector('[data-champ="hebergement"]').value;
+    // Le petit-dejeuner ne s'affiche plus, mais il compte toujours : un
+    // jour de depart ou l'on ne prend que lui n'est pas une absence, et ne
+    // doit donc pas etre grise.
     const veille = i > 0 ? lignes[i - 1] : null;
     const enChambreLaVeille =
       veille && veille.querySelector('[data-champ="hebergement"]').value === "chambre";
-
-    ligne.querySelector(".herite").hidden = !enChambreLaVeille;
 
     // Les repas ne dependent de rien : on peut passer dejeuner sans dormir
     // sur place, et c'est meme le cas de tous ceux qui logent a cote.

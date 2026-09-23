@@ -414,8 +414,8 @@ un supplément — parce que c'est ainsi que l'hôtel facture.
 
 **Le petit-déjeuner n'a pas de case** : il vient avec la nuit en chambre, et
 seulement avec elle — l'hôtel le sert, le gîte non, on y fait son café
-soi-même. La mention « petit-déjeuner compris » paraît sous le jour où il
-est pris, c'est-à-dire le lendemain matin.
+soi-même. Il ne s'affiche nulle part dans la grille : il s'ajoute à
+l'enregistrement, le lendemain matin de chaque nuit en chambre.
 
 C'est la règle que [`engine/rules.py`](engine/rules.py) applique pour
 reconnaître une demi-pension, et celle que l'import du tableur pose déjà.
