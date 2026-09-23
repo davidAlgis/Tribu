@@ -785,10 +785,9 @@ end $fn$;
 --  pas touchees -- reimporter une branche corrigee ne doit pas effacer le
 --  reste.
 --
---  Elle renvoie `recues` ET `ecrites`. L'ecart entre les deux est le seul
---  moyen de voir que des lignes sont tombees hors des dates du sejour :
---  sans ce couple, un import a cote de la plaque ressemblerait a un
---  succes.
+--  Elle renvoie `recues` ET `ecrites`. Les dates hors sejour arretent
+--  desormais tout avant la moindre ecriture ; le couple reste affiche parce
+--  qu'un hebergement inconnu ferait encore tomber une ligne en silence.
 --
 create or replace function public.admin_presences_importer(p_code text, p_lignes jsonb)
 returns jsonb
@@ -823,6 +822,23 @@ begin
      where not exists (select 1 from private.participants p where p.id = c)
   ) then
     raise exception 'PARTICIPANT_INCONNU' using errcode = 'P0001';
+  end if;
+
+  -- AVANT d'effacer quoi que ce soit.
+  --
+  -- L'insert plus bas filtre sur les dates du sejour. Le delete, lui, ne
+  -- filtre rien : un fichier cale sur d'autres dates effacait la saisie des
+  -- personnes citees puis n'ecrivait aucune ligne -- et la transaction
+  -- reussissait, donc rien ne l'annulait. On leve ici, pendant que la
+  -- transaction peut encore tout rendre.
+  if exists (
+    select 1 from jsonb_array_elements(p_lignes) as l
+     where (l->>'jour')::date not between r.date_debut and r.date_fin
+  ) then
+    raise exception
+      'HORS_SEJOUR : le sejour est regle du % au %, le fichier est ailleurs',
+      r.date_debut, r.date_fin
+      using errcode = 'P0001';
   end if;
 
   delete from public.presences where participant_id = any(cibles);
