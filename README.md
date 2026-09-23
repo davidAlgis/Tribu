@@ -92,7 +92,7 @@ prononcer, et rend le résultat lisible sans pondération à expliquer.
 
 Chacun voit les totaux de la famille, **jamais les noms**.
 
-Sous les week-ends, **« Où en est le choix »** donne le résultat courant, et
+Sous les week-ends, **« Résultat des choix »** donne l'état courant, et
 il est visible de tous : le classement, une barre par week-end — vert pour
 les oui, rouge pour les non, gris pour ceux qui n'ont rien dit — et le nombre
 de gens qui se sont prononcés. Le classement suit le nombre de **oui** :
@@ -105,9 +105,12 @@ famille compte huit personnes ou vingt. La page annonce donc aussi combien
 ont répondu, et signale quand c'est encore trop peu pour arrêter quoi que ce
 soit.
 
-Les deux panneaux ne se ressemblent pas, et c'est voulu : celui du haut se
-remplit — carte pleine, bord accentué — celui du bas se lit — fond de page,
-trait discontinu. On ne cherche pas où cliquer dans un panneau d'affichage.
+Les deux panneaux ne se ressemblent pas, et c'est voulu. Celui du haut se
+remplit : une **carte** posée sur la page, bord accentué, légère ombre.
+Celui du bas se lit : un **bandeau**, aplat distinct, angles droits, barre
+accentuée en tête, titre en capitales. Deux objets différents plutôt que
+deux nuances du même — on ne cherche pas où cliquer dans un panneau
+d'affichage.
 
 À égalité, celui qui bloque le moins de monde s'affiche en premier, mais
 l'égalité est annoncée plutôt que masquée derrière un classement arbitraire.

@@ -571,7 +571,10 @@ function dessinerRapport() {
   const donnees = etat.donnees;
   const classement = classer(donnees.options, donnees.participants);
 
-  participation.textContent = participationTexte(donnees);
+  // Entre parentheses, et seulement s'il y a quelque chose a dire : la
+  // legende se lit « Résultat des choix (12 personnes sur 20 ont répondu) ».
+  const combien = participationTexte(donnees);
+  participation.textContent = combien ? `(${combien})` : "";
 
   verdict.className = classement.vide ? "note" : "note resultat";
   verdict.textContent = verdictTexte(classement);

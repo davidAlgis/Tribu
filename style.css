@@ -8,6 +8,7 @@
   --ok: #2f7a4f;
   --erreur: #b3261e;
   --survol: #eaeae4;
+  --bandeau: #e7eaf0;
 }
 
 * { box-sizing: border-box; }
@@ -99,6 +100,10 @@ button:disabled { opacity: 0.5; cursor: default; }
     --texte: #e8e8e3; --doux: #9b9b93; --accent: #6f9ae8;
     --ok: #7bc496; --erreur: #ef8a82;
     --survol: #2e2f31;
+    /* Nettement plus sombre que la page, pas legerement : en sombre, deux
+       gris voisins ne se distinguent plus des qu'on recule de l'ecran. Le
+       bandeau se creuse. */
+    --bandeau: #101317;
   }
   input[type="text"], select { background: #2a2b2c; }
   .note { background: #262728; }
@@ -249,25 +254,52 @@ button.retirer:hover { color: #fff; background: var(--erreur); border-color: var
 
 /* ---------- Les deux panneaux de la page des dates ---------- */
 
-/* L'un se remplit, l'autre se lit. Deux cadres identiques l'un sous l'autre
-   donnent l'impression qu'il faut agir dans les deux, et on cherche ou
-   cliquer dans le second.
+/* L'un se remplit, l'autre se lit -- et ca doit se voir de loin. Deux
+   variantes du meme cadre ne suffisent pas : on cherche encore ou cliquer
+   dans le second.
 
-   La saisie garde la carte pleine et gagne un bord accentue, du cote ou le
-   regard arrive. Le resultat recule dans le fond de page, en trait
-   discontinu, avec sa legende en gris : un panneau d'affichage, pas un
-   formulaire. */
+   La saisie reste une CARTE posee sur la page : fond plein, coins arrondis,
+   bord accentue du cote ou le regard arrive, ombre qui la souleve.
+
+   Le resultat devient un BANDEAU : un aplat qui n'est ni la page ni la
+   carte, aucun cadre, des angles droits, une barre accentuee en tete et un
+   titre en capitales. Deux objets differents, pas deux nuances du meme. */
 fieldset.panneau-saisie {
-  border-left: 3px solid var(--accent);
+  border-left: 4px solid var(--accent);
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.07);
 }
 
 fieldset.panneau-resultat {
-  background: transparent;
-  border-style: dashed;
+  background: var(--bandeau);
+  border: 0;
+  border-top: 4px solid var(--accent);
+  border-radius: 0;
+  margin-top: 28px;
+  padding: 16px 20px 20px;
 }
+/* `float` et non le placement par defaut : un legend s'assoit SUR la bordure
+   et la coupe en deux. Sur un trait de 4 px, le titre a l'air de mordre
+   dedans. Flotte sur toute la largeur, il devient un simple titre pose sous
+   la barre, qui reste entiere. */
 fieldset.panneau-resultat legend {
+  float: left;
+  width: 100%;
+  padding: 0;
+  margin: 0 0 12px;
+  text-transform: uppercase;
+  letter-spacing: 0.07em;
+  font-size: 0.78rem;
   color: var(--doux);
-  font-weight: 500;
+}
+/* Le decompte reste une phrase : les capitales du titre ne l'atteignent pas. */
+fieldset.panneau-resultat legend .discret-inline {
+  text-transform: none;
+  letter-spacing: 0;
+}
+/* Sur l'aplat du bandeau, une note grise sur gris se brouille : on lui
+   retire son fond et on ne garde que le lisere. */
+fieldset.panneau-resultat .note {
+  background: transparent;
 }
 
 /* ---------- Rapport du sondage ---------- */
