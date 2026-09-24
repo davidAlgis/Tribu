@@ -371,6 +371,39 @@ button.modifier:hover {
 .renommage input { flex: 1; min-width: 120px; }
 .renommage button { padding: 7px 14px; font-size: 0.9rem; }
 
+/* Meme geste pour une ligne d'inventaire, trois champs au lieu d'un. Un
+   nombre n'a pas besoin de s'etirer comme un prenom : seul le type garde
+   de quoi se lire en entier. */
+.renommage select { flex: 0 1 auto; width: auto; min-width: 9.5em; }
+.renommage input[type="number"] { flex: 0 0 4.5em; min-width: 0; }
+
+/* Un de plus, un de moins : le geste le plus frequent de l'inventaire, et
+   celui qui ne merite pas d'ouvrir un formulaire. Le nombre au milieu n'est
+   pas un champ -- il ne se saisit pas, il se compte. */
+.pas-a-pas { display: flex; align-items: center; gap: 6px; flex: none; }
+.pas-a-pas .valeur {
+  min-width: 1.7em;
+  text-align: center;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+
+button.pas {
+  background: transparent;
+  color: var(--texte);
+  border: 1px solid var(--trait);
+  border-radius: 6px;
+  padding: 2px 11px;
+  font-size: 1.05rem;
+  font-weight: 600;
+  line-height: 1.35;
+  flex: none;
+}
+button.pas:hover {
+  background: var(--survol);
+  border-color: var(--doux);
+}
+
 /* ---------- Le fil des étapes ---------- */
 
 /* Code famille puis prénom : deux champs de texte, au même endroit, dans

@@ -75,6 +75,7 @@ const MESSAGES = {
   CAPACITE_INVALIDE: "La capacité doit être un nombre entre 1 et 30.",
   NOMBRE_INVALIDE: "Le nombre de logements doit être entre 1 et 200.",
   VUE_MER_HORS_CHAMBRE: "La vue mer ne concerne que les chambres.",
+  LOGEMENT_EXISTANT: "Ce type est déjà dans l'inventaire : corrige plutôt sa ligne.",
 };
 
 const etat = { code: "", participants: [], type: "famille", logements: [], nuits: [] };
@@ -712,17 +713,158 @@ function dessinerLogements() {
 
     const gauche = document.createElement("div");
     gauche.append(fort(nommerLogement(l)), span(`${l.capacite * l.nombre} places`, "lien"));
-    ligne.appendChild(gauche);
+
+    const modifier = document.createElement("button");
+    modifier.type = "button";
+    modifier.className = "modifier";
+    modifier.textContent = "✎";
+    modifier.title = `Corriger ${nommerLogement(l)}`;
+    modifier.setAttribute("aria-label", `Corriger ${nommerLogement(l)}`);
+    modifier.addEventListener("click", () => editerLogement(l, ligne));
 
     const retirer = document.createElement("button");
     retirer.type = "button";
     retirer.className = "retirer";
-    retirer.textContent = "Retirer";
-    retirer.setAttribute("aria-label", `Retirer ${nommerLogement(l)}`);
+    retirer.textContent = "✕";
+    retirer.title = `Retirer ${nommerLogement(l)} de l'inventaire`;
+    retirer.setAttribute("aria-label", `Retirer ${nommerLogement(l)} de l'inventaire`);
     retirer.addEventListener("click", () => retirerLogement(l));
-    ligne.appendChild(retirer);
 
+    ligne.append(gauche, pasAPas(l), modifier, retirer);
     zoneLogements.appendChild(ligne);
+  }
+}
+
+// Un de plus, un de moins. C'est le geste le plus frequent -- on compte les
+// chambres en les parcourant -- et il ne merite pas d'ouvrir un formulaire.
+//
+// Le nombre affiche entre les deux boutons n'est pas un champ : un champ
+// libre poserait la question de savoir quand il s'enregistre. Ici chaque
+// clic est un enregistrement, et la ligne entiere se reprend au crayon.
+function pasAPas(l) {
+  const bloc = document.createElement("div");
+  bloc.className = "pas-a-pas";
+  const un = TYPES_LOGEMENT[typeDe(l)].un;
+
+  const moins = document.createElement("button");
+  moins.type = "button";
+  moins.className = "pas";
+  moins.textContent = "−";
+  moins.title = `Une ${un} de ${l.capacite} de moins`;
+  moins.setAttribute("aria-label", moins.title);
+  moins.addEventListener("click", () => changerNombre(l, l.nombre - 1));
+
+  const valeur = span(String(l.nombre), "valeur");
+  valeur.setAttribute("aria-live", "polite");
+
+  const plus = document.createElement("button");
+  plus.type = "button";
+  plus.className = "pas";
+  plus.textContent = "+";
+  plus.title = `Une ${un} de ${l.capacite} de plus`;
+  plus.setAttribute("aria-label", plus.title);
+  plus.addEventListener("click", () => changerNombre(l, l.nombre + 1));
+
+  bloc.append(moins, valeur, plus);
+  return bloc;
+}
+
+// Descendre sous un, c'est retirer le dernier -- donc le type. On ne grise
+// pas le bouton pour autant : « en enlever un » reste ce qu'on a voulu
+// faire, et la confirmation dit ou cela mene.
+function changerNombre(l, nombre) {
+  if (nombre < 1) return retirerLogement(l);
+  return modifierLogement(l, { ...l, nombre });
+}
+
+// ---------------------------------------------------------- corriger
+//
+// Une capacite mal tapee obligeait a retirer la ligne et a la reposer. Le
+// type, la capacite et le nombre se reprennent maintenant d'un coup, la ou
+// ils se lisent -- comme le prenom d'une personne.
+
+function editerLogement(l, zone) {
+  const choix = document.createElement("select");
+  for (const [valeur, t] of Object.entries(TYPES_LOGEMENT)) {
+    const option = document.createElement("option");
+    option.value = valeur;
+    option.textContent = t.un.charAt(0).toUpperCase() + t.un.slice(1);
+    choix.appendChild(option);
+  }
+  choix.value = typeDe(l);
+  choix.setAttribute("aria-label", "Type de couchage");
+
+  const nombrePour = (valeur, min, max, etiquette) => {
+    const champ = document.createElement("input");
+    champ.type = "number";
+    champ.min = min;
+    champ.max = max;
+    champ.step = 1;
+    champ.value = valeur;
+    champ.setAttribute("aria-label", etiquette);
+    return champ;
+  };
+  const capacite = nombrePour(l.capacite, 1, 30, "Pour combien de personnes");
+  const nombre = nombrePour(l.nombre, 1, 200, "Combien de logements de ce type");
+
+  const valider = document.createElement("button");
+  valider.type = "button";
+  valider.textContent = "Corriger";
+
+  const annuler = document.createElement("button");
+  annuler.type = "button";
+  annuler.className = "discret";
+  annuler.textContent = "Annuler";
+
+  const bloc = document.createElement("div");
+  bloc.className = "renommage";
+  bloc.append(choix, capacite, nombre, valider, annuler);
+
+  // On remplace la LIGNE ENTIERE, et non son seul libelle : le pas a pas et
+  // la croix agiraient encore sur les anciennes valeurs, a cote de champs
+  // qui en montrent de nouvelles. Deux verites pour une meme ligne.
+  zone.replaceChildren(bloc);
+  choix.focus();
+
+  const saisie = () => ({
+    ...TYPES_LOGEMENT[choix.value],
+    id: l.id,
+    capacite: Number(capacite.value),
+    nombre: Number(nombre.value),
+  });
+
+  annuler.addEventListener("click", dessinerLogements);
+  valider.addEventListener("click", () => modifierLogement(l, saisie()));
+  for (const champ of [choix, capacite, nombre]) {
+    champ.addEventListener("keydown", (e) => {
+      if (e.key === "Enter") modifierLogement(l, saisie());
+      if (e.key === "Escape") dessinerLogements();
+    });
+  }
+}
+
+async function modifierLogement(avant, apres) {
+  messageLogements.className = "";
+  messageLogements.textContent = "Enregistrement…";
+  try {
+    await rpc("admin_logement_modifier", {
+      p_code: etat.code,
+      p_id: avant.id,
+      p_categorie: apres.categorie,
+      p_capacite: apres.capacite,
+      p_nombre: apres.nombre,
+      p_vue_mer: apres.vue_mer,
+    });
+    await rechargerLogements();
+    messageLogements.className = "ok";
+    messageLogements.textContent =
+      `${nommerLogement(avant)} → ${nommerLogement(apres)}.`;
+  } catch (erreur) {
+    messageLogements.className = "erreur";
+    messageLogements.textContent = erreur.message;
+    // Le serveur a refuse : la ligne doit revenir a ce que la base contient,
+    // sans quoi l'ecran montrerait une correction qui n'a pas eu lieu.
+    dessinerLogements();
   }
 }
 

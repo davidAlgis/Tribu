@@ -258,6 +258,21 @@ un type déjà présent met son nombre à jour au lieu d'empiler un doublon.
 Deux saisies distraites ne peuvent donc pas produire un total que personne
 n'a voulu.
 
+Une fois posée, elle **se reprend sans passer par sa suppression** :
+
+| Geste | Effet |
+|---|---|
+| **−** / **+** | un exemplaire de moins ou de plus, un clic, un enregistrement |
+| **✎** | rouvre la ligne entière — le type, la capacité, le nombre |
+| **✕** | retire le type de l'inventaire |
+
+Le **−** sur le dernier exemplaire retire le type : « en enlever un » reste
+ce qu'on a voulu faire, et la confirmation dit où cela mène. Le crayon
+travaille sur l'identifiant de la ligne et non sur son intitulé — corriger
+une capacité mal tapée déplace la ligne au lieu d'en créer une seconde à
+côté. Si le type visé existe déjà, la page le dit avec une phrase plutôt
+que de laisser remonter une violation de contrainte.
+
 Le second panneau confronte cet inventaire à ce que la famille a déjà
 déclaré, **nuit par nuit** : `12 / 14` se lit « douze personnes en chambre,
 quatorze places ». Un dépassement est signalé en rouge, jamais refusé — la

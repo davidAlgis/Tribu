@@ -1585,6 +1585,12 @@ begin
 end $fn$;
 
 -- ---- 11b. Poser un type, le corriger, le retirer ----
+--
+--  Trois fonctions et trois verbes. `poser` cree, et se contente de
+--  corriger le nombre si le type existe deja -- c'est ce qui evite les
+--  doublons au formulaire d'ajout. `modifier` reprend une ligne connue,
+--  jusqu'a sa capacite. `retirer` la fait disparaitre.
+--
 
 create or replace function public.admin_logement_poser(
   p_code      text,
@@ -1627,6 +1633,80 @@ begin
   return jsonb_build_object('id', pose.id, 'places', pose.capacite * pose.nombre);
 end $fn$;
 
+-- Un type pose se CORRIGE. Il fallait sinon le retirer et le reposer pour
+-- une unite de plus, ou pour une capacite mal tapee -- trois gestes la ou
+-- il en faut un.
+--
+-- Une seule fonction sert les deux usages : le pas a pas de la liste (un de
+-- plus, un de moins) et la reprise complete de la ligne. Un pas est une
+-- modification comme une autre, et deux chemins d'ecriture pour le meme
+-- champ finiraient par diverger.
+--
+-- Elle travaille sur l'`id`, jamais sur la cle naturelle : changer la
+-- capacite d'une ligne reviendrait sinon a en creer une seconde en laissant
+-- la premiere derriere.
+create or replace function public.admin_logement_modifier(
+  p_code      text,
+  p_id        uuid,
+  p_categorie text,
+  p_capacite  integer,
+  p_nombre    integer,
+  p_vue_mer   boolean default false
+)
+returns jsonb
+language plpgsql security definer
+set search_path = private, pg_temp as $fn$
+declare
+  avant private.logements;
+  vue   boolean := coalesce(p_vue_mer, false);
+begin
+  perform private.verifier_code(p_code, 'admin');
+  -- Le premier changement de la semaine emporte une copie de l'avant.
+  perform private.sauver_si_nouvelle_semaine();
+
+  select * into avant from private.logements where id = p_id;
+  if avant.id is null then
+    raise exception 'INCONNU' using errcode = 'P0001';
+  end if;
+
+  if p_categorie is null or p_categorie not in ('chambre', 'gite') then
+    raise exception 'CATEGORIE_INCONNUE' using errcode = 'P0001';
+  end if;
+  if p_capacite is null or p_capacite not between 1 and 30 then
+    raise exception 'CAPACITE_INVALIDE' using errcode = 'P0001';
+  end if;
+  if p_nombre is null or p_nombre not between 1 and 200 then
+    raise exception 'NOMBRE_INVALIDE' using errcode = 'P0001';
+  end if;
+  if vue and p_categorie <> 'chambre' then
+    raise exception 'VUE_MER_HORS_CHAMBRE' using errcode = 'P0001';
+  end if;
+
+  -- Deplacer une ligne sur un type deja present ferait deux lignes pour la
+  -- meme chose -- ce que l'index unique refuse de toute facon. On le dit
+  -- avec un mot plutot qu'en laissant remonter une violation de contrainte :
+  -- l'organisateur doit apprendre que l'autre ligne existe, pas lire un
+  -- message de Postgres.
+  if exists (
+    select 1 from private.logements l
+     where l.id <> p_id
+       and l.categorie = p_categorie
+       and l.capacite = p_capacite
+       and l.vue_mer = vue
+  ) then
+    raise exception 'LOGEMENT_EXISTANT' using errcode = 'P0001';
+  end if;
+
+  update private.logements
+     set categorie = p_categorie,
+         capacite  = p_capacite,
+         nombre    = p_nombre,
+         vue_mer   = vue
+   where id = p_id;
+
+  return jsonb_build_object('id', p_id, 'places', p_capacite * p_nombre);
+end $fn$;
+
 create or replace function public.admin_logement_retirer(p_code text, p_id uuid)
 returns jsonb
 language plpgsql security definer
@@ -1652,6 +1732,7 @@ end $fn$;
 
 grant execute on function public.admin_logements(text)                                  to anon;
 grant execute on function public.admin_logement_poser(text, text, integer, integer, boolean) to anon;
+grant execute on function public.admin_logement_modifier(text, uuid, text, integer, integer, boolean) to anon;
 grant execute on function public.admin_logement_retirer(text, uuid)                     to anon;
 
 
