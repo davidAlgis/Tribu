@@ -99,6 +99,42 @@
         </p>
         <p id="message-sejour" role="status" aria-live="polite"></p>
       </fieldset>
+
+      <fieldset>
+        <legend>Les âges <span id="resume-ages" class="discret-inline"></span></legend>
+
+        <div class="grille">
+          <div>
+            <label for="age-bebe">Bébé jusqu'à… (ans)</label>
+            <input type="number" id="age-bebe" min="0" max="30" step="1">
+          </div>
+          <div>
+            <label for="age-enfant">Enfant jusqu'à… (ans)</label>
+            <input type="number" id="age-enfant" min="0" max="30" step="1">
+          </div>
+        </div>
+
+        <div class="actions" style="margin-top:14px">
+          <button type="button" id="ages-enregistrer">Enregistrer les bornes</button>
+          <button type="button" id="ages-recalculer" class="discret">
+            Recalculer les catégories
+          </button>
+        </div>
+        <p id="message-ages" role="status" aria-live="polite"></p>
+
+        <div id="rapport-ages"></div>
+
+        <p class="note">
+          Ces bornes viennent de l'hôtel, pas de la famille&nbsp;: chaque
+          établissement compte à sa façon, et <code>config.toml</code> range
+          ses tarifs sous ces trois mots.
+          «&nbsp;Recalculer&nbsp;» refait la catégorie de chacun d'après sa
+          date de naissance, <strong>à la date du séjour</strong> — et dit ce
+          qu'il change avant comme après. Sans date connue, personne ne bouge.
+          Les dates se posent depuis le GEDCOM&nbsp;:
+          <code>python importer_ged.py --ged "…" --racine "…" --naissances</code>.
+        </p>
+      </fieldset>
     </div>
 
     <!-- ---- Participants ---------------------------------------- -->

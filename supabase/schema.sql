@@ -53,6 +53,16 @@ create table if not exists private.reglages (
   saisie_ouverte boolean not null default true
 );
 
+-- A partir de quel age on cesse d'etre un bebe, puis un enfant. Ce sont les
+-- bornes de l'HOTEL, pas de la famille : chaque etablissement compte a sa
+-- facon, et `config.toml` range ses tarifs sous ces trois mots. Elles
+-- vivaient dans les options de `importer_ged.py`, donc nulle part une fois
+-- l'amorcage passe.
+alter table private.reglages
+  add column if not exists age_bebe smallint not null default 3;
+alter table private.reglages
+  add column if not exists age_enfant smallint not null default 12;
+
 -- ============================================================
 --  2. Le code d'acces, partage par toute la famille
 -- ============================================================
@@ -214,9 +224,57 @@ alter table private.participants
 alter table private.participants
   add column if not exists portee text not null default 'descendance';
 
+-- La date de naissance. Nullable, et elle le restera : le GEDCOM ne la
+-- donne pas pour tout le monde, et un invite n'y figure pas du tout.
+--
+-- POURQUOI LA GARDER, puisque `categorie_age` suffit a facturer ?
+--
+-- Parce que la categorie, elle, PERIME. Elle est calculee a la date du
+-- sejour ; l'enfant qui a onze ans cette annee en aura douze la prochaine,
+-- et rien dans la base ne le sait. Jusqu'ici il fallait relancer l'import
+-- GEDCOM -- qui vide tout -- ou corriger a la main, personne par personne.
+-- Avec la date, la categorie se recalcule (`admin_ages_recalculer`).
+--
+-- `categorie_age` reste ce qui FACTURE : c'est elle que lit la vue
+-- d'export et le moteur de tarifs, et elle peut etre corrigee a la main
+-- quand l'hotel compte autrement. La date propose, l'organisateur dispose.
+alter table private.participants
+  add column if not exists date_naissance date;
+
 alter table private.participants drop constraint if exists participants_portee_valide;
 alter table private.participants add constraint participants_portee_valide
   check (portee in ('descendance', 'foyer', 'soi'));
+
+-- L'age accompli a une date. `age()` rend un intervalle ; l'annee qu'on en
+-- extrait est le nombre d'anniversaires passes, ce qui est exactement ce
+-- qu'on appelle un age.
+create or replace function private.age_au(p_naissance date, p_jour date)
+returns integer language sql immutable
+set search_path = private, pg_temp as $fn$
+  select case
+           when p_naissance is null or p_jour is null then null
+           else extract(year from age(p_jour, p_naissance))::integer
+         end
+$fn$;
+
+-- La categorie qu'une date de naissance appelle. UNE SEULE DEFINITION,
+-- lue par la liste des participants comme par le recalcul : deux formules
+-- qui doivent s'accorder finissent toujours par diverger.
+--
+-- Sans date, `null` -- et non « adulte ». Ne pas savoir n'est pas la meme
+-- chose que savoir que c'est un adulte, et la page doit pouvoir le dire.
+create or replace function private.categorie_pour(
+  p_naissance date, p_jour date, p_bebe integer, p_enfant integer
+)
+returns text language sql immutable
+set search_path = private, pg_temp as $fn$
+  select case
+           when private.age_au(p_naissance, p_jour) is null then null
+           when private.age_au(p_naissance, p_jour) < p_bebe then 'bebe'
+           when private.age_au(p_naissance, p_jour) < p_enfant then 'enfant'
+           else 'adulte'
+         end
+$fn$;
 
 -- ============================================================
 --  4. Les presences
@@ -518,14 +576,28 @@ create or replace function public.admin_lister(p_code text)
 returns jsonb
 language plpgsql stable security definer
 set search_path = private, pg_temp as $fn$
+declare
+  r private.reglages;
 begin
   perform private.verifier_code(p_code, 'admin');
+  -- Les ages se comptent A LA DATE DU SEJOUR, et non aujourd'hui : c'est
+  -- celle-la que l'hotel facture. Un enfant qui a douze ans le mois d'apres
+  -- reste un enfant pour ce sejour.
+  select * into r from private.reglages;
+
   return coalesce((
     select jsonb_agg(jsonb_build_object(
              'id', p.id,
              'prenom', p.prenom,
              'famille', p.famille,
              'categorie_age', p.categorie_age,
+             'date_naissance', p.date_naissance,
+             'age', private.age_au(p.date_naissance, r.date_debut),
+             -- Ce que la date appellerait. `null` quand on ne sait pas ; la
+             -- page ne signale un ecart que lorsqu'elle sait.
+             'categorie_attendue',
+               private.categorie_pour(p.date_naissance, r.date_debut,
+                                      r.age_bebe, r.age_enfant),
              'parent_id', p.parent_id,
              'conjoint_id', p.conjoint_id,
              'invite', p.invite,
@@ -550,6 +622,11 @@ end $fn$;
 --                    Son parent et les ascendants de son parent le gerent.
 --    ni l'un ni l'autre : un invite independant. Lui seul se gere.
 --
+-- La signature a gagne `p_naissance` : `create or replace` ne remplace que
+-- la fonction de MEME signature, l'ancienne survivrait a cote et PostgREST
+-- ne saurait plus laquelle appeler.
+drop function if exists public.admin_ajouter(text, text, text, uuid, uuid, boolean, text);
+
 create or replace function public.admin_ajouter(
   p_code        text,
   p_prenom      text,
@@ -557,7 +634,8 @@ create or replace function public.admin_ajouter(
   p_conjoint_de uuid default null,
   p_enfant_de   uuid default null,
   p_invite      boolean default false,
-  p_famille     text default null
+  p_famille     text default null,
+  p_naissance   date default null
 )
 returns jsonb
 language plpgsql security definer
@@ -598,7 +676,7 @@ begin
   );
 
   insert into private.participants
-    (id, prenom, famille, categorie_age, parent_id, conjoint_id, invite)
+    (id, prenom, famille, categorie_age, parent_id, conjoint_id, invite, date_naissance)
   values (
     nouveau,
     trim(p_prenom),
@@ -611,7 +689,8 @@ begin
       else p_enfant_de
     end,
     p_conjoint_de,
-    p_invite
+    p_invite,
+    p_naissance
   );
 
   if p_conjoint_de is not null then
@@ -770,16 +849,22 @@ begin
   -- (erreur 21000). Un `where true` n'y changerait rien, le planificateur
   -- l'eliminerait. TRUNCATE n'est pas un DELETE et passe donc outre.
   --
-  -- Les deux tables sont citees ensemble parce que les presences
-  -- referencent les participants : de toute facon, reamorcer la liste
-  -- invalide les saisies existantes.
-  truncate table public.presences, private.participants;
+  -- TOUTES les tables qui referencent les participants sont citees
+  -- ensemble : Postgres refuse de vider seule une table referencee, meme
+  -- quand la referencante n'a aucune ligne. La liste s'est allongee avec le
+  -- projet -- voeux, refus de lieu, plan de couchage -- et l'oublier
+  -- faisait echouer l'amorcage entier.
+  --
+  -- De toute facon, reamorcer la liste donne de nouveaux identifiants :
+  -- tout ce qui designait les anciens ne veut plus rien dire.
+  truncate table public.presences, public.voeux, public.refus_lieu,
+                 private.couchages, private.participants;
 
   -- Les identifiants viennent du script : cela permet de poser parents et
   -- conjoints dans le meme insert. Les contraintes de cle etrangere n'etant
   -- verifiees qu'en fin d'instruction, les references croisees passent.
   insert into private.participants
-    (id, prenom, famille, categorie_age, parent_id, conjoint_id, invite)
+    (id, prenom, famille, categorie_age, parent_id, conjoint_id, invite, date_naissance)
   select
     (l->>'id')::uuid,
     l->>'prenom',
@@ -787,7 +872,8 @@ begin
     l->>'categorie_age',
     nullif(l->>'parent_id', '')::uuid,
     nullif(l->>'conjoint_id', '')::uuid,
-    coalesce((l->>'invite')::boolean, false)
+    coalesce((l->>'invite')::boolean, false),
+    nullif(l->>'date_naissance', '')::date
   from jsonb_array_elements(p_participants) as l;
 
   get diagnostics nb = row_count;
@@ -922,6 +1008,12 @@ begin
     'date_fin', r.date_fin,
     'jours', (r.date_fin - r.date_debut) + 1,
     'saisie_ouverte', r.saisie_ouverte,
+    'age_bebe', r.age_bebe,
+    'age_enfant', r.age_enfant,
+    -- Combien de personnes n'ont pas de date : le panneau le dit, sinon
+    -- « recalculer » paraitrait ne rien faire pour la moitie du monde.
+    'sans_naissance', (select count(*) from private.participants
+                        where date_naissance is null),
     'presences', (select count(*) from public.presences),
     -- Ce qui a ete saisi hors des bornes actuelles. Zero en temps normal ;
     -- non nul apres un deplacement des dates, et il faut le dire.
@@ -991,12 +1083,146 @@ begin
   return jsonb_build_object('saisie_ouverte', p_ouvert);
 end $fn$;
 
+-- ---- 8h. Les dates de naissance ----
+--
+--  Le GEDCOM les porte toutes, et `importer_ged.py` les lisait deja -- pour
+--  en tirer une categorie d'age, puis les jeter. Les garder demandait
+--  jusqu'ici de relancer l'amorcage, qui VIDE la liste et tout ce qui s'y
+--  rattache. Hors de question une fois le sejour commence.
+--
+--  Cette fonction ne detruit rien : elle pose une date sur des personnes
+--  qui existent deja, une par une, par leur identifiant. Le script se
+--  charge de dire QUI est qui -- c'est lui qui a l'arbre sous les yeux --
+--  et l'organisateur voit l'appariement avant qu'il parte.
+--
+create or replace function public.admin_naissances_poser(p_code text, p_dates jsonb)
+returns jsonb
+language plpgsql security definer
+set search_path = private, pg_temp as $fn$
+declare
+  ecrites   integer;
+  inconnues integer;
+begin
+  perform private.verifier_code(p_code, 'admin');
+  -- Le premier changement de la semaine emporte une copie de l'avant.
+  perform private.sauver_si_nouvelle_semaine();
+
+  if jsonb_array_length(coalesce(p_dates, '[]'::jsonb)) = 0 then
+    raise exception 'LISTE_VIDE' using errcode = 'P0001';
+  end if;
+
+  -- Ce qui ne designe personne est COMPTE, pas ignore en silence : un
+  -- appariement qui rate a moitie doit se voir.
+  select count(*) into inconnues
+    from jsonb_array_elements(p_dates) as l
+   where not exists (
+     select 1 from private.participants p where p.id = (l->>'id')::uuid
+   );
+
+  update private.participants p
+     set date_naissance = nullif(d.date_naissance, '')::date
+    from (
+      select l->>'id' as id, l->>'date_naissance' as date_naissance
+        from jsonb_array_elements(p_dates) as l
+    ) d
+   where p.id = d.id::uuid;
+  get diagnostics ecrites = row_count;
+
+  return jsonb_build_object('ecrites', ecrites, 'inconnues', inconnues);
+end $fn$;
+
+-- ---- 8i. Recalculer les categories d'age ----
+--
+--  La categorie perime : elle vaut a la date du sejour, et le sejour
+--  bouge. Ce bouton la refait depuis les dates de naissance.
+--
+--  Il RAPPORTE ce qu'il change, personne par personne, plutot que de le
+--  faire en silence. Une categorie posee a la main -- parce que l'hotel
+--  compte autrement pour quelqu'un -- serait sinon effacee sans un mot.
+--
+--  Ceux dont on ignore la date ne bougent pas : ne pas savoir n'est pas
+--  une raison de decider.
+--
+create or replace function public.admin_ages_recalculer(p_code text)
+returns jsonb
+language plpgsql security definer
+set search_path = private, pg_temp as $fn$
+declare
+  r        private.reglages;
+  changes  jsonb;
+begin
+  perform private.verifier_code(p_code, 'admin');
+  perform private.sauver_si_nouvelle_semaine();
+
+  select * into r from private.reglages;
+  if r.id is null then
+    raise exception 'REGLAGES_ABSENTS' using errcode = 'P0001';
+  end if;
+
+  select coalesce(jsonb_agg(jsonb_build_object(
+           'prenom', t.prenom,
+           'avant', t.categorie_age,
+           'apres', t.attendue,
+           'age', private.age_au(t.date_naissance, r.date_debut)
+         ) order by t.famille, t.prenom), '[]'::jsonb)
+    into changes
+    from (
+      select p.*, private.categorie_pour(p.date_naissance, r.date_debut,
+                                         r.age_bebe, r.age_enfant) as attendue
+        from private.participants p
+    ) t
+   where t.attendue is not null and t.attendue <> t.categorie_age;
+
+  update private.participants p
+     set categorie_age = private.categorie_pour(p.date_naissance, r.date_debut,
+                                                r.age_bebe, r.age_enfant)
+   where p.date_naissance is not null
+     and private.categorie_pour(p.date_naissance, r.date_debut,
+                                r.age_bebe, r.age_enfant) <> p.categorie_age;
+
+  return jsonb_build_object(
+    'jour', r.date_debut,
+    'changes', changes,
+    'sans_date', (select count(*) from private.participants where date_naissance is null)
+  );
+end $fn$;
+
+-- ---- 8j. Les bornes d'age ----
+--
+--  Elles viennent de l'hotel, pas de la famille : chaque etablissement
+--  compte a sa facon. Elles vivaient dans les options de `importer_ged.py`,
+--  donc nulle part une fois l'amorcage passe.
+--
+create or replace function public.admin_sejour_ages(p_code text, p_bebe integer, p_enfant integer)
+returns jsonb
+language plpgsql security definer
+set search_path = private, pg_temp as $fn$
+begin
+  perform private.verifier_code(p_code, 'admin');
+  perform private.sauver_si_nouvelle_semaine();
+
+  if p_bebe is null or p_enfant is null or p_bebe < 0 or p_enfant < 0 then
+    raise exception 'AGE_INVALIDE' using errcode = 'P0001';
+  end if;
+  if p_bebe >= p_enfant then
+    raise exception 'AGES_INVERSES' using errcode = 'P0001';
+  end if;
+
+  -- `where id` : safeupdate refuse un UPDATE sans clause WHERE.
+  update private.reglages set age_bebe = p_bebe, age_enfant = p_enfant where id;
+  return jsonb_build_object('age_bebe', p_bebe, 'age_enfant', p_enfant);
+end $fn$;
+
+grant execute on function public.admin_naissances_poser(text, jsonb)     to anon;
+grant execute on function public.admin_ages_recalculer(text)             to anon;
+grant execute on function public.admin_sejour_ages(text, integer, integer) to anon;
+
 grant execute on function public.admin_sejour(text)                    to anon;
 grant execute on function public.admin_sejour_dates(text, date, date)  to anon;
 grant execute on function public.admin_saisie_ouvrir(text, boolean)    to anon;
 
 grant execute on function public.admin_lister(text)                                         to anon;
-grant execute on function public.admin_ajouter(text, text, text, uuid, uuid, boolean, text) to anon;
+grant execute on function public.admin_ajouter(text, text, text, uuid, uuid, boolean, text, date) to anon;
 grant execute on function public.admin_modifier(text, uuid, text, text)                     to anon;
 grant execute on function public.admin_portee(text, uuid, text)                             to anon;
 grant execute on function public.admin_retirer(text, uuid)                                  to anon;
@@ -2271,7 +2497,8 @@ begin
                  private.couchages, private.options_date, private.participants;
 
   insert into private.participants
-    (id, prenom, famille, categorie_age, parent_id, conjoint_id, invite, portee, cree_le)
+    (id, prenom, famille, categorie_age, parent_id, conjoint_id, invite, portee,
+     date_naissance, cree_le)
   select (l->>'id')::uuid,
          l->>'prenom',
          l->>'famille',
@@ -2280,6 +2507,7 @@ begin
          nullif(l->>'conjoint_id', '')::uuid,
          coalesce((l->>'invite')::boolean, false),
          coalesce(nullif(l->>'portee', ''), 'descendance'),
+         nullif(l->>'date_naissance', '')::date,
          coalesce((l->>'cree_le')::timestamptz, now())
     from jsonb_array_elements(coalesce(c->'participants', '[]'::jsonb)) as l;
   get diagnostics n_participants = row_count;

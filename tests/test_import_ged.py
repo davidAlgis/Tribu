@@ -252,8 +252,134 @@ def test_les_participants_sont_prets_pour_supabase(arbre):
     """La forme envoyee a admin_importer doit etre exactement celle attendue."""
     attendu = {
         "id", "prenom", "famille", "categorie_age",
-        "parent_id", "conjoint_id", "invite",
+        "parent_id", "conjoint_id", "invite", "date_naissance",
     }
     for participant in participants(arbre):
         assert set(participant.vers_json()) == attendu
         assert participant.invite is False
+
+
+def test_la_date_de_naissance_part_avec_le_reste(arbre):
+    """Elle servait a calculer la categorie d'age, puis elle etait jetee.
+
+    C'est ce qui obligeait a relancer cet import -- qui vide la liste --
+    des que le sejour changeait d'annee et que les ages bougeaient.
+    """
+    gens = {p.prenom: p.vers_json() for p in participants(arbre)}
+    assert gens["Lea"]["date_naissance"] == "2020-09-04"
+    assert gens["Marie"]["date_naissance"] == "1965-06-12"
+    # Une annee seule vaut le 1er janvier, comme partout dans ce lecteur.
+    assert gens["Paul"]["date_naissance"] == "1963-01-01"
+
+    # Sans BIRT, pas de date -- et surtout pas une date inventee. Le GEDCOM
+    # d'essai n'a personne dans ce cas parmi les retenus : on interroge donc
+    # la forme elle-meme.
+    from importer_ged import Participant
+
+    nu = Participant(id="x", prenom="Zora", famille="Zora", categorie_age="adulte")
+    assert nu.vers_json()["date_naissance"] is None
+
+
+# --- Apparier le GEDCOM a une base deja remplie --------------------------
+#
+# Poser les dates sur une liste existante demande de savoir qui est qui, et
+# les identifiants ne peuvent pas servir : le script en tire de nouveaux a
+# chaque passage. On compare donc les deux arbres par la PLACE de chacun.
+#
+# Se tromper ici donnerait un anniversaire a la mauvaise personne, et rien
+# ne le signalerait : l'age paraitrait simplement bizarre, des mois plus
+# tard, sur une facture.
+
+from importer_ged import apparier  # noqa: E402
+
+
+def _gens(*lignes):
+    """(id, prenom, famille, parent_id, conjoint_id) -> dicts."""
+    return [
+        {"id": i, "prenom": p, "famille": f, "parent_id": pa, "conjoint_id": c}
+        for i, p, f, pa, c in lignes
+    ]
+
+
+def test_l_appariement_suit_la_place_et_non_l_identifiant():
+    """Les deux cotes ont des identifiants differents, et doivent quand
+    meme se reconnaitre."""
+    base = _gens(
+        ("b1", "Marie", "Marie", None, "b2"),
+        ("b2", "Paul", "Marie", None, "b1"),
+        ("b3", "Lea", "Marie", "b1", None),
+    )
+    ged = _gens(
+        ("g9", "Marie", "Marie", None, "g8"),
+        ("g8", "Paul", "Marie", None, "g9"),
+        ("g7", "Lea", "Marie", "g9", None),
+    )
+    paires, ambigus, base_seule, ged_seul = apparier(base, ged)
+    assert {(a["id"], b["id"]) for a, b in paires} == {("b1", "g9"), ("b2", "g8"), ("b3", "g7")}
+    assert (ambigus, base_seule, ged_seul) == ([], [], [])
+
+
+def test_deux_homonymes_se_distinguent_par_leur_parent():
+    """Le meme prenom deux fois dans la famille ne doit pas les confondre."""
+    base = _gens(
+        ("b1", "Marie", "Marie", None, None),
+        ("b2", "Lea", "Marie", "b1", None),
+        ("b3", "Chloe", "Chloe", None, None),
+        ("b4", "Lea", "Chloe", "b3", None),
+    )
+    ged = _gens(
+        ("g1", "Marie", "Marie", None, None),
+        ("g2", "Lea", "Marie", "g1", None),
+        ("g3", "Chloe", "Chloe", None, None),
+        ("g4", "Lea", "Chloe", "g3", None),
+    )
+    paires, ambigus, _, _ = apparier(base, ged)
+    assert ambigus == []
+    apparie = {a["id"]: b["id"] for a, b in paires}
+    assert apparie["b2"] == "g2" and apparie["b4"] == "g4"
+
+
+def test_deux_personnes_vraiment_indiscernables_ne_sont_pas_devinees():
+    """Meme prenom, meme parent, meme branche, pas de conjoint : rien ne
+    les separe. Le script refuse alors de trancher -- une date posee sur la
+    mauvaise personne ne se verrait jamais."""
+    base = _gens(
+        ("b0", "Marie", "Marie", None, None),
+        ("b1", "Lea", "Marie", "b0", None),
+        ("b2", "Lea", "Marie", "b0", None),
+    )
+    ged = _gens(
+        ("g0", "Marie", "Marie", None, None),
+        ("g1", "Lea", "Marie", "g0", None),
+        ("g2", "Lea", "Marie", "g0", None),
+    )
+    paires, ambigus, base_seule, ged_seul = apparier(base, ged)
+    assert {a["id"] for a, _ in paires} == {"b0"}
+    assert len(ambigus) == 1
+    assert {g["id"] for g in base_seule} == {"b1", "b2"}
+    assert {g["id"] for g in ged_seul} == {"g1", "g2"}
+
+
+def test_ce_qui_n_existe_que_d_un_cote_est_rendu_tel_quel():
+    """Quelqu'un ajouté sur admin.html depuis l'amorçage n'est pas dans le
+    GEDCOM, et un mort retiré depuis n'est plus en base."""
+    base = _gens(
+        ("b1", "Marie", "Marie", None, None),
+        ("b2", "Zora", "Marie", "b1", None),  # ajoutee depuis
+    )
+    ged = _gens(
+        ("g1", "Marie", "Marie", None, None),
+        ("g2", "Simon", "Marie", "g1", None),  # retire depuis
+    )
+    paires, ambigus, base_seule, ged_seul = apparier(base, ged)
+    assert [a["id"] for a, _ in paires] == ["b1"]
+    assert [g["prenom"] for g in base_seule] == ["Zora"]
+    assert [g["prenom"] for g in ged_seul] == ["Simon"]
+
+
+def test_la_casse_et_les_espaces_ne_separent_personne():
+    """« marie » et « Marie  » sont la meme personne."""
+    base = _gens(("b1", "Marie ", "Marie", None, None))
+    ged = _gens(("g1", "marie", "MARIE", None, None))
+    paires, _, _, _ = apparier(base, ged)
+    assert len(paires) == 1

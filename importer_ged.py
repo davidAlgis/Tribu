@@ -21,7 +21,8 @@ CE QUI EST DÉDUIT DU GEDCOM
 
   * les couples, lus dans les enregistrements FAM (HUSB / WIFE) ;
   * la filiation, lue dans les CHIL, d'où découlent les droits ;
-  * la catégorie d'âge, calculée depuis BIRT DATE à la date du séjour ;
+  * la date de naissance, et la catégorie d'âge qu'elle donne à la date
+    du séjour ;
   * les personnes décédées, écartées d'office (DEAT).
 
 `exclusions.txt` permet d'écarter d'emblée ceux qui ne viennent pas, pour
@@ -217,6 +218,7 @@ class Participant:
     parent_id: str | None = None
     conjoint_id: str | None = None
     invite: bool = False
+    naissance: date | None = None
     generation: int = 0  # sert uniquement a l'apercu
 
     def vers_json(self) -> dict:
@@ -228,6 +230,11 @@ class Participant:
             "parent_id": self.parent_id,
             "conjoint_id": self.conjoint_id,
             "invite": self.invite,
+            # La date part avec le reste, au lieu d'etre jetee apres avoir
+            # servi a calculer la categorie. C'est elle qui permettra de
+            # refaire le calcul l'annee suivante sans relancer cet import,
+            # qui vide la liste.
+            "date_naissance": self.naissance.isoformat() if self.naissance else None,
         }
 
 
@@ -290,6 +297,7 @@ def construire(
                     famille="",  # pose plus bas, au niveau de la branche
                     categorie_age=categorie_age(individu, jour, seuil_bebe, seuil_enfant),
                     parent_id=parent,
+                    naissance=individu.naissance,
                     generation=generation,
                 )
             )
@@ -406,18 +414,17 @@ def apercu(rapport: Rapport) -> str:
     return "\n".join(lignes)
 
 
-def envoyer(url: str, cle: str, code_admin: str, participants: list[Participant]) -> dict:
-    """Remplace toute la liste par POST sur la fonction admin_importer."""
+def appeler(url: str, cle: str, fonction: str, charge: dict):
+    """POST sur une fonction SQL. Le code d'acces voyage dans le corps."""
     entetes = {"Content-Type": "application/json", "apikey": cle}
     if cle.startswith("eyJ"):
         entetes["Authorization"] = f"Bearer {cle}"
 
-    corps = json.dumps(
-        {"p_code": code_admin, "p_participants": [p.vers_json() for p in participants]}
-    ).encode("utf-8")
-
     requete = urllib.request.Request(
-        f"{url}/rest/v1/rpc/admin_importer", data=corps, headers=entetes, method="POST"
+        f"{url}/rest/v1/rpc/{fonction}",
+        data=json.dumps(charge).encode("utf-8"),
+        headers=entetes,
+        method="POST",
     )
     try:
         with urllib.request.urlopen(requete, timeout=60) as reponse:
@@ -426,7 +433,148 @@ def envoyer(url: str, cle: str, code_admin: str, participants: list[Participant]
         detail = erreur.read().decode("utf-8", errors="replace")
         if "CODE_REFUSE" in detail:
             raise SystemExit("Code organisateur refuse.") from None
-        raise SystemExit(f"Supabase a refuse l'import : {detail}") from None
+        raise SystemExit(f"Supabase a refuse l'appel a {fonction} : {detail}") from None
+
+
+def envoyer(url: str, cle: str, code_admin: str, participants: list[Participant]) -> dict:
+    """Remplace toute la liste par POST sur la fonction admin_importer."""
+    return appeler(
+        url,
+        cle,
+        "admin_importer",
+        {"p_code": code_admin, "p_participants": [p.vers_json() for p in participants]},
+    )
+
+
+# ---------------------------------------------------------------- apparier
+#
+# Poser les dates sur une base DEJA REMPLIE demande de savoir qui est qui.
+# Les identifiants ne peuvent pas servir : ce script en tire de nouveaux a
+# chaque passage, et la base garde ceux du premier.
+#
+# On compare donc les DEUX ARBRES. `construire` est deterministe : relance
+# sur le meme GEDCOM, elle redonne la meme forme -- memes prenoms, memes
+# rattachements, memes couples. Il suffit alors de decrire chaque personne
+# par sa place : son prenom, celui de son parent, celui de son conjoint, et
+# sa branche. Deux personnes qui partagent les quatre sont vraiment
+# indiscernables, et on refuse de trancher pour elles.
+
+
+def _signature(prenom, parent, conjoint, famille) -> tuple:
+    net = lambda x: (x or "").strip().casefold()  # noqa: E731
+    return (net(prenom), net(parent), net(conjoint), net(famille))
+
+
+def signatures(gens: list[dict]) -> dict:
+    """{signature: [personne, ...]} pour une liste de dicts uniformes."""
+    par_id = {g["id"]: g for g in gens}
+    nom = lambda i: par_id[i]["prenom"] if i in par_id else None  # noqa: E731
+
+    groupes: dict[tuple, list[dict]] = {}
+    for g in gens:
+        cle = _signature(g["prenom"], nom(g.get("parent_id")),
+                         nom(g.get("conjoint_id")), g.get("famille"))
+        groupes.setdefault(cle, []).append(g)
+    return groupes
+
+
+def apparier(base: list[dict], ged: list[dict]) -> tuple:
+    """(paires, ambigus, base_seule, ged_seul).
+
+    Une paire n'est retenue que si la signature designe UNE personne de
+    chaque cote. Tout le reste est rendu tel quel, a l'organisateur de
+    trancher -- le script ne devine pas un anniversaire.
+    """
+    a, b = signatures(base), signatures(ged)
+    paires, ambigus = [], []
+
+    for cle, ceux_de_base in a.items():
+        ceux_du_ged = b.get(cle, [])
+        if len(ceux_de_base) == 1 and len(ceux_du_ged) == 1:
+            paires.append((ceux_de_base[0], ceux_du_ged[0]))
+        elif ceux_du_ged:
+            ambigus.append((ceux_de_base, ceux_du_ged))
+
+    apparies_base = {p[0]["id"] for p in paires}
+    apparies_ged = {p[1]["id"] for p in paires}
+    base_seule = [g for g in base if g["id"] not in apparies_base]
+    ged_seul = [g for g in ged if g["id"] not in apparies_ged]
+    return paires, ambigus, base_seule, ged_seul
+
+
+def poser_naissances(args, rapport) -> int:
+    """Pose les dates du GEDCOM sur la liste DEJA en base, sans rien effacer.
+
+    L'amorcage, lui, remplace tout : il n'est cense servir qu'une fois, et
+    relancer ne serait-ce que pour une colonne emporterait les presences,
+    les voeux et le plan de couchage. Ce mode-ci ne touche qu'une colonne.
+    """
+    url, cle = config_js(Path(args.config))
+    code_admin = os.environ.get("TRIBU_CODE_ADMIN") or getpass.getpass(
+        "Code organisateur (invisible) : "
+    )
+
+    base = appeler(url, cle, "admin_lister", {"p_code": code_admin})
+    print(f"\n{len(base)} personnes en base, {len(rapport.participants)} dans le GEDCOM.")
+
+    ged = [p.vers_json() for p in rapport.participants]
+    paires, ambigus, base_seule, ged_seul = apparier(base, ged)
+
+    # Seules celles qu'on a su apparier ET dont le GEDCOM donne la date.
+    a_poser = [
+        {"id": en_base["id"], "date_naissance": du_ged["date_naissance"]}
+        for en_base, du_ged in paires
+        if du_ged["date_naissance"]
+    ]
+
+    print(f"\n{len(paires)} personne(s) appariee(s), {len(a_poser)} avec une date :")
+    for en_base, du_ged in sorted(paires, key=lambda x: (x[0]["famille"], x[0]["prenom"])):
+        quand = du_ged["date_naissance"] or "— pas de date dans le GEDCOM"
+        print(f"    {en_base['prenom']:<20} {quand}")
+
+    # Ce qui n'a pas trouve sa place se DIT. Un appariement muet a moitie
+    # reussi ferait croire que tout est pose.
+    for ceux_de_base, ceux_du_ged in ambigus:
+        noms = ", ".join(g["prenom"] for g in ceux_de_base)
+        print(f"\n  AMBIGU  {noms} : meme prenom, meme parent, meme conjoint.")
+        print("          Le script ne tranche pas ; corrige a la main sur admin.html.")
+    if base_seule:
+        print(
+            f"\n  {len(base_seule)} en base sans correspondance dans le GEDCOM : "
+            + ", ".join(g["prenom"] for g in base_seule)
+        )
+        print("     (ajoutees depuis, ou invitees : elles n'y figurent pas)")
+    if ged_seul:
+        print(
+            f"\n  {len(ged_seul)} dans le GEDCOM sans correspondance en base : "
+            + ", ".join(g["prenom"] for g in ged_seul)
+        )
+        print("     (retirees depuis l'amorcage)")
+
+    if not a_poser:
+        print("\nAucune date a poser.")
+        return 1
+
+    if args.apercu:
+        print("\nApercu seul : rien n'a ete envoye.")
+        return 0
+
+    print(
+        f"\nCeci pose {len(a_poser)} date(s) de naissance et ne touche a RIEN"
+        "\nd'autre : ni les presences, ni les voeux, ni le plan de couchage."
+    )
+    if input("Taper « oui » pour continuer : ").strip().lower() != "oui":
+        print("Abandonne.")
+        return 1
+
+    resultat = appeler(
+        url, cle, "admin_naissances_poser", {"p_code": code_admin, "p_dates": a_poser}
+    )
+    print(f"\n{resultat.get('ecrites', 0)} date(s) ecrite(s).")
+    if resultat.get("inconnues"):
+        print(f"  {resultat['inconnues']} ne designaient plus personne.")
+    print("Les categories d'age se refont depuis admin.html, onglet Sejour.")
+    return 0
 
 
 def config_js(chemin: Path) -> tuple[str, str]:
@@ -456,6 +604,11 @@ def main() -> int:
     parseur.add_argument("--date-sejour", default="2027-07-10", help="pour calculer les ages")
     parseur.add_argument("--age-bebe", type=int, default=3, help="moins de N ans = bebe")
     parseur.add_argument("--age-enfant", type=int, default=12, help="moins de N ans = enfant")
+    parseur.add_argument(
+        "--naissances",
+        action="store_true",
+        help="ne poser QUE les dates de naissance sur la liste deja en base",
+    )
     parseur.add_argument(
         "--apercu",
         action="store_true",
@@ -494,6 +647,9 @@ def main() -> int:
     if not rapport.participants:
         print(f"Aucun descendant retenu pour {individus[trouves[0]].complet}.", file=sys.stderr)
         return 1
+
+    if args.naissances:
+        return poser_naissances(args, rapport)
 
     print(apercu(rapport))
     print(f"\n{len(rapport.participants)} participants, ages calcules au {jour}.")

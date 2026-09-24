@@ -341,6 +341,11 @@ button.discret:hover {
 }
 .etiquette.ok { color: var(--ok); border-color: var(--ok); }
 
+/* Ce que la date de naissance dirait, quand la categorie posee dit autre
+   chose. Ce n'est pas une erreur -- l'hotel compte parfois autrement -- mais
+   ca doit se voir dans une liste de soixante lignes. */
+.etiquette.alerte { color: var(--erreur); border-color: var(--erreur); }
+
 button.retirer {
   background: transparent;
   color: var(--doux);

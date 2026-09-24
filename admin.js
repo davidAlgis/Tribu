@@ -71,6 +71,8 @@ const MESSAGES = {
   LISTE_VIDE: "La liste envoyée est vide.",
   DATES_MANQUANTES: "Il manque une des deux dates du séjour.",
   REGLAGES_ABSENTS: "Les réglages du séjour sont absents de la base.",
+  AGE_INVALIDE: "Les bornes d'âge doivent être des nombres positifs.",
+  AGES_INVERSES: "La borne des bébés doit être inférieure à celle des enfants.",
   CATEGORIE_INCONNUE: "Type de couchage inconnu.",
   CAPACITE_INVALIDE: "La capacité doit être un nombre entre 1 et 30.",
   NOMBRE_INVALIDE: "Le nombre de logements doit être entre 1 et 200.",
@@ -230,12 +232,30 @@ function dessinerListe() {
       if (personne.invite) etiquettes.append(span("invité", "etiquette"));
       if (personne.a_saisi) etiquettes.append(span("a saisi", "etiquette ok"));
 
+      // La categorie FACTURE ; la date de naissance, elle, ne fait que la
+      // proposer. Quand les deux divergent, on le dit -- sans rien changer :
+      // l'hotel compte parfois autrement pour telle personne, et c'est
+      // l'organisateur qui tranche, pas la page.
+      if (
+        personne.categorie_attendue &&
+        personne.categorie_attendue !== personne.categorie_age
+      ) {
+        const ecart = span(`l'âge dit : ${AGES[personne.categorie_attendue]}`, "etiquette alerte");
+        ecart.title =
+          `${personne.age} ans à la date du séjour. ` +
+          `« Recalculer les catégories », dans l'onglet Séjour, corrige tout d'un coup.`;
+        etiquettes.append(ecart);
+      }
+
       const gauche = document.createElement("div");
-      gauche.append(
-        fort(personne.prenom),
-        etiquettes,
-        span(decrireLien(personne), "lien")
-      );
+      // « conjoint·e de Paul · 42 ans ». L'age vient de la base, calcule a
+      // la date du sejour : c'est celui que l'hotel facturera, et non celui
+      // d'aujourd'hui.
+      const lien =
+        personne.age === null || personne.age === undefined
+          ? decrireLien(personne)
+          : `${decrireLien(personne)} · ${personne.age} ans`;
+      gauche.append(fort(personne.prenom), etiquettes, span(lien, "lien"));
 
       gauche.appendChild(selecteurPortee(personne));
 
@@ -2189,10 +2209,89 @@ async function rechargerSejour() {
   champDebut.value = d.date_debut;
   champFin.value = d.date_fin;
   interrupteurSaisie.checked = d.saisie_ouverte;
+  remplirAges(d);
   resumeSejour.textContent =
     `${d.jours} jour(s), ${d.presences} journée(s) saisie(s)`;
   direHorsSejour(d.presences_hors);
 }
+
+// ------------------------------------------------------------ les ages
+//
+// Deux bornes, et un bouton qui refait les categories.
+//
+// `categorie_age` reste ce qui FACTURE : c'est elle que lit la vue d'export
+// et le moteur de tarifs. La date de naissance ne la remplace pas, elle la
+// PROPOSE -- et le recalcul dit ce qu'il change avant de le garder, parce
+// qu'une categorie posee a la main a ses raisons.
+
+const champAgeBebe = document.getElementById("age-bebe");
+const champAgeEnfant = document.getElementById("age-enfant");
+const resumeAges = document.getElementById("resume-ages");
+const messageAges = document.getElementById("message-ages");
+const rapportAges = document.getElementById("rapport-ages");
+
+function remplirAges(d) {
+  champAgeBebe.value = d.age_bebe;
+  champAgeEnfant.value = d.age_enfant;
+  resumeAges.textContent = d.sans_naissance
+    ? `${d.sans_naissance} personne(s) sans date de naissance`
+    : "toutes les dates de naissance sont connues";
+}
+
+document.getElementById("ages-enregistrer").addEventListener("click", async () => {
+  messageAges.className = "";
+  messageAges.textContent = "Enregistrement…";
+  try {
+    const d = await rpc("admin_sejour_ages", {
+      p_code: etat.code,
+      p_bebe: Number(champAgeBebe.value),
+      p_enfant: Number(champAgeEnfant.value),
+    });
+    await recharger();
+    messageAges.className = "ok";
+    messageAges.textContent =
+      `Bébé avant ${d.age_bebe} ans, enfant avant ${d.age_enfant}. ` +
+      `Les catégories déjà posées n'ont pas bougé.`;
+  } catch (erreur) {
+    messageAges.className = "erreur";
+    messageAges.textContent = erreur.message;
+  }
+});
+
+document.getElementById("ages-recalculer").addEventListener("click", async () => {
+  messageAges.className = "";
+  messageAges.textContent = "Calcul…";
+  rapportAges.textContent = "";
+  try {
+    const d = await rpc("admin_ages_recalculer", { p_code: etat.code });
+    await recharger();
+    messageAges.className = "ok";
+    // La date en tete, et non a la fin : `afficherJour` rend « 24 oct. »,
+    // point compris, et la phrase se terminerait par deux points.
+    messageAges.textContent = d.changes.length
+      ? `Au ${afficherJour(d.jour)} : ${d.changes.length} catégorie(s) corrigée(s).`
+      : `Au ${afficherJour(d.jour)} : rien à corriger, tout concorde.`;
+
+    // Le detail, personne par personne. Sans lui, « 7 corrigees » ne dit pas
+    // si l'on vient d'ecraser un reglage voulu.
+    for (const c of d.changes) {
+      rapportAges.appendChild(
+        ligneDiff(AGES[c.apres], `${c.prenom} — ${c.age} ans, était ${AGES[c.avant]}`)
+      );
+    }
+    if (d.sans_date) {
+      const reste = document.createElement("p");
+      reste.className = "note";
+      reste.textContent =
+        `${d.sans_date} personne(s) n'ont pas de date de naissance : leur ` +
+        `catégorie n'a pas été touchée.`;
+      rapportAges.appendChild(reste);
+    }
+  } catch (erreur) {
+    messageAges.className = "erreur";
+    messageAges.textContent = erreur.message;
+  }
+});
 
 document.getElementById("sejour-enregistrer").addEventListener("click", async () => {
   messageSejour.className = "";

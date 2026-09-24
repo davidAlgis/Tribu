@@ -392,6 +392,58 @@ sont **écartées à la lecture** — les personnes reviennent à placer — mai
 pas effacées : remonter le nombre les retrouve. Retirer le type, lui, les
 emporte pour de bon.
 
+## Les âges
+
+L'onglet **Séjour**, second panneau. Deux bornes — *bébé jusqu'à*, *enfant
+jusqu'à* — et un bouton qui refait les catégories de tout le monde.
+
+Le GEDCOM porte les dates de naissance, et `importer_ged.py` les lisait
+déjà : il en tirait une catégorie d'âge, puis **les jetait**. C'est ce qui
+obligeait à tout reprendre à la main quand le séjour changeait d'année — un
+enfant de onze ans en a douze l'édition suivante, et rien dans la base ne le
+savait. Elles sont maintenant conservées.
+
+**`categorie_age` reste ce qui facture** : c'est elle que lisent la vue
+d'export et le moteur de tarifs, et elle peut être corrigée à la main quand
+l'hôtel compte autrement pour quelqu'un. La date de naissance ne la remplace
+pas, elle la *propose* — dans la liste des participants, un écart apparaît
+comme une étiquette rouge « l'âge dit : enfant », et rien ne bouge tant que
+tu n'as pas cliqué. Le recalcul, lui, **dit ce qu'il change**, nom par nom,
+avec l'âge et l'état précédent : une catégorie posée exprès a ses raisons,
+et l'effacer en silence serait le plus sûr moyen de ne jamais s'en
+apercevoir.
+
+L'âge se compte **à la date du séjour**, pas aujourd'hui : c'est celui que
+l'hôtel facturera.
+
+### Poser les dates sur une base déjà remplie
+
+```bash
+python importer_ged.py --ged "D:/chemin/vers/genealogie.ged" --racine "Prénom Nom" --naissances --apercu
+```
+
+Sans `--apercu`, il écrit. Ce mode **ne touche qu'une colonne** : ni les
+présences, ni les vœux, ni le plan de couchage. L'amorçage, lui, remplace
+tout — il n'est censé servir qu'une fois.
+
+Reste à savoir qui est qui, puisque les identifiants ne peuvent pas servir :
+le script en tire de nouveaux à chaque passage, et la base garde ceux du
+premier. Il compare donc **les deux arbres** : chaque personne est décrite
+par sa place — son prénom, celui de son parent, celui de son conjoint, et sa
+branche. Deux personnes qui partagent les quatre sont vraiment
+indiscernables, et le script **refuse de trancher** pour elles : il les
+signale et passe. Une date posée sur la mauvaise personne ne se verrait
+jamais — l'âge paraîtrait seulement bizarre, des mois plus tard, sur une
+facture.
+
+Ce qui n'existe que d'un côté est dit aussi : quelqu'un ajouté depuis
+l'amorçage n'est pas dans le GEDCOM, et un défunt retiré depuis n'est plus
+en base.
+
+> La vue d'export `v_participants` **ne porte pas** la date de naissance.
+> Le moteur de tarifs n'en a pas besoin, et moins de données personnelles
+> franchissent la frontière, mieux c'est.
+
 ## Corriger un prénom
 
 Le bouton ✎ en face de la personne, sur `admin.html`. Le nom devient un
