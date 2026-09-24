@@ -71,9 +71,13 @@ const MESSAGES = {
   LISTE_VIDE: "La liste envoyée est vide.",
   DATES_MANQUANTES: "Il manque une des deux dates du séjour.",
   REGLAGES_ABSENTS: "Les réglages du séjour sont absents de la base.",
+  CATEGORIE_INCONNUE: "Type de couchage inconnu.",
+  CAPACITE_INVALIDE: "La capacité doit être un nombre entre 1 et 30.",
+  NOMBRE_INVALIDE: "Le nombre de logements doit être entre 1 et 200.",
+  VUE_MER_HORS_CHAMBRE: "La vue mer ne concerne que les chambres.",
 };
 
-const etat = { code: "", participants: [], type: "famille" };
+const etat = { code: "", participants: [], type: "famille", logements: [], nuits: [] };
 
 // ---------------------------------------------------------------- reseau
 
@@ -132,6 +136,7 @@ async function recharger() {
   dessinerListe();
   remplirSelecteurs();
   await rechargerSejour();
+  await rechargerLogements();
   await rechargerDates();
   await rechargerLieux();
   await rechargerSauvegardes();
@@ -461,6 +466,45 @@ function montrer(id) {
   }
 }
 
+// ------------------------------------------------------------- onglets
+//
+// Six sujets sans rapport se suivaient dans une seule colonne : pour ouvrir
+// la carte, il fallait passer devant la liste entiere des participants.
+//
+// L'etat n'est ecrit qu'a UN endroit, l'`aria-selected` du bouton : le style
+// s'y accroche, le lecteur d'ecran le lit, et il n'y a rien a synchroniser.
+//
+// Le `tabindex` roulant est la moitie du motif qu'on oublie. Sans lui, la
+// tabulation traverse les six boutons avant d'atteindre le contenu ; avec
+// lui, un seul onglet est atteignable et les fleches passent de l'un a
+// l'autre, comme dans n'importe quelle barre d'onglets.
+
+const onglets = [...document.querySelectorAll('[role="tab"]')];
+
+function ouvrirOnglet(onglet) {
+  for (const o of onglets) {
+    const actif = o === onglet;
+    o.setAttribute("aria-selected", actif ? "true" : "false");
+    o.tabIndex = actif ? 0 : -1;
+    document.getElementById(o.getAttribute("aria-controls")).hidden = !actif;
+  }
+}
+
+onglets.forEach((onglet, i) => {
+  onglet.addEventListener("click", () => ouvrirOnglet(onglet));
+  onglet.addEventListener("keydown", (e) => {
+    const pas = { ArrowLeft: -1, ArrowRight: 1 }[e.key];
+    let cible = null;
+    if (pas) cible = onglets[(i + pas + onglets.length) % onglets.length];
+    else if (e.key === "Home") cible = onglets[0];
+    else if (e.key === "End") cible = onglets[onglets.length - 1];
+    if (!cible) return;
+    e.preventDefault();
+    ouvrirOnglet(cible);
+    cible.focus();
+  });
+});
+
 
 // ------------------------------------------------------- choix de la date
 //
@@ -577,6 +621,238 @@ interrupteur.addEventListener("change", async () => {
 });
 
 
+// ------------------------------------------------------ les logements
+//
+// Un inventaire, et rien de plus : combien de chambres de deux, combien de
+// gites de six. Pas de plan de couchage -- « qui dort avec qui » est une
+// autre question, et la melanger a celle-ci ferait de la saisie d'un nombre
+// une reunion de famille.
+//
+// L'offre seule ne dit rien. Le second panneau la confronte a la demande,
+// nuit par nuit : c'est l'ecart qui interesse, pas le total.
+//
+// Rien n'est ecrit en dur. Une autre annee, un autre lieu : on retape
+// l'inventaire, et le reste suit -- comme les dates du sejour, sorties de
+// l'editeur SQL pour la meme raison.
+
+// Meme vocabulaire que la grille de saisie (`app.js`) : la vue mer est une
+// VARIANTE DE CHAMBRE, pas une option a cote. La base, elle, garde deux
+// champs -- une categorie et un supplement -- parce que c'est ainsi que
+// l'hotel facture.
+const CHAMBRE_VUE_MER = "chambre+vue_mer";
+
+const TYPES_LOGEMENT = {
+  chambre: { categorie: "chambre", vue_mer: false, un: "chambre", plusieurs: "chambres" },
+  [CHAMBRE_VUE_MER]: {
+    categorie: "chambre",
+    vue_mer: true,
+    un: "chambre vue mer",
+    plusieurs: "chambres vue mer",
+  },
+  gite: { categorie: "gite", vue_mer: false, un: "gîte", plusieurs: "gîtes" },
+};
+
+// Deux champs en base, une seule valeur dans l'interface. La conversion tient
+// en une ligne, mais elle doit repondre exactement a l'index unique
+// `(categorie, capacite, vue_mer)` : c'est lui qui decide si reposer un type
+// le corrige ou en ajoute un second.
+function typeDe(ligne) {
+  return ligne.categorie === "chambre" && ligne.vue_mer ? CHAMBRE_VUE_MER : ligne.categorie;
+}
+
+function nommerLogement(ligne) {
+  const t = TYPES_LOGEMENT[typeDe(ligne)] || { un: ligne.categorie, plusieurs: ligne.categorie };
+  const quoi = ligne.nombre > 1 ? t.plusieurs : t.un;
+  const gens = ligne.capacite > 1 ? "personnes" : "personne";
+  return `${ligne.nombre} ${quoi} de ${ligne.capacite} ${gens}`;
+}
+
+// Ce que l'inventaire offre, par type d'interface.
+function placesParType(logements) {
+  const total = { chambre: 0, [CHAMBRE_VUE_MER]: 0, gite: 0 };
+  for (const l of logements || []) total[typeDe(l)] += l.capacite * l.nombre;
+  return total;
+}
+
+const zoneLogements = document.getElementById("liste-logements");
+const zoneTension = document.getElementById("tension-logements");
+const compteurLogements = document.getElementById("compteur-logements");
+const compteurTension = document.getElementById("compteur-tension");
+const messageLogements = document.getElementById("message-logements");
+
+async function rechargerLogements() {
+  const d = await rpc("admin_logements", { p_code: etat.code });
+  etat.logements = d.logements || [];
+  etat.nuits = d.nuits || [];
+  dessinerLogements();
+  dessinerTension();
+}
+
+function dessinerLogements() {
+  const offre = placesParType(etat.logements);
+  const total = offre.chambre + offre[CHAMBRE_VUE_MER] + offre.gite;
+  compteurLogements.textContent = etat.logements.length
+    ? `${total} place(s) au total`
+    : "rien de déclaré";
+
+  zoneLogements.textContent = "";
+  if (!etat.logements.length) {
+    const rien = document.createElement("p");
+    rien.className = "note";
+    rien.textContent =
+      "Aucun type posé. Tant que l'inventaire est vide, le panneau d'à côté " +
+      "n'a rien à comparer.";
+    zoneLogements.appendChild(rien);
+    return;
+  }
+
+  for (const l of etat.logements) {
+    const ligne = document.createElement("div");
+    ligne.className = "personne";
+
+    const gauche = document.createElement("div");
+    gauche.append(fort(nommerLogement(l)), span(`${l.capacite * l.nombre} places`, "lien"));
+    ligne.appendChild(gauche);
+
+    const retirer = document.createElement("button");
+    retirer.type = "button";
+    retirer.className = "retirer";
+    retirer.textContent = "Retirer";
+    retirer.setAttribute("aria-label", `Retirer ${nommerLogement(l)}`);
+    retirer.addEventListener("click", () => retirerLogement(l));
+    ligne.appendChild(retirer);
+
+    zoneLogements.appendChild(ligne);
+  }
+}
+
+const COLONNES_TENSION = [
+  ["chambre", "Chambre"],
+  [CHAMBRE_VUE_MER, "Vue mer"],
+  ["gite", "Gîte"],
+];
+
+// La base renvoie `chambre` et `chambre_vue_mer` separement -- exactement les
+// deux types que l'inventaire distingue. Les confondre ici ferait passer pour
+// disponible une chambre vue mer que personne n'a.
+function demandeDe(nuit, type) {
+  return (type === CHAMBRE_VUE_MER ? nuit.chambre_vue_mer : nuit[type]) || 0;
+}
+
+function celluleTension(demande, offre) {
+  const c = document.createElement("td");
+  c.textContent = `${demande} / ${offre}`;
+  // Un depassement n'est pas une erreur de saisie : c'est un fait dont
+  // l'organisateur doit decider. La cellule le montre, la page ne l'empeche
+  // pas -- et le titre le dit pour qui ne voit pas la couleur.
+  if (demande > offre) {
+    c.className = "trop";
+    c.title = `${demande - offre} de plus que ce qui existe`;
+  }
+  return c;
+}
+
+function dessinerTension() {
+  const offre = placesParType(etat.logements);
+  zoneTension.textContent = "";
+
+  if (!etat.nuits.length) {
+    compteurTension.textContent = "";
+    const rien = document.createElement("p");
+    rien.className = "note";
+    rien.textContent = "Personne n'a encore déclaré de nuit sur place.";
+    zoneTension.appendChild(rien);
+    return;
+  }
+
+  const cadre = document.createElement("div");
+  cadre.className = "defilement";
+  const table = document.createElement("table");
+
+  const tete = document.createElement("tr");
+  tete.appendChild(document.createElement("th")).textContent = "Nuit du";
+  for (const [, titre] of COLONNES_TENSION) {
+    tete.appendChild(document.createElement("th")).textContent = titre;
+  }
+  const thead = document.createElement("thead");
+  thead.appendChild(tete);
+  table.appendChild(thead);
+
+  const corps = document.createElement("tbody");
+  let depassements = 0;
+  for (const nuit of etat.nuits) {
+    const ligne = document.createElement("tr");
+    ligne.appendChild(document.createElement("td")).textContent = afficherJour(nuit.jour);
+    let serree = false;
+    for (const [type] of COLONNES_TENSION) {
+      const demande = demandeDe(nuit, type);
+      if (demande > offre[type]) serree = true;
+      ligne.appendChild(celluleTension(demande, offre[type]));
+    }
+    if (serree) depassements += 1;
+    corps.appendChild(ligne);
+  }
+  table.appendChild(corps);
+  cadre.appendChild(table);
+  zoneTension.appendChild(cadre);
+
+  compteurTension.textContent = depassements
+    ? `${depassements} nuit(s) au-delà de l'inventaire`
+    : "tout tient";
+}
+
+document.getElementById("logement-poser").addEventListener("click", async () => {
+  const choisi = document.getElementById("logement-categorie").value;
+  const type = TYPES_LOGEMENT[choisi];
+  const capacite = Number(document.getElementById("logement-capacite").value);
+  const nombre = Number(document.getElementById("logement-nombre").value);
+
+  messageLogements.className = "";
+  messageLogements.textContent = "Enregistrement…";
+  try {
+    // La conversion se fait ici et nulle part ailleurs : l'interface parle de
+    // « chambre vue mer », la base de deux colonnes.
+    await rpc("admin_logement_poser", {
+      p_code: etat.code,
+      p_categorie: type.categorie,
+      p_capacite: capacite,
+      p_nombre: nombre,
+      p_vue_mer: type.vue_mer,
+    });
+    await rechargerLogements();
+    messageLogements.className = "ok";
+    messageLogements.textContent = `${nommerLogement({
+      categorie: type.categorie,
+      vue_mer: type.vue_mer,
+      capacite,
+      nombre,
+    })} : enregistré.`;
+  } catch (erreur) {
+    messageLogements.className = "erreur";
+    messageLogements.textContent = erreur.message;
+  }
+});
+
+async function retirerLogement(ligne) {
+  // Rien ne pointe vers un logement : les presences disent une categorie, pas
+  // une unite. Retirer un type ne casse donc aucune saisie -- il change
+  // seulement ce que le panneau d'a cote compte comme places disponibles.
+  if (!confirm(`Retirer ${nommerLogement(ligne)} de l'inventaire ?`)) return;
+
+  messageLogements.className = "";
+  messageLogements.textContent = "Suppression…";
+  try {
+    await rpc("admin_logement_retirer", { p_code: etat.code, p_id: ligne.id });
+    await rechargerLogements();
+    messageLogements.className = "ok";
+    messageLogements.textContent = `${nommerLogement(ligne)} : retiré.`;
+  } catch (erreur) {
+    messageLogements.className = "erreur";
+    messageLogements.textContent = erreur.message;
+  }
+}
+
+
 // ------------------------------------------------------------ le lieu
 //
 // La carte se peint sur lieux.html ; ici on ne montre que le resultat du
@@ -652,7 +928,7 @@ interrupteurLieux.addEventListener("change", async () => {
 // La base ne garde que l'etat courant : « Appliquer a tous », le retrait
 // d'un participant et le reamorcage GEDCOM effacent sans retour. Une copie
 // part donc a la premiere ecriture de chaque semaine, prise juste avant
-// celle-ci (cf. schema.sql, section 11).
+// celle-ci (cf. schema.sql, section 12).
 //
 // La COMPARAISON se fait ici, et non en SQL. Deux raisons : la base sert
 // des faits et laisse les derivees au reste du projet, et une fonction
@@ -699,6 +975,7 @@ const CHAMPS_PARTICIPANT = [
   "portee",
 ];
 const CHAMPS_OPTION = ["libelle", "date_debut", "date_fin"];
+const CHAMPS_LOGEMENT = ["categorie", "capacite", "nombre", "vue_mer"];
 
 // Les noms de colonnes ne sortent pas de la base : « categorie_age » ne
 // veut rien dire pour qui lit la page.
@@ -713,6 +990,10 @@ const NOMS_CHAMPS = {
   libelle: "intitulé",
   date_debut: "date de début",
   date_fin: "date de fin",
+  categorie: "type",
+  capacite: "capacité",
+  nombre: "nombre",
+  vue_mer: "vue mer",
 };
 
 function nommerChamps(champs) {
@@ -812,6 +1093,15 @@ function comparerEtats(avant, apres) {
   const participants = comparerParId(avant.participants, apres.participants, CHAMPS_PARTICIPANT);
   const options = comparerParId(avant.options_date, apres.options_date, CHAMPS_OPTION);
 
+  // L'inventaire n'entre dans les copies que depuis qu'il existe. Une copie
+  // plus ancienne ne dit RIEN a son sujet, et le silence n'est pas « il n'y
+  // en avait aucun » : on ne compare pas, exactement comme la restauration
+  // n'y touche pas. Annoncer « 3 types ajoutes » pour ensuite les laisser en
+  // place serait la pire des deux reponses.
+  const logements = avant.logements
+    ? comparerParId(avant.logements, apres.logements, CHAMPS_LOGEMENT)
+    : null;
+
   const tables = COMPARABLES.map((def) => {
     const r = comparerTable(avant[def.clef], apres[def.clef], def);
     for (const g of r.personnes) g.prenom = noms.get(g.pid) || "(inconnu)";
@@ -819,13 +1109,17 @@ function comparerEtats(avant, apres) {
     return { clef: def.clef, nom: def.nom, ...r };
   });
 
-  const bouge = (d) => d.ajoutes.length || d.retires.length || d.modifies.length;
+  const bouge = (d) => !!d && (d.ajoutes.length || d.retires.length || d.modifies.length);
   return {
     participants,
     options,
+    logements,
     tables,
     identique:
-      !bouge(participants) && !bouge(options) && tables.every((t) => !t.personnes.length),
+      !bouge(participants) &&
+      !bouge(options) &&
+      !bouge(logements) &&
+      tables.every((t) => !t.personnes.length),
   };
 }
 
@@ -957,6 +1251,18 @@ function dessinerComparaison(copie, d) {
     for (const m of o.modifies) {
       zoneComparaison.appendChild(
         ligneDiff("modifié", `${m.avant.libelle} — ${nommerChamps(m.champs)}`)
+      );
+    }
+  }
+
+  const g = d.logements;
+  if (g && (g.ajoutes.length || g.retires.length || g.modifies.length)) {
+    zoneComparaison.appendChild(sousTitre(`Logements : ${g.avant} → ${g.apres}`));
+    for (const x of g.ajoutes) zoneComparaison.appendChild(ligneDiff("ajouté", nommerLogement(x)));
+    for (const x of g.retires) zoneComparaison.appendChild(ligneDiff("retiré", nommerLogement(x)));
+    for (const m of g.modifies) {
+      zoneComparaison.appendChild(
+        ligneDiff("modifié", `${nommerLogement(m.avant)} → ${nommerLogement(m.apres)}`)
       );
     }
   }

@@ -20,7 +20,7 @@ Trois pages pour la famille, une pour toi :
 | [`lieux.html`](lieux.html) | la famille | où l'on n'a pas envie d'aller |
 | [`dates.html`](dates.html) | la famille | quel week-end arrange chacun, et où en est le choix |
 | [`index.html`](index.html) | la famille | qui vient, quelles nuits, quels repas |
-| [`admin.html`](admin.html) | toi | dates du séjour, participants, droits, week-ends, résultat de la carte, retour en arrière |
+| [`admin.html`](admin.html) | toi | dates du séjour, participants, droits, logements, week-ends, résultat de la carte, retour en arrière |
 
 Les trois pages familiales portent le même menu en tête — **Le lieu**, **La
 date**, **Les présences** — dans l'ordre où les décisions se prennent. Celle
@@ -28,6 +28,19 @@ qu'on regarde y est remplie.
 
 `admin.html` n'y figure pas : elle ne s'ouvre pas avec le code famille, et
 l'annoncer à toute la famille ne ferait qu'inviter à la pousser.
+
+Elle a ses propres **onglets** — Séjour, Participants, Logements, Week-ends,
+Lieu, Sauvegardes. Six sujets sans rapport se suivaient auparavant dans une
+seule colonne : pour ouvrir la carte, il fallait dérouler la liste entière
+des participants. Les flèches ← → passent d'un onglet à l'autre.
+
+Le champ du code y est désormais lisible par un **gestionnaire de mots de
+passe**. Ces outils classent leurs entrées par couple identifiant + mot de
+passe ; devant un formulaire à un seul champ, la plupart ne proposaient ni
+d'enregistrer ni de remplir. Un champ d'identifiant les accompagne donc,
+en lecture seule et hors écran — hors écran et non `display:none`, que
+LastPass et consorts ignorent délibérément, un champ caché ainsi étant le
+motif classique du piège.
 
 ---
 
@@ -215,7 +228,7 @@ Et personne ne perd jamais la main sur sa propre présence.
 
 ## Les dates du séjour
 
-Le panneau **Le séjour**, en tête de `admin.html`. Deux champs, un bouton.
+L'onglet **Séjour** de `admin.html`. Deux champs, un bouton.
 
 Elles ne vivaient jusqu'ici que dans `private.reglages`, donc dans
 l'éditeur SQL. C'est peu, et c'est mal placé : ce sont elles qui bornent la
@@ -233,6 +246,34 @@ fois tout le monde passé. La colonne existait depuis le début et
 `sejour_enregistrer` la respectait, mais rien ne permettait de la basculer :
 le sondage des dates et la carte avaient leur interrupteur, le formulaire
 des présences non.
+
+## Les logements
+
+L'onglet **Logements** de `admin.html`. Un inventaire, et rien de plus :
+combien de chambres de deux, combien de gîtes de six.
+
+Une ligne est **un type de couchage, pas une unité**. « 4 chambres de 2 »
+est une ligne qu'on corrige, et non quatre lignes qu'on additionne : reposer
+un type déjà présent met son nombre à jour au lieu d'empiler un doublon.
+Deux saisies distraites ne peuvent donc pas produire un total que personne
+n'a voulu.
+
+Le second panneau confronte cet inventaire à ce que la famille a déjà
+déclaré, **nuit par nuit** : `12 / 14` se lit « douze personnes en chambre,
+quatorze places ». Un dépassement est signalé en rouge, jamais refusé — la
+saisie reste ouverte, et c'est à toi de trancher. Poser la contrainte dans
+la base bloquerait toute la famille les jours où l'inventaire n'est pas
+encore saisi.
+
+**Rien n'est écrit dans le code.** L'inventaire est une table, pas des
+colonnes : un hôtel a deux sortes de chambres, un village de vacances en a
+six, et le schéma n'a pas à changer entre deux éditions. Une autre année,
+un autre lieu — on retape l'inventaire, comme on retape les dates du
+séjour, et le reste suit.
+
+Ce que cela ne fait **pas** : dire qui dort avec qui. C'est une autre
+question, et la mélanger à celle-ci ferait de la saisie d'un nombre une
+réunion de famille.
 
 ## Corriger un prénom
 

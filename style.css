@@ -73,6 +73,52 @@ main { max-width: 900px; margin: 0 auto; }
   color: #fff;
 }
 
+/* ---------- Onglets de la page organisateur ---------- */
+
+/* Meme forme que les pastilles et que le menu principal : la page
+   n'introduit pas un troisieme vocabulaire pour dire « c'est celui-la ».
+   Ce qui change, c'est le rattachement -- un trait continu sous la rangee,
+   que l'onglet ouvert interrompt, pour qu'on voie qu'il tient au volet
+   d'en dessous et non a la page. */
+.onglets {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin: 0 0 20px;
+  border-bottom: 1px solid var(--trait);
+  padding-bottom: 0;
+}
+.onglets [role="tab"] {
+  background: transparent;
+  color: var(--doux);
+  border: 1px solid transparent;
+  border-bottom: 0;
+  border-radius: 8px 8px 0 0;
+  padding: 9px 16px;
+  font-size: 0.93rem;
+  font-weight: 500;
+  margin-bottom: -1px;
+}
+.onglets [role="tab"]:hover {
+  background: var(--survol);
+  color: var(--texte);
+}
+/* L'etat vit dans `aria-selected`, et le style s'y accroche : un seul
+   endroit a tenir a jour, et le lecteur d'ecran dit la meme chose que
+   l'oeil. */
+.onglets [role="tab"][aria-selected="true"] {
+  background: var(--carte);
+  color: var(--texte);
+  border-color: var(--trait);
+  border-bottom: 1px solid var(--carte);
+  font-weight: 600;
+}
+
+/* Le volet ne porte aucun cadre : ce sont les fieldsets qu'il contient qui
+   en ont un. Deux cadres imbriques feraient une boite dans une boite pour
+   ne rien ajouter. */
+.volet:focus { outline: none; }
+
 h1 { font-size: 1.6rem; margin: 0 0 4px; }
 h2 { font-size: 1.05rem; margin: 0 0 12px; }
 .sous-titre { color: var(--doux); margin: 0 0 28px; }
@@ -88,7 +134,7 @@ legend { font-weight: 600; padding: 0 8px; }
 
 label { display: block; font-size: 0.9rem; color: var(--doux); margin-bottom: 4px; }
 
-input[type="text"], input[type="date"], select {
+input[type="text"], input[type="date"], input[type="number"], select {
   width: 100%;
   padding: 9px 10px;
   border: 1px solid var(--trait);
@@ -143,6 +189,21 @@ button:disabled { opacity: 0.5; cursor: default; }
 }
 
 .defilement { overflow-x: auto; }
+
+/* Hors de l'ecran, mais dans le document. `display:none` serait plus court
+   -- et c'est justement pour cela que LastPass, 1Password et les autres
+   ignorent les champs qui le portent : un champ cache ainsi est le motif
+   classique du piege. Reste la mise hors ecran, qu'ils lisent. */
+.hors-ecran {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  border: 0;
+}
 
 /* ---------- Champ + bouton sur une ligne ---------- */
 .ligne-champ { display: flex; gap: 10px; align-items: stretch; }
@@ -207,6 +268,15 @@ button:disabled { opacity: 0.5; cursor: default; }
 .pastille.active .vide { color: #fff; }
 
 /* ---------- Grille ---------- */
+/* Plus de monde que de places cette nuit-la. Ce n'est pas une erreur --
+   la saisie reste ouverte, et c'est a l'organisateur de trancher -- mais
+   ca doit sauter aux yeux dans un tableau de chiffres. La couleur ne porte
+   pas seule : la cellule a aussi un `title` qui dit l'ecart. */
+td.trop {
+  color: var(--erreur);
+  font-weight: 700;
+}
+
 tr.absente td:first-child { color: var(--doux); }
 tr.absente select { color: var(--doux); }
 

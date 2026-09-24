@@ -4,23 +4,39 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="robots" content="noindex">
-  <title>Tribu — participants</title>
+  <title>Tribu — organisateur</title>
   <link rel="stylesheet" href="./style.css">
 </head>
 <body>
 <main>
-  <h1>Participants</h1>
-  <p class="sous-titre">Ajouter, retirer, corriger. Réservé à l'organisateur.</p>
+  <h1>Organisateur</h1>
+  <p class="sous-titre">Le séjour, les participants, les logements. Réservé à l'organisateur.</p>
 
   <!-- ÉTAPE 1 — le code organisateur -------------------------------- -->
   <section id="etape-code">
     <fieldset>
       <legend>Code organisateur</legend>
       <form id="form-code">
+        <!--
+          Le champ d'identifiant n'est pas là pour l'organisateur : il est
+          là pour son gestionnaire de mots de passe. LastPass, 1Password,
+          Bitwarden et le trousseau du navigateur classent leurs entrées par
+          couple identifiant + mot de passe ; devant un formulaire à un seul
+          champ, la plupart ne proposent ni d'enregistrer ni de remplir.
+
+          Il est donc en lecture seule, hors du parcours au clavier, et
+          placé hors écran par `.hors-ecran` — et non `display:none`, que
+          ces outils ignorent délibérément, justement pour ne pas se laisser
+          piéger par un champ caché.
+        -->
+        <input type="text" id="identifiant" name="username" value="organisateur"
+               autocomplete="username" readonly tabindex="-1" aria-hidden="true"
+               class="hors-ecran">
+
         <label for="code">Ce n'est pas le code famille</label>
         <div class="ligne-champ">
-          <input type="password" id="code" required maxlength="40" autocomplete="off"
-                 autocapitalize="off" spellcheck="false">
+          <input type="password" id="code" name="password" required maxlength="40"
+                 autocomplete="current-password" autocapitalize="off" spellcheck="false">
           <button type="submit">Entrer</button>
         </div>
         <p id="message-code" role="status" aria-live="polite"></p>
@@ -28,146 +44,237 @@
     </fieldset>
   </section>
 
-  <!-- ÉTAPE 2 — la liste et les ajouts ------------------------------- -->
+  <!-- ÉTAPE 2 — les réglages, par onglets ---------------------------- -->
+  <!--
+    Six sujets sans rapport les uns avec les autres se suivaient dans une
+    seule colonne : pour ouvrir la carte, il fallait passer devant la liste
+    entière des participants. Un onglet par sujet, et la page ne montre plus
+    que celui qu'on regarde.
+
+    Le balisage suit le motif ARIA des onglets : `role="tablist"`, un
+    `role="tab"` par bouton, un `role="tabpanel"` par volet, et chacun
+    désigne l'autre. C'est ce qui permet à un lecteur d'écran d'annoncer
+    « onglet 3 sur 6 » au lieu de six titres empilés.
+  -->
   <section id="etape-liste" hidden>
 
-    <fieldset>
-      <legend>Le séjour <span id="sejour-resume" class="discret-inline"></span></legend>
-      <div class="grille">
-        <div>
-          <label for="sejour-debut">Premier jour</label>
-          <input type="date" id="sejour-debut">
+    <div class="onglets" role="tablist" aria-label="Réglages du séjour">
+      <button type="button" role="tab" id="onglet-sejour"
+              aria-controls="volet-sejour" aria-selected="true">Séjour</button>
+      <button type="button" role="tab" id="onglet-participants"
+              aria-controls="volet-participants" aria-selected="false" tabindex="-1">Participants</button>
+      <button type="button" role="tab" id="onglet-logements"
+              aria-controls="volet-logements" aria-selected="false" tabindex="-1">Logements</button>
+      <button type="button" role="tab" id="onglet-dates"
+              aria-controls="volet-dates" aria-selected="false" tabindex="-1">Week-ends</button>
+      <button type="button" role="tab" id="onglet-lieu"
+              aria-controls="volet-lieu" aria-selected="false" tabindex="-1">Lieu</button>
+      <button type="button" role="tab" id="onglet-sauvegardes"
+              aria-controls="volet-sauvegardes" aria-selected="false" tabindex="-1">Sauvegardes</button>
+    </div>
+
+    <!-- ---- Séjour ---------------------------------------------- -->
+    <div class="volet" id="volet-sejour" role="tabpanel" aria-labelledby="onglet-sejour" tabindex="0">
+      <fieldset>
+        <legend>Les dates <span id="sejour-resume" class="discret-inline"></span></legend>
+        <div class="grille">
+          <div>
+            <label for="sejour-debut">Premier jour</label>
+            <input type="date" id="sejour-debut">
+          </div>
+          <div>
+            <label for="sejour-fin">Dernier jour</label>
+            <input type="date" id="sejour-fin">
+          </div>
         </div>
-        <div>
-          <label for="sejour-fin">Dernier jour</label>
-          <input type="date" id="sejour-fin">
+        <div class="actions">
+          <button type="button" id="sejour-enregistrer">Enregistrer les dates</button>
         </div>
-      </div>
-      <div class="actions">
-        <button type="button" id="sejour-enregistrer">Enregistrer les dates</button>
-      </div>
-      <p class="note">
-        Ces deux dates bornent la grille de <a href="./index.html">saisie</a> et
-        filtrent tout ce qui s'écrit&nbsp;: une présence en dehors est refusée.
-        <label class="interrupteur">
-          <input type="checkbox" id="saisie-ouverte"> Saisie ouverte
-        </label>
-      </p>
-      <p id="message-sejour" role="status" aria-live="polite"></p>
-    </fieldset>
+        <p class="note">
+          Ces deux dates bornent la grille de <a href="./index.html">saisie</a> et
+          filtrent tout ce qui s'écrit&nbsp;: une présence en dehors est refusée.
+          <label class="interrupteur">
+            <input type="checkbox" id="saisie-ouverte"> Saisie ouverte
+          </label>
+        </p>
+        <p id="message-sejour" role="status" aria-live="polite"></p>
+      </fieldset>
+    </div>
 
-    <fieldset>
-      <legend>Ajouter quelqu'un</legend>
+    <!-- ---- Participants ---------------------------------------- -->
+    <div class="volet" id="volet-participants" role="tabpanel" aria-labelledby="onglet-participants" tabindex="0" hidden>
+      <fieldset>
+        <legend>Ajouter quelqu'un</legend>
 
-      <div class="grille">
-        <div>
-          <label for="prenom">Prénom</label>
-          <input type="text" id="prenom" maxlength="40" autocomplete="off">
+        <div class="grille">
+          <div>
+            <label for="prenom">Prénom</label>
+            <input type="text" id="prenom" maxlength="40" autocomplete="off">
+          </div>
+          <div>
+            <label for="age">Catégorie d'âge</label>
+            <select id="age">
+              <option value="adulte">Adulte</option>
+              <option value="enfant">Enfant</option>
+              <option value="bebe">Bébé</option>
+            </select>
+          </div>
         </div>
-        <div>
-          <label for="age">Catégorie d'âge</label>
-          <select id="age">
-            <option value="adulte">Adulte</option>
-            <option value="enfant">Enfant</option>
-            <option value="bebe">Bébé</option>
-          </select>
+
+        <label class="titre-groupe">Qui est-ce&nbsp;?</label>
+        <div class="pastilles" id="type-personne">
+          <button type="button" class="pastille active" data-type="famille">De la famille</button>
+          <button type="button" class="pastille" data-type="invite">Un invité</button>
         </div>
-      </div>
 
-      <label class="titre-groupe">Qui est-ce&nbsp;?</label>
-      <div class="pastilles" id="type-personne">
-        <button type="button" class="pastille active" data-type="famille">De la famille</button>
-        <button type="button" class="pastille" data-type="invite">Un invité</button>
-      </div>
-
-      <div class="grille" style="margin-top:14px">
-        <div>
-          <label for="lien">Rattachement</label>
-          <select id="lien"></select>
+        <div class="grille" style="margin-top:14px">
+          <div>
+            <label for="lien">Rattachement</label>
+            <select id="lien"></select>
+          </div>
+          <div id="bloc-cible">
+            <label for="cible">Avec qui&nbsp;?</label>
+            <select id="cible"></select>
+          </div>
         </div>
-        <div id="bloc-cible">
-          <label for="cible">Avec qui&nbsp;?</label>
-          <select id="cible"></select>
+
+        <p class="note" id="explication-lien"></p>
+
+        <button type="button" id="ajouter">Ajouter</button>
+        <p id="message" role="status" aria-live="polite"></p>
+      </fieldset>
+
+      <fieldset>
+        <legend>La liste <span id="compteur" class="discret-inline"></span></legend>
+        <div id="liste"></div>
+        <p class="note">
+          Retirer quelqu'un supprime aussi sa saisie de présences. Ses enfants
+          sont repris par son conjoint s'il reste, sinon par son propre parent —
+          la branche n'est jamais coupée.
+        </p>
+      </fieldset>
+    </div>
+
+    <!-- ---- Logements ------------------------------------------- -->
+    <div class="volet" id="volet-logements" role="tabpanel" aria-labelledby="onglet-logements" tabindex="0" hidden>
+      <fieldset>
+        <legend>L'inventaire <span id="compteur-logements" class="discret-inline"></span></legend>
+
+        <div class="grille">
+          <div>
+            <label for="logement-categorie">Type de couchage</label>
+            <select id="logement-categorie">
+              <option value="chambre">Chambre</option>
+              <option value="chambre+vue_mer">Chambre, vue mer</option>
+              <option value="gite">Gîte</option>
+            </select>
+          </div>
+          <div>
+            <label for="logement-capacite">Pour combien de personnes</label>
+            <input type="number" id="logement-capacite" min="1" max="30" step="1" value="2">
+          </div>
+          <div>
+            <label for="logement-nombre">Combien en avons-nous</label>
+            <input type="number" id="logement-nombre" min="1" max="200" step="1" value="1">
+          </div>
         </div>
-      </div>
 
-      <p class="note" id="explication-lien"></p>
-
-      <button type="button" id="ajouter">Ajouter</button>
-      <p id="message" role="status" aria-live="polite"></p>
-    </fieldset>
-
-    <fieldset>
-      <legend>Week-ends proposés <span id="compteur-dates" class="discret-inline"></span></legend>
-
-      <div class="grille">
-        <div>
-          <label for="date-libelle">Intitulé</label>
-          <input type="text" id="date-libelle" maxlength="80" autocomplete="off"
-                 placeholder="ex. week-end du 14 juillet">
+        <div class="actions" style="margin-top:14px">
+          <button type="button" id="logement-poser">Poser ce type</button>
         </div>
-        <div>
-          <label for="date-debut">Du</label>
-          <input type="date" id="date-debut">
+        <p id="message-logements" role="status" aria-live="polite"></p>
+
+        <div id="liste-logements"></div>
+
+        <p class="note">
+          Un type par ligne&nbsp;: «&nbsp;4 chambres de 2&nbsp;» est une ligne
+          qu'on corrige, pas quatre lignes qu'on additionne. Reposer un type
+          déjà présent met seulement son nombre à jour. L'inventaire se retape
+          d'une année sur l'autre&nbsp;; rien n'est écrit dans le code.
+        </p>
+      </fieldset>
+
+      <fieldset>
+        <legend>Ce qui est demandé <span id="compteur-tension" class="discret-inline"></span></legend>
+        <div id="tension-logements"></div>
+        <p class="note">
+          Nuit par nuit, ce que la famille a déjà déclaré face à ce que
+          l'inventaire contient. Un dépassement est signalé, jamais refusé&nbsp;:
+          la saisie reste ouverte, c'est à toi de trancher.
+        </p>
+      </fieldset>
+    </div>
+
+    <!-- ---- Week-ends ------------------------------------------- -->
+    <div class="volet" id="volet-dates" role="tabpanel" aria-labelledby="onglet-dates" tabindex="0" hidden>
+      <fieldset>
+        <legend>Week-ends proposés <span id="compteur-dates" class="discret-inline"></span></legend>
+
+        <div class="grille">
+          <div>
+            <label for="date-libelle">Intitulé</label>
+            <input type="text" id="date-libelle" maxlength="80" autocomplete="off"
+                   placeholder="ex. week-end du 14 juillet">
+          </div>
+          <div>
+            <label for="date-debut">Du</label>
+            <input type="date" id="date-debut">
+          </div>
+          <div>
+            <label for="date-fin">Au</label>
+            <input type="date" id="date-fin">
+          </div>
         </div>
-        <div>
-          <label for="date-fin">Au</label>
-          <input type="date" id="date-fin">
+
+        <button type="button" id="ajouter-date">Proposer ce week-end</button>
+        <p id="message-dates" role="status" aria-live="polite"></p>
+
+        <div id="liste-dates"></div>
+
+        <p class="note">
+          Retirer un week-end supprime les réponses déjà données pour lui.
+          <label class="interrupteur">
+            <input type="checkbox" id="voeux-ouverts"> Sondage ouvert
+          </label>
+        </p>
+      </fieldset>
+    </div>
+
+    <!-- ---- Lieu ------------------------------------------------ -->
+    <div class="volet" id="volet-lieu" role="tabpanel" aria-labelledby="onglet-lieu" tabindex="0" hidden>
+      <fieldset>
+        <legend>Lieu <span id="compteur-lieux" class="discret-inline"></span></legend>
+        <div id="classement-lieux"></div>
+        <p class="note">
+          Les départements que personne ne refuse, d'après
+          <a href="./lieux.html">la carte</a>.
+          <label class="interrupteur">
+            <input type="checkbox" id="lieux-ouverts"> Carte ouverte
+          </label>
+        </p>
+        <p id="message-lieux" role="status" aria-live="polite"></p>
+      </fieldset>
+    </div>
+
+    <!-- ---- Sauvegardes ----------------------------------------- -->
+    <div class="volet" id="volet-sauvegardes" role="tabpanel" aria-labelledby="onglet-sauvegardes" tabindex="0" hidden>
+      <fieldset>
+        <legend>Revenir en arrière <span id="compteur-sauvegardes" class="discret-inline"></span></legend>
+        <div id="liste-sauvegardes"></div>
+        <div id="comparaison"></div>
+        <div class="actions">
+          <button type="button" id="sauver-maintenant" class="discret">Sauvegarder maintenant</button>
         </div>
-      </div>
-
-      <button type="button" id="ajouter-date">Proposer ce week-end</button>
-      <p id="message-dates" role="status" aria-live="polite"></p>
-
-      <div id="liste-dates"></div>
-
-      <p class="note">
-        Retirer un week-end supprime les réponses déjà données pour lui.
-        <label class="interrupteur">
-          <input type="checkbox" id="voeux-ouverts"> Sondage ouvert
-        </label>
-      </p>
-    </fieldset>
-
-    <fieldset>
-      <legend>Lieu <span id="compteur-lieux" class="discret-inline"></span></legend>
-      <div id="classement-lieux"></div>
-      <p class="note">
-        Les départements que personne ne refuse, d'après
-        <a href="./lieux.html">la carte</a>.
-        <label class="interrupteur">
-          <input type="checkbox" id="lieux-ouverts"> Carte ouverte
-        </label>
-      </p>
-      <p id="message-lieux" role="status" aria-live="polite"></p>
-    </fieldset>
-
-    <fieldset>
-      <legend>Revenir en arrière <span id="compteur-sauvegardes" class="discret-inline"></span></legend>
-      <div id="liste-sauvegardes"></div>
-      <div id="comparaison"></div>
-      <div class="actions">
-        <button type="button" id="sauver-maintenant" class="discret">Sauvegarder maintenant</button>
-      </div>
-      <p class="note">
-        Une copie part toute seule à la première modification de chaque semaine,
-        prise juste avant celle-ci. «&nbsp;Comparer&nbsp;» montre ce qui a changé
-        depuis&nbsp;; «&nbsp;Restaurer&nbsp;» remet toute la base dans cet état — et
-        prend d'abord une copie de l'état actuel, pour que ce geste-là s'annule
-        aussi.
-      </p>
-      <p id="message-sauvegardes" role="status" aria-live="polite"></p>
-    </fieldset>
-
-    <fieldset>
-      <legend>La liste <span id="compteur" class="discret-inline"></span></legend>
-      <div id="liste"></div>
-      <p class="note">
-        Retirer quelqu'un supprime aussi sa saisie de présences. Ses enfants
-        sont repris par son conjoint s'il reste, sinon par son propre parent —
-        la branche n'est jamais coupée.
-      </p>
-    </fieldset>
+        <p class="note">
+          Une copie part toute seule à la première modification de chaque semaine,
+          prise juste avant celle-ci. «&nbsp;Comparer&nbsp;» montre ce qui a changé
+          depuis&nbsp;; «&nbsp;Restaurer&nbsp;» remet toute la base dans cet état — et
+          prend d'abord une copie de l'état actuel, pour que ce geste-là s'annule
+          aussi.
+        </p>
+        <p id="message-sauvegardes" role="status" aria-live="polite"></p>
+      </fieldset>
+    </div>
 
   </section>
 </main>

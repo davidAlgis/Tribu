@@ -1448,7 +1448,215 @@ grant execute on function public.admin_lieux(text)                 to anon;
 grant execute on function public.admin_lieux_ouvrir(text, boolean) to anon;
 
 -- ============================================================
---  11. Revenir en arriere
+--  11. Les logements
+-- ============================================================
+--
+--  Un inventaire, et rien de plus : combien de chambres de deux, combien
+--  de gites de six. Pas de plan de couchage, pas de nom sur une porte --
+--  « qui dort avec qui » est une autre question, et la melanger a
+--  celle-ci ferait de la saisie d'un nombre une reunion de famille.
+--
+--  UNE LIGNE = UN TYPE DE COUCHAGE, PAS UNE UNITE
+--
+--  « 4 chambres de 2 personnes » tient sur une ligne qu'on corrige, et
+--  non sur quatre lignes qu'on additionne. La cle est donc naturelle --
+--  (categorie, capacite, vue mer) -- et unique : reposer le meme type met
+--  son nombre a jour au lieu d'empiler un doublon. Deux saisies distraites
+--  ne peuvent pas produire un total que personne n'a voulu.
+--
+--  POURQUOI UNE TABLE, ET NON DES COLONNES DANS `reglages`
+--
+--  Parce que le nombre de types change d'une annee a l'autre : un hotel
+--  a deux sortes de chambres, un village de vacances en a six. Une
+--  colonne par type obligerait a modifier le schema a chaque sejour ;
+--  une table ne demande que de retaper l'inventaire. C'est le meme
+--  raisonnement que pour les dates du sejour, sorties de l'editeur SQL
+--  pour la meme raison.
+--
+--  CE QUE CELA NE FAIT PAS ENCORE
+--
+--  Rien ne contraint la saisie des familles : quelqu'un peut declarer une
+--  nuit en chambre alors qu'il n'en reste plus. Le panneau le DIT -- il
+--  confronte l'inventaire aux nuits deja declarees, jour par jour -- mais
+--  il ne l'interdit pas. Poser la contrainte avant d'avoir l'inventaire
+--  bloquerait toute la famille sur une table vide.
+--
+
+create table if not exists private.logements (
+  id        uuid primary key default gen_random_uuid(),
+  categorie text     not null,
+  capacite  smallint not null,
+  nombre    smallint not null,
+  vue_mer   boolean  not null default false,
+  cree_le   timestamptz not null default now()
+);
+
+-- `drop ... if exists` avant chaque `add` : le script se recolle en entier
+-- a chaque changement, et `add constraint` seul casserait au second passage.
+alter table private.logements drop constraint if exists logements_categorie_valide;
+alter table private.logements add constraint logements_categorie_valide
+  check (categorie in ('chambre', 'gite'));
+
+-- Des bornes de formulaire, pas des bornes de verite : elles existent pour
+-- qu'un doigt qui glisse sur le pave numerique ne pose pas trois mille
+-- couchages sans que rien ne bronche.
+alter table private.logements drop constraint if exists logements_capacite_valide;
+alter table private.logements add constraint logements_capacite_valide
+  check (capacite between 1 and 30);
+
+alter table private.logements drop constraint if exists logements_nombre_valide;
+alter table private.logements add constraint logements_nombre_valide
+  check (nombre between 1 and 200);
+
+-- La vue mer est un supplement d'hotel : `presences` ne l'accepte qu'avec
+-- une nuit en chambre, et l'inventaire doit dire la meme chose. Deux
+-- endroits valent mieux qu'un pour une regle qui vient du tarif.
+alter table private.logements drop constraint if exists logements_vue_mer_en_chambre;
+alter table private.logements add constraint logements_vue_mer_en_chambre
+  check (not vue_mer or categorie = 'chambre');
+
+-- C'est cet index qui porte la regle « une ligne par type », et c'est lui
+-- que vise le `on conflict` de `admin_logement_poser`.
+create unique index if not exists logements_type_idx
+  on private.logements (categorie, capacite, vue_mer);
+
+-- Comme `sauvegardes` : la table nait APRES le `revoke all` de la section 6,
+-- qui ne la couvre donc pas. Seules les fonctions ci-dessous y touchent, et
+-- elles exigent le code organisateur.
+revoke all on private.logements from anon, authenticated;
+
+-- ---- 11a. L'offre et la demande, cote a cote ----
+--
+--  L'inventaire seul ne dit rien. Ce qui interesse l'organisateur, c'est
+--  l'ecart : combien de places en chambre, combien de personnes en ont
+--  demande une, et quelle nuit. Les deux partent donc ensemble, et c'est
+--  admin.js qui les confronte -- la base sert des faits, les derivees se
+--  calculent la ou elles se testent.
+--
+create or replace function public.admin_logements(p_code text)
+returns jsonb
+language plpgsql stable security definer
+set search_path = private, pg_temp as $fn$
+declare
+  r private.reglages;
+begin
+  perform private.verifier_code(p_code, 'admin');
+  select * into r from private.reglages;
+  if r.id is null then
+    raise exception 'REGLAGES_ABSENTS' using errcode = 'P0001';
+  end if;
+
+  return jsonb_build_object(
+    'logements', coalesce((
+      select jsonb_agg(jsonb_build_object(
+               'id', l.id,
+               'categorie', l.categorie,
+               'capacite', l.capacite,
+               'nombre', l.nombre,
+               'vue_mer', l.vue_mer,
+               'places', l.capacite * l.nombre
+             ) order by l.categorie, l.vue_mer, l.capacite)
+      from private.logements l
+    ), '[]'::jsonb),
+
+    -- Les nuits deja declarees, dans les bornes du sejour. `hebergement`
+    -- porte la nuit QUI SUIT le jour (cf. section 4), donc une ligne par
+    -- nuit et non par journee. « exterieur » ne dort pas sur place : il ne
+    -- prend aucun couchage et ne compte pas ici.
+    'nuits', coalesce((
+      select jsonb_agg(jsonb_build_object(
+               'jour', t.jour,
+               'chambre', t.chambre,
+               'chambre_vue_mer', t.vue,
+               'gite', t.gite
+             ) order by t.jour)
+      from (
+        select p.jour,
+               count(*) filter (where p.hebergement = 'chambre' and not p.vue_mer) as chambre,
+               count(*) filter (where p.hebergement = 'chambre' and p.vue_mer)     as vue,
+               count(*) filter (where p.hebergement = 'gite')                      as gite
+          from public.presences p
+         where p.jour between r.date_debut and r.date_fin
+           and p.hebergement <> 'exterieur'
+         group by p.jour
+      ) t
+    ), '[]'::jsonb)
+  );
+end $fn$;
+
+-- ---- 11b. Poser un type, le corriger, le retirer ----
+
+create or replace function public.admin_logement_poser(
+  p_code      text,
+  p_categorie text,
+  p_capacite  integer,
+  p_nombre    integer,
+  p_vue_mer   boolean default false
+)
+returns jsonb
+language plpgsql security definer
+set search_path = private, pg_temp as $fn$
+declare
+  pose private.logements;
+begin
+  perform private.verifier_code(p_code, 'admin');
+  -- Le premier changement de la semaine emporte une copie de l'avant.
+  perform private.sauver_si_nouvelle_semaine();
+
+  if p_categorie is null or p_categorie not in ('chambre', 'gite') then
+    raise exception 'CATEGORIE_INCONNUE' using errcode = 'P0001';
+  end if;
+  if p_capacite is null or p_capacite not between 1 and 30 then
+    raise exception 'CAPACITE_INVALIDE' using errcode = 'P0001';
+  end if;
+  if p_nombre is null or p_nombre not between 1 and 200 then
+    raise exception 'NOMBRE_INVALIDE' using errcode = 'P0001';
+  end if;
+  if coalesce(p_vue_mer, false) and p_categorie <> 'chambre' then
+    raise exception 'VUE_MER_HORS_CHAMBRE' using errcode = 'P0001';
+  end if;
+
+  -- Reposer un type deja connu le CORRIGE, il ne s'ajoute pas. C'est ce qui
+  -- permet au formulaire de n'avoir qu'un bouton, et a la liste de n'avoir
+  -- jamais deux lignes a dire la meme chose.
+  insert into private.logements (categorie, capacite, nombre, vue_mer)
+  values (p_categorie, p_capacite, p_nombre, coalesce(p_vue_mer, false))
+  on conflict (categorie, capacite, vue_mer) do update set nombre = excluded.nombre
+  returning * into pose;
+
+  return jsonb_build_object('id', pose.id, 'places', pose.capacite * pose.nombre);
+end $fn$;
+
+create or replace function public.admin_logement_retirer(p_code text, p_id uuid)
+returns jsonb
+language plpgsql security definer
+set search_path = private, pg_temp as $fn$
+declare
+  partant private.logements;
+begin
+  perform private.verifier_code(p_code, 'admin');
+  -- Le premier changement de la semaine emporte une copie de l'avant.
+  perform private.sauver_si_nouvelle_semaine();
+
+  select * into partant from private.logements where id = p_id;
+  if partant.id is null then
+    raise exception 'INCONNU' using errcode = 'P0001';
+  end if;
+
+  -- Rien ne pointe vers un logement : les presences disent une CATEGORIE,
+  -- pas une unite. Retirer un type ne casse donc aucune saisie -- il change
+  -- seulement ce que la page compte comme places disponibles.
+  delete from private.logements where id = p_id;
+  return jsonb_build_object('retire', partant.capacite * partant.nombre);
+end $fn$;
+
+grant execute on function public.admin_logements(text)                                  to anon;
+grant execute on function public.admin_logement_poser(text, text, integer, integer, boolean) to anon;
+grant execute on function public.admin_logement_retirer(text, uuid)                     to anon;
+
+
+-- ============================================================
+--  12. Revenir en arriere
 -- ============================================================
 --
 --  Trois gestes effacent beaucoup d'un coup, et aucun n'est reversible :
@@ -1473,7 +1681,7 @@ grant execute on function public.admin_lieux_ouvrir(text, boolean) to anon;
 --
 --  CE QU'IL CONTIENT
 --
---  Les cinq tables qui portent de la donnee saisie, dans un seul jsonb.
+--  Les six tables qui portent de la donnee saisie, dans un seul jsonb.
 --  Ce n'est pas la forme la plus compacte ; c'est la plus simple a relire
 --  dans cinq semaines, et vingt personnes tiennent en quelques dizaines
 --  de kilo-octets.
@@ -1538,7 +1746,9 @@ set search_path = private, pg_temp as $fn$
     'voeux', coalesce(
       (select jsonb_agg(to_jsonb(v) order by v.participant_id, v.option_id) from public.voeux v), '[]'::jsonb),
     'refus_lieu', coalesce(
-      (select jsonb_agg(to_jsonb(r) order by r.participant_id, r.departement) from public.refus_lieu r), '[]'::jsonb)
+      (select jsonb_agg(to_jsonb(r) order by r.participant_id, r.departement) from public.refus_lieu r), '[]'::jsonb),
+    'logements', coalesce(
+      (select jsonb_agg(to_jsonb(l) order by l.id) from private.logements l), '[]'::jsonb)
   )
 $fn$;
 
@@ -1577,7 +1787,7 @@ begin
   perform private.sauvegardes_purger();
 end $fn$;
 
--- ---- 11a. Ce qu'on a sous la main ----
+-- ---- 12a. Ce qu'on a sous la main ----
 --
 --  Les compteurs, jamais le contenu : douze copies completes feraient
 --  plusieurs mega-octets pour une page qui ne veut afficher qu'une liste.
@@ -1599,14 +1809,15 @@ begin
                'presences',    jsonb_array_length(coalesce(s.contenu->'presences', '[]'::jsonb)),
                'voeux',        jsonb_array_length(coalesce(s.contenu->'voeux', '[]'::jsonb)),
                'refus_lieu',   jsonb_array_length(coalesce(s.contenu->'refus_lieu', '[]'::jsonb)),
-               'options_date', jsonb_array_length(coalesce(s.contenu->'options_date', '[]'::jsonb))
+               'options_date', jsonb_array_length(coalesce(s.contenu->'options_date', '[]'::jsonb)),
+               'logements',    jsonb_array_length(coalesce(s.contenu->'logements', '[]'::jsonb))
              )
            ) order by s.prise_le desc)
       from private.sauvegardes s
   ), '[]'::jsonb);
 end $fn$;
 
--- ---- 11b. Une copie a la demande ----
+-- ---- 12b. Une copie a la demande ----
 --
 --  Avant une operation qu'on sent risquee, sans attendre lundi.
 --
@@ -1628,7 +1839,7 @@ begin
   return jsonb_build_object('id', nouveau);
 end $fn$;
 
--- ---- 11c. Le contenu d'une copie, et celui du present ----
+-- ---- 12c. Le contenu d'une copie, et celui du present ----
 --
 --  Meme forme, pour que le navigateur puisse les comparer champ a champ.
 --
@@ -1656,7 +1867,7 @@ begin
   return private.etat_courant();
 end $fn$;
 
--- ---- 11d. Revenir dessus ----
+-- ---- 12d. Revenir dessus ----
 --
 --  Remplacement complet : apres l'appel, la base est celle de la copie.
 --  Tout ce qui a ete saisi depuis disparait -- d'ou la copie
@@ -1681,6 +1892,7 @@ declare
   n_voeux        integer;
   n_refus        integer;
   n_options      integer;
+  n_logements    integer;   -- reste null si la copie ne dit rien des logements
 begin
   perform private.verifier_code(p_code, 'admin');
 
@@ -1750,6 +1962,24 @@ begin
     from jsonb_array_elements(coalesce(c->'refus_lieu', '[]'::jsonb)) as l;
   get diagnostics n_refus = row_count;
 
+  -- L'inventaire n'entre dans les copies que depuis la section 11. Une
+  -- copie plus ancienne ne dit RIEN a son sujet -- et le silence n'est pas
+  -- « il n'y en avait aucun ». On n'y touche donc pas, et le compte rendu
+  -- le dit en renvoyant `null` plutot que zero. `logements` ne figure pas
+  -- dans le TRUNCATE ci-dessus pour cette seule raison.
+  if c ? 'logements' then
+    truncate table private.logements;
+    insert into private.logements (id, categorie, capacite, nombre, vue_mer, cree_le)
+    select (l->>'id')::uuid,
+           l->>'categorie',
+           (l->>'capacite')::smallint,
+           (l->>'nombre')::smallint,
+           coalesce((l->>'vue_mer')::boolean, false),
+           coalesce((l->>'cree_le')::timestamptz, now())
+      from jsonb_array_elements(c->'logements') as l;
+    get diagnostics n_logements = row_count;
+  end if;
+
   perform private.sauvegardes_purger();
 
   return jsonb_build_object(
@@ -1757,7 +1987,8 @@ begin
     'options_date', n_options,
     'presences', n_presences,
     'voeux', n_voeux,
-    'refus_lieu', n_refus
+    'refus_lieu', n_refus,
+    'logements', n_logements
   );
 end $fn$;
 
@@ -1768,7 +1999,7 @@ grant execute on function public.admin_etat(text)                        to anon
 grant execute on function public.admin_sauvegarde_restaurer(text, uuid)  to anon;
 
 -- ============================================================
---  12. Etat de la base apres execution
+--  13. Etat de la base apres execution
 -- ============================================================
 --
 --  Affiche ce qui existe reellement, plutot que de le supposer.
@@ -1781,6 +2012,7 @@ grant execute on function public.admin_sauvegarde_restaurer(text, uuid)  to anon
 --    options_date   les week-ends proposes, poses depuis admin.html
 --    voeux          les reponses de la famille au sondage des dates
 --    refus_lieu     les departements peints en rouge sur la carte
+--    logements      l'inventaire des couchages, pose depuis admin.html
 --    sauvegardes    0 tant que personne n'a rien modifie cette semaine
 --
 select
@@ -1792,4 +2024,5 @@ select
   (select count(*) from private.options_date) as options_date,
   (select count(*) from public.voeux)         as voeux,
   (select count(*) from public.refus_lieu)    as refus_lieu,
+  (select count(*) from private.logements)    as logements,
   (select count(*) from private.sauvegardes)  as sauvegardes;

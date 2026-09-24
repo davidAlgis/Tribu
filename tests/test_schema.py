@@ -85,3 +85,23 @@ def test_chaque_fonction_fige_son_search_path():
         if "security definer" in entete.lower() and "set search_path" not in entete.lower():
             sans.append(m.group(1))
     assert sans == [], "fonctions `security definer` sans search_path figé"
+
+def test_chaque_fonction_publique_est_appelable():
+    """Une fonction posee sans `grant execute` existe et reste injoignable :
+    PostgREST repond 404 au premier clic, des mois apres, sur une page qui
+    n'a jamais servi.
+
+    On compare les NOMS et non les signatures : le but est d'attraper le
+    grant oublie, pas de rejouer la resolution de surcharge de Postgres.
+
+    Les deux motifs sont ancres en debut de ligne (`^`, mode multiligne) :
+    sans cela, un `grant` mis en commentaire d'un `--` compterait encore.
+    """
+    posees = set(
+        re.findall(r"^create (?:or replace )?function\s+public\.(\w+)\(", SCHEMA, re.I | re.M)
+    )
+    ouvertes = set(
+        re.findall(r"^grant execute on function\s+public\.(\w+)\(", SCHEMA, re.I | re.M)
+    )
+    assert posees, "aucune fonction publique trouvee, le test ne sert a rien"
+    assert sorted(posees - ouvertes) == [], "fonctions publiques sans `grant execute`"
