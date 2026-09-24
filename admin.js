@@ -1058,14 +1058,48 @@ const TAS = "tas"; // l'unite qui n'en est pas une : ceux qui restent a placer
 
 // Ce qu'un jeton met dans le presse-papiers du glisser-deposer.
 //
-// Un type A NOUS, et surtout PAS `text/plain`. Avec du texte ordinaire, un
-// depose qui rate la boite -- l'espace entre deux rectangles suffit --
-// n'est plus notre affaire : le navigateur reprend la main et fait ce
-// qu'il fait de tout texte lache sur une page, c'est-a-dire l'ouvrir dans
-// un onglet et le chercher sur Google. Avec un type inconnu de lui, il n'a
-// rien a en faire.
-const TYPE_JETON = "application/x-tribu-jeton";
+// LE GLISSER N'EST PAS CELUI DU NAVIGATEUR
+//
+// La page n'emet plus aucun `dragstart`, `dragover` ni `drop`. Elle suit
+// le pointeur elle-meme, du `pointerdown` au `pointerup`.
+//
+// Ce n'est pas un gout pour le travail manuel. Le glisser-deposer natif
+// est un geste que le navigateur diffuse a qui veut l'entendre, et des
+// modules complementaires tres repandus -- ceux qui ouvrent un lien ou
+// lancent une recherche quand on leur jette un mot -- s'y branchent. Ils
+// ne lisent pas ce qu'on transporte : ils voient un glisser finir, et ils
+// agissent. On avait beau ne rien mettre de lisible dans le presse-
+// papiers, l'un d'eux ouvrait un onglet de recherche vide a chaque
+// depose. Rien dans la page ne pouvait l'en empecher : il ecoute en amont.
+//
+// Un glisser qui n'existe pas ne se laisse pas ecouter. Trois gains au
+// passage, et non un seul :
+//
+//   - le doigt fonctionne. Le glisser-deposer natif ignore le tactile,
+//     il fallait s'en remettre au clic-clic sur une tablette ;
+//   - plus de presse-papiers, donc plus rien a fuir vers l'exterieur ;
+//   - le fantome qui suit le curseur est a nous, et montre le jeton tel
+//     qu'il est, au lieu de l'image grise du navigateur.
+//
+// Ce qui ne change pas : le clic-clic, et Echap. Les deux chemins
+// aboutissent toujours a `placer()`, seul a ecrire.
 
+// Ce qu'il faut avoir parcouru avant qu'un appui devienne un glisser. En
+// deca, c'est un clic -- et le clic sert a saisir le jeton.
+const SEUIL_GLISSE = 5;
+
+// La boite d'arrivee se retrouve par sa clef : `elementFromPoint` rend un
+// noeud, et il faut savoir quelle unite il represente.
+const unitesParCle = new Map();
+
+// Le glisser en cours, ou `null`. Il porte tout ce que les ecouteurs de la
+// fenetre ont besoin de savoir -- ils vivent plus longtemps qu'un dessin
+// du plan.
+let glisse = null;
+
+// Le glisser qui vient de finir a deplace quelqu'un ; le `click` qui suit
+// ne doit donc pas le saisir.
+let vientDeGlisser = false;
 
 function cleUnite(logementId, numero) {
   return `${logementId}#${numero}`;
@@ -1170,12 +1204,11 @@ async function changerNuit(jour) {
 
 // Le jeton d'une personne. C'est un vrai bouton : il prend le focus, il
 // s'active a la barre d'espace, et un lecteur d'ecran l'annonce -- ce
-// qu'un <div draggable> ne fait pas.
+// qu'un <div> ne fait pas.
 function jeton(personne, dansUneUnite) {
   const b = document.createElement("button");
   b.type = "button";
   b.className = "jeton";
-  b.draggable = true;
   b.dataset.personne = personne.id;
   b.append(span(personne.prenom, "nom"));
 
@@ -1205,20 +1238,132 @@ function jeton(personne, dansUneUnite) {
     : `${nomComplet} — à placer`;
 
   b.addEventListener("click", () => {
+    if (vientDeGlisser) {
+      vientDeGlisser = false;
+      return;
+    }
     saisi = saisi === personne.id ? null : personne.id;
     dessinerPlan();
   });
-  b.addEventListener("dragstart", (e) => {
-    // On ne touche PAS a `saisi` : cet etat-la sert au clic-clic, et un
-    // glisser qui rate sa cible le laisserait arme. Le prochain clic
-    // n'importe ou deplacerait alors quelqu'un sans qu'on l'ait demande.
-    // La classe suffit a montrer le jeton en vol, et `dragend` la retire.
-    e.dataTransfer.setData(TYPE_JETON, personne.id);
-    e.dataTransfer.effectAllowed = "move";
-    b.classList.add("saisi");
+
+  b.addEventListener("pointerdown", (e) => {
+    // Le bouton droit ouvre un menu, il ne deplace rien.
+    if (e.pointerType === "mouse" && e.button !== 0) return;
+    commencerGlisse(e, b, personne);
   });
-  b.addEventListener("dragend", () => b.classList.remove("saisi"));
+
   return b;
+}
+
+// Le sosie qui suit le curseur. Le navigateur en fabrique un en niveau de
+// gris ; celui-ci montre le jeton tel qu'il est, ce qui vaut mieux quand on
+// cherche a savoir QUI l'on deplace.
+function fantomeDe(b) {
+  const copie = b.cloneNode(true);
+  copie.className = "jeton fantome";
+  copie.style.width = `${b.offsetWidth}px`;
+  document.body.appendChild(copie);
+  return copie;
+}
+
+function suivre(fantome, e) {
+  // Sous le curseur, et non a cote : on saisit un jeton la ou on l'a pris.
+  fantome.style.left = `${e.clientX - glisse.prise.x}px`;
+  fantome.style.top = `${e.clientY - glisse.prise.y}px`;
+}
+
+// La boite sous le curseur. Le fantome ne compte pas : `pointer-events:
+// none` le rend transparent a cette recherche -- sans quoi il se
+// designerait lui-meme.
+function boiteSous(e) {
+  const sous = document.elementFromPoint(e.clientX, e.clientY);
+  const boite = sous && sous.closest ? sous.closest(".unite") : null;
+  return boite && unitesParCle.has(boite.dataset.cle) ? boite : null;
+}
+
+function viser(boite) {
+  if (glisse.boite === boite) return;
+  if (glisse.boite) glisse.boite.classList.remove("visee");
+  glisse.boite = boite;
+  if (boite) boite.classList.add("visee");
+}
+
+function commencerGlisse(e, b, personne) {
+  const rect = b.getBoundingClientRect();
+  glisse = {
+    personne,
+    jeton: b,
+    depart: { x: e.clientX, y: e.clientY },
+    prise: { x: e.clientX - rect.left, y: e.clientY - rect.top },
+    pointerId: e.pointerId,
+    aBouge: false,
+    fantome: null,
+    boite: null,
+  };
+
+  // Les ecouteurs vivent sur la FENETRE : le jeton, lui, disparait des que
+  // `placer` redessine le plan, et un ecouteur pose sur lui partirait avec.
+  window.addEventListener("pointermove", pendantGlisse);
+  window.addEventListener("pointerup", finirGlisse);
+  window.addEventListener("pointercancel", finirGlisse);
+}
+
+function pendantGlisse(e) {
+  if (!glisse || e.pointerId !== glisse.pointerId) return;
+
+  if (!glisse.aBouge) {
+    const parcouru = Math.hypot(e.clientX - glisse.depart.x, e.clientY - glisse.depart.y);
+    if (parcouru < SEUIL_GLISSE) return;
+    // Au-dela du seuil seulement : sinon un clic un peu tremblant
+    // deviendrait un glisser, et le clic-clic ne marcherait plus.
+    glisse.aBouge = true;
+    glisse.jeton.classList.add("saisi");
+    glisse.fantome = fantomeDe(glisse.jeton);
+    // Le pointeur reste a nous meme si le doigt sort du jeton.
+    if (glisse.jeton.setPointerCapture) {
+      try {
+        glisse.jeton.setPointerCapture(e.pointerId);
+      } catch (erreur) {
+        // Le jeton a pu etre remplace entre-temps : sans capture, le
+        // glisser marche encore, il survit seulement moins bien aux
+        // sorties de fenetre.
+      }
+    }
+  }
+
+  suivre(glisse.fantome, e);
+  viser(boiteSous(e));
+}
+
+function finirGlisse(e) {
+  if (!glisse || e.pointerId !== glisse.pointerId) return;
+
+  window.removeEventListener("pointermove", pendantGlisse);
+  window.removeEventListener("pointerup", finirGlisse);
+  window.removeEventListener("pointercancel", finirGlisse);
+
+  const { aBouge, fantome, boite, personne } = glisse;
+  if (fantome) fantome.remove();
+  if (boite) boite.classList.remove("visee");
+  glisse.jeton.classList.remove("saisi");
+
+  // Rater sa cible ne doit pas deplacer quelqu'un au hasard : cela ne fait
+  // rien du tout.
+  if (aBouge && boite && e.type === "pointerup") {
+    placer(personne.id, unitesParCle.get(boite.dataset.cle));
+  }
+
+  glisse = null;
+
+  // Un glisser se termine aussi par un `click`, sur le jeton d'ou il est
+  // parti : le navigateur le dispatche juste apres le `pointerup`. Sans ce
+  // drapeau, deplacer quelqu'un le laisserait saisi dans la foulee. Le
+  // clic l'eteint lui-meme ; le delai n'est qu'un filet, pour le cas ou
+  // aucun clic ne suivrait.
+  vientDeGlisser = aBouge;
+  setTimeout(() => {
+    vientDeGlisser = false;
+  }, 0);
 }
 
 // Le rectangle d'une unite -- ou le tas de ceux qui restent a placer, qui
@@ -1258,34 +1403,14 @@ function rectangle(unite, occupants) {
   if (!occupants.length) places.append(span("vide", "vide"));
   boite.appendChild(places);
 
-  // La zone de depot est la boite entiere, et non la seule bande des
+  // La boite entiere est la zone d'arrivee, et non la seule bande des
   // jetons : viser trois pixels de haut dans un rectangle vide serait un
-  // jeu d'adresse.
-  // `dragenter` AUTANT que `dragover`. La specification demande d'annuler
-  // les DEUX pour declarer une zone d'arrivee ; Chromium se contente du
-  // second, Firefox exige les deux. Sans `dragenter`, la boite n'est jamais
-  // une cible valide sous Firefox : le depose n'y arrive pas, le navigateur
-  // reprend le geste, et il ouvre le contenu lache dans un onglet.
-  const accepter = (e) => {
-    e.preventDefault();
-    e.dataTransfer.dropEffect = "move";
-    boite.classList.add("visee");
-  };
-  boite.addEventListener("dragenter", accepter);
-  boite.addEventListener("dragover", accepter);
+  // jeu d'adresse. C'est `boiteSous` qui la designe, en cherchant le
+  // `.unite` sous le curseur -- la boite n'a donc rien a ecouter.
+  boite.dataset.cle = unite.cle;
+  unitesParCle.set(unite.cle, unite);
 
-  boite.addEventListener("dragleave", (e) => {
-    // `dragleave` remonte aussi des enfants : passer du rectangle sur un
-    // jeton qu'il contient ferait clignoter la marque. On ne l'efface que
-    // si l'on quitte vraiment la boite.
-    if (!boite.contains(e.relatedTarget)) boite.classList.remove("visee");
-  });
-  boite.addEventListener("drop", (e) => {
-    e.preventDefault();
-    boite.classList.remove("visee");
-    placer(e.dataTransfer.getData(TYPE_JETON), unite);
-  });
-  // Le meme geste au clic, pour le doigt et pour le clavier.
+  // Le meme geste au clic, pour le clavier.
   boite.addEventListener("click", (e) => {
     if (e.target.closest(".jeton")) return; // le jeton gere son propre clic
     if (saisi) placer(saisi, unite);
@@ -1302,6 +1427,9 @@ function etiquetteDemande(valeur) {
 function dessinerPlan() {
   const { unites, dormeurs, jour } = etat.plan;
   ambigus = prenomsPortesPlusieursFois();
+  // Les boites de l'ancien dessin n'existent plus : garder leurs clefs
+  // ferait viser des rectangles disparus.
+  unitesParCle.clear();
   zonePlan.textContent = "";
 
   const places = dormeurs.filter((d) => d.logement_id).length;
@@ -1375,24 +1503,18 @@ async function placer(personneId, unite) {
 
 // Cette page n'attend RIEN de ce qu'on lache dessus.
 //
-// Ce garde-fou a ete conditionnel deux fois, et il a fui deux fois. Il a
-// d'abord reconnu nos glissers en lisant le presse-papiers -- illisible
-// sous Firefox pendant le survol. Puis a un drapeau pose par notre propre
-// `dragstart` -- et le depose filait encore au navigateur, qui cherchait le
-// texte recu : vide, il ouvrait la page d'accueil de Google.
+// Nos jetons ne passent plus par la : ils ne produisent aucun evenement de
+// glisser-deposer. Ce garde-fou ne les concerne donc plus. Il reste pour
+// CE QUI VIENT DE DEHORS -- un fichier, un lien, un bout de texte glisse
+// depuis une autre fenetre. Sans lui, le navigateur quitterait la page
+// pour l'ouvrir, et l'organisateur perdrait sa saisie en cours.
 //
-// La condition etait la precaution de trop. Entre deux rectangles il y a
-// dix pixels, et sous eux toute une note ; un jeton lache la n'atteint
-// aucune zone d'arrivee, et il n'existe AUCUN cas ou l'on veuille que le
-// navigateur en fasse quelque chose. On annule donc sans condition.
-//
-// Les trois evenements : annuler `dragover` seul suffit a Chromium, pas a
-// Firefox, qui suit la specification et demande aussi `dragenter`. Sur
-// `window` autant que sur `document`, en phase de CAPTURE -- un garde-fou
-// qui s'execute en dernier n'en est pas un.
-//
-// Rien n'est pose ici. Rater sa cible ne doit pas deplacer quelqu'un au
-// hasard ; cela doit ne rien faire du tout.
+// Sans condition : il n'existe aucun cas ou l'on veuille que le navigateur
+// fasse quelque chose de ce qu'on lache ici. Les trois evenements, parce
+// qu'annuler `dragover` seul suffit a Chromium mais pas a Firefox, qui suit
+// la specification et demande aussi `dragenter`. Sur `window` autant que
+// sur `document`, en phase de CAPTURE -- un garde-fou qui s'execute en
+// dernier n'en est pas un.
 for (const cible of [window, document]) {
   for (const evenement of ["dragenter", "dragover", "drop"]) {
     cible.addEventListener(

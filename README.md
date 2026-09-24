@@ -305,31 +305,48 @@ cas courant reste « la même chose toute la semaine », le bouton **Reporter
 cette nuit sur les suivantes** le fait en un geste — en ne suivant que les
 personnes présentes ces nuits-là.
 
-**Deux façons de déplacer**, et non une. Le glisser-déposer du navigateur
-ne répond ni au doigt ni au clavier ; un jeton qu'on saisit d'un clic et
-qu'on pose d'un autre répond aux trois. Échap repose ce qu'on avait saisi.
+**Deux façons de déplacer**, et non une : on glisse le jeton, ou bien on le
+saisit d'un clic et on le pose d'un autre. Échap repose ce qu'on avait
+saisi, et un jeton lâché à côté d'un rectangle retombe là où il était.
 
-Un jeton lâché **à côté** d'un rectangle ne fait rien. Il ouvrait un onglet
-de recherche — d'abord sous Chrome, puis, après un premier correctif, sous
-Firefox seulement. Trois causes indépendantes, toutes supprimées :
+### Le glisser n'est pas celui du navigateur
 
-- le geste transportait le nom **en texte ordinaire**, que le navigateur
-  reprend dès que le dépôt manque sa cible. Il transporte maintenant un
-  type qui n'appartient qu'à cette page ;
-- `dragenter` n'était pas annulé. La spécification demande d'annuler
-  `dragenter` **et** `dragover` pour déclarer une zone d'arrivée ; Chromium
-  se contente du second, Firefox exige les deux ;
-- le garde-fou de la page était **conditionnel**, et il a fui deux fois
-  pour cette seule raison : d'abord parce qu'il reconnaissait nos glissers
-  en lisant le presse-papiers, dont l'accès est restreint pendant le survol
-  et varie d'un navigateur à l'autre ; puis, une fois cette lecture
-  remplacée par un drapeau, parce que le dépôt filait encore sous Firefox.
+La page ne se sert pas du glisser-déposer HTML5. Elle suit le pointeur
+elle-même, du `pointerdown` au `pointerup`.
 
-La condition était la précaution de trop. **La page refuse maintenant tout
-dépôt, sans condition** — il n'existe aucun cas où l'on veuille que le
-navigateur fasse quelque chose de ce qu'on lâche ici. Seuls les champs de
-saisie gardent leur comportement : y glisser du texte est le seul geste
-légitime de la page.
+Ce n'est pas un goût pour le travail manuel. Le glisser-déposer natif est
+un geste que le navigateur **diffuse à qui veut l'entendre**, et les
+modules complémentaires du genre « drag-and-go » — ceux qui ouvrent un lien
+ou lancent une recherche quand on leur jette un mot — s'y branchent. Ils ne
+lisent pas ce qu'on transporte : ils voient un glisser finir, et ils
+agissent. Un module de ce genre ouvrait `google.com/webhp` — une recherche
+**vide** — à chaque déposé.
+
+Trois correctifs ont échoué avant qu'on cherche du bon côté : ne rien
+mettre de lisible dans le presse-papiers, annuler `dragenter` autant que
+`dragover`, puis refuser tout dépôt sans condition. Aucun ne pouvait
+marcher. Le module écoute **en amont de la page** ; rien de ce qu'elle fait
+de l'évènement ne le concerne.
+
+Un glisser qui n'existe pas ne se laisse pas écouter. Trois gains au
+passage :
+
+- **le doigt fonctionne** — le glisser-déposer natif ignore le tactile, il
+  fallait s'en remettre au clic-clic sur une tablette ;
+- plus de presse-papiers, donc plus rien qui puisse fuir vers l'extérieur ;
+- le fantôme qui suit le curseur est à nous, et montre le jeton tel qu'il
+  est au lieu de l'image grise du navigateur.
+
+Un test ([`tests/test_pages.py`](tests/test_pages.py)) garde la propriété :
+le mécanisme natif est plus court à écrire, et une refonte pourrait y
+revenir sans s'apercevoir de ce qu'elle rouvre.
+
+Le refus inconditionnel des dépôts, lui, **reste** — mais pour une autre
+raison qu'au départ. Il ne protège plus de nos propres jetons, qui ne
+produisent plus rien : il protège de ce qui vient de dehors, un fichier ou
+un lien glissé depuis une autre fenêtre, que le navigateur ouvrirait en
+quittant la page — et la saisie en cours avec elle. Seuls les champs de
+texte gardent leur comportement.
 
 **Les homonymes** portent leur filiation entre parenthèses : « Marie
 (conjoint de Gérard) », « Marie (enfant d'Alice) ». Seulement eux — un

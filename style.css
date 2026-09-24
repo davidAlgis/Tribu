@@ -721,11 +721,29 @@ fieldset.panneau-resultat .note {
   font-size: 0.88rem;
   font-weight: 500;
   cursor: grab;
-  /* Sans cela, un depart de glisser un peu lent selectionne le prenom, et
-     c'est cette SELECTION que le navigateur emporte -- du texte ordinaire,
-     qu'il ouvrira dans un onglet la ou on le lache. */
+  /* Rien a selectionner sur un jeton : le prenom n'est pas du texte a
+     copier, c'est une poignee. Et une selection en cours ferait concurrence
+     au glisser. */
   user-select: none;
   -webkit-user-select: none;
+  /* Le glisser est suivi par la page elle-meme, au pointeur. Sans cette
+     ligne, le doigt ferait defiler la page au lieu de deplacer le jeton --
+     c'est le navigateur qui prendrait le geste, et il ne le rend pas. */
+  touch-action: none;
+}
+
+/* Le sosie qui suit le curseur pendant le deplacement.
+   `pointer-events: none` n'est pas un detail : c'est ce qui permet a
+   `elementFromPoint` de voir le rectangle SOUS le fantome. Sans cela, le
+   fantome se designerait lui-meme et aucune boite ne serait jamais visee. */
+.jeton.fantome {
+  position: fixed;
+  z-index: 50;
+  pointer-events: none;
+  margin: 0;
+  box-shadow: 0 6px 18px rgba(0, 0, 0, 0.22);
+  opacity: 0.92;
+  transform: rotate(-1.5deg);
 }
 .jeton:hover { background: var(--survol); border-color: var(--doux); }
 .jeton .etiquette { font-size: 0.68rem; padding: 0 6px; }

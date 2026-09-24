@@ -203,3 +203,28 @@ def test_chaque_message_d_etat_porte_une_couleur():
             if not atteint:
                 orphelins.append(f"{page}#{ident}")
     assert sorted(set(orphelins)) == [], "paragraphes d'état sans couleur d'erreur"
+
+
+def test_le_plan_n_amorce_aucun_glisser_deposer_natif(pages):
+    """Le glisser-déposer du navigateur est un geste diffusé à qui veut
+    l'entendre, et des modules complémentaires très répandus s'y branchent
+    pour ouvrir un lien ou lancer une recherche. L'un d'eux ouvrait un
+    onglet à chaque déposé, sans rien lire de ce qu'on transportait : rien
+    dans la page ne pouvait l'en empêcher, il écoute en amont. Trois
+    correctifs ont échoué avant qu'on cherche du bon côté.
+
+    Le plan suit donc le pointeur lui-même. C'est cette propriété-là qui
+    ferme le défaut, et c'est elle qu'une refonte pourrait perdre sans s'en
+    apercevoir — le mécanisme natif est plus court à écrire.
+
+    ANNULER un glisser venu de dehors reste permis, et la page le fait pour
+    ne pas se laisser quitter. Ce qui est interdit, c'est d'en AMORCER un.
+    Ces trois marques suffisent à le dire : sans `draggable` aucun élément
+    ne part, et sans `dataTransfer` rien n'est transporté.
+    """
+    _, js = pages["admin.html"]
+    # Les commentaires en parlent, et doivent pouvoir continuer.
+    code = "\n".join(l for l in js.splitlines() if not l.lstrip().startswith("//"))
+
+    fautifs = sorted(set(re.findall(r"\b(dataTransfer|draggable|ondrag\w*)\b", code)))
+    assert fautifs == [], "le plan est revenu au glisser-déposer du navigateur"
