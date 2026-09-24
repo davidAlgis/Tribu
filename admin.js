@@ -1050,9 +1050,15 @@ const zoneNuits = document.getElementById("choix-nuit");
 const compteurCouchages = document.getElementById("compteur-couchages");
 const messageCouchages = document.getElementById("message-couchages");
 
-// `null` = personne de saisi. C'est le seul etat que ce panneau garde pour
-// lui : tout le reste vient de la base a chaque rechargement.
-let saisi = null;
+// Les jetons saisis, en attente d'un rectangle ou les poser. C'est le seul
+// etat que ce panneau garde pour lui : tout le reste vient de la base a
+// chaque rechargement.
+//
+// UN ENSEMBLE, et non un identifiant. Placer une famille de cinq demandait
+// cinq allers-retours entre le tas et la chambre ; Ctrl+clic les prend
+// ensemble, comme les curseurs multiples d'un editeur de texte. Le cas a
+// une personne reste le plus court : un clic simple.
+const saisis = new Set();
 
 const TAS = "tas"; // l'unite qui n'en est pas une : ceux qui restent a placer
 
@@ -1176,7 +1182,7 @@ let ambigus = new Set();
 async function rechargerPlan(jour) {
   const d = await rpc("admin_couchages", { p_code: etat.code, p_jour: jour || null });
   etat.plan = { ...d, unites: nommerUnites(d.unites || []) };
-  saisi = null;
+  saisis.clear();
   dessinerNuits();
   dessinerPlan();
 }
@@ -1235,19 +1241,32 @@ function jeton(personne, dansUneUnite) {
   // se decouvre qu'a l'arrivee.
   b.dataset.demande = personne.vue_mer ? CHAMBRE_VUE_MER : personne.hebergement;
 
-  if (saisi === personne.id) b.classList.add("saisi");
-  b.setAttribute("aria-pressed", saisi === personne.id ? "true" : "false");
+  if (saisis.has(personne.id)) b.classList.add("saisi");
+  b.setAttribute("aria-pressed", saisis.has(personne.id) ? "true" : "false");
   const nomComplet = precision ? `${personne.prenom} (${precision})` : personne.prenom;
   b.title = dansUneUnite
     ? `${nomComplet} — cliquer pour le déplacer`
     : `${nomComplet} — à placer`;
 
-  b.addEventListener("click", () => {
+  b.addEventListener("click", (e) => {
     if (vientDeGlisser) {
       vientDeGlisser = false;
       return;
     }
-    saisi = saisi === personne.id ? null : personne.id;
+    // Ctrl -- Cmd sur un Mac -- ajoute ou retire sans defaire le reste.
+    // Sans lui, le clic REMPLACE la selection : c'est le geste courant, et
+    // il doit rester le plus court.
+    if (e.ctrlKey || e.metaKey) {
+      if (saisis.has(personne.id)) saisis.delete(personne.id);
+      else saisis.add(personne.id);
+    } else if (saisis.size === 1 && saisis.has(personne.id)) {
+      // Recliquer le seul jeton saisi le repose : c'est la sortie la plus
+      // proche quand on s'est trompe de nom.
+      saisis.clear();
+    } else {
+      saisis.clear();
+      saisis.add(personne.id);
+    }
     dessinerPlan();
   });
 
@@ -1263,10 +1282,16 @@ function jeton(personne, dansUneUnite) {
 // Le sosie qui suit le curseur. Le navigateur en fabrique un en niveau de
 // gris ; celui-ci montre le jeton tel qu'il est, ce qui vaut mieux quand on
 // cherche a savoir QUI l'on deplace.
-function fantomeDe(b) {
+function fantomeDe(b, combien) {
   const copie = b.cloneNode(true);
   copie.className = "jeton fantome";
-  copie.style.width = `${b.offsetWidth}px`;
+  if (combien > 1) {
+    // Un seul jeton en vol pour cinq personnes deplacees serait un
+    // mensonge : le compte le dit.
+    copie.appendChild(span(`+${combien - 1}`, "etiquette"));
+  } else {
+    copie.style.width = `${b.offsetWidth}px`;
+  }
   document.body.appendChild(copie);
   return copie;
 }
@@ -1323,7 +1348,10 @@ function pendantGlisse(e) {
     // deviendrait un glisser, et le clic-clic ne marcherait plus.
     glisse.aBouge = true;
     glisse.jeton.classList.add("saisi");
-    glisse.fantome = fantomeDe(glisse.jeton);
+    glisse.fantome = fantomeDe(
+      glisse.jeton,
+      saisis.has(glisse.personne.id) ? saisis.size : 1
+    );
     // Le pointeur reste a nous meme si le doigt sort du jeton.
     if (glisse.jeton.setPointerCapture) {
       try {
@@ -1350,12 +1378,17 @@ function finirGlisse(e) {
   const { aBouge, fantome, boite, personne } = glisse;
   if (fantome) fantome.remove();
   if (boite) boite.classList.remove("visee");
-  glisse.jeton.classList.remove("saisi");
+  // Le jeton d'un groupe saisi garde sa marque : elle dit la selection, pas
+  // le vol qui vient de finir.
+  if (!saisis.has(personne.id)) glisse.jeton.classList.remove("saisi");
 
   // Rater sa cible ne doit pas deplacer quelqu'un au hasard : cela ne fait
   // rien du tout.
   if (aBouge && boite && e.type === "pointerup") {
-    placer(personne.id, unitesParCle.get(boite.dataset.cle));
+    // Glisser l'un des jetons saisis les emporte tous : on ne deplace pas
+    // une selection en la defaisant.
+    const emportes = saisis.has(personne.id) ? new Set(saisis) : [personne.id];
+    placer(emportes, unitesParCle.get(boite.dataset.cle));
   }
 
   glisse = null;
@@ -1418,7 +1451,7 @@ function rectangle(unite, occupants) {
   // Le meme geste au clic, pour le clavier.
   boite.addEventListener("click", (e) => {
     if (e.target.closest(".jeton")) return; // le jeton gere son propre clic
-    if (saisi) placer(saisi, unite);
+    if (saisis.size) placer(saisis, unite);
   });
 
   return boite;
@@ -1438,9 +1471,13 @@ function dessinerPlan() {
   zonePlan.textContent = "";
 
   const places = dormeurs.filter((d) => d.logement_id).length;
-  compteurCouchages.textContent = dormeurs.length
+  const resume = dormeurs.length
     ? `nuit du ${afficherJour(jour)} — ${places} placé(s) sur ${dormeurs.length}`
     : `nuit du ${afficherJour(jour)} — personne ne dort sur place`;
+  // Le compte des jetons saisis ne parait qu'a partir de deux : a un, la
+  // marque bleue sur le jeton suffit, et la phrase s'allongerait pour rien.
+  compteurCouchages.textContent =
+    saisis.size > 1 ? `${resume} · ${saisis.size} saisis` : resume;
 
   if (!unites.length) {
     const rien = document.createElement("p");
@@ -1469,35 +1506,54 @@ function dessinerPlan() {
   zonePlan.appendChild(grille);
 }
 
-async function placer(personneId, unite) {
-  const personne = etat.plan.dormeurs.find((d) => d.id === personneId);
-  if (!personne) return;
+// « Alice → Chambre 2 » pour une personne, « 4 personnes → Chambre 2 » pour
+// plusieurs : au-dela de deux noms, la phrase devient une liste que
+// personne ne lit.
+function direDeplacement(gens, unite) {
+  const qui = gens.length === 1 ? gens[0].prenom : `${gens.length} personnes`;
+  if (unite.cle !== TAS) return `${qui} → ${unite.nom}.`;
+  return `${qui} ${gens.length === 1 ? "n'a" : "n'ont"} plus de place attribuée.`;
+}
 
-  const dejaLa =
+// `ids` : un identifiant, ou plusieurs. Le geste est le meme -- seules les
+// ecritures se suivent.
+async function placer(ids, unite) {
+  const demandes = (typeof ids === "string" ? [ids] : [...ids])
+    .map((id) => etat.plan.dormeurs.find((d) => d.id === id))
+    .filter(Boolean);
+
+  // Ceux qui y sont deja n'ont rien a faire : les renvoyer ferait une
+  // ecriture pour rien. Cela compte surtout en groupe, ou l'on repose
+  // volontiers cinq personnes dont trois ne bougent pas.
+  const aDeplacer = demandes.filter((p) =>
     unite.cle === TAS
-      ? !personne.logement_id
-      : cleUnite(personne.logement_id, personne.numero) === unite.cle;
-  if (dejaLa) {
-    saisi = null;
+      ? p.logement_id
+      : cleUnite(p.logement_id, p.numero) !== unite.cle
+  );
+
+  if (!aDeplacer.length) {
+    saisis.clear();
     return dessinerPlan();
   }
 
   messageCouchages.className = "";
   messageCouchages.textContent = "Enregistrement…";
   try {
-    await rpc("admin_couchage_placer", {
-      p_code: etat.code,
-      p_participant: personneId,
-      p_jour: etat.plan.jour,
-      p_logement: unite.cle === TAS ? null : unite.logement_id,
-      p_numero: unite.cle === TAS ? null : unite.numero,
-    });
+    // Une ecriture apres l'autre, et non toutes ensemble : chacune peut
+    // declencher la sauvegarde hebdomadaire, et un echec au milieu laisse
+    // un etat qu'on sait relire -- le rechargement qui suit dit la verite.
+    for (const p of aDeplacer) {
+      await rpc("admin_couchage_placer", {
+        p_code: etat.code,
+        p_participant: p.id,
+        p_jour: etat.plan.jour,
+        p_logement: unite.cle === TAS ? null : unite.logement_id,
+        p_numero: unite.cle === TAS ? null : unite.numero,
+      });
+    }
     await rechargerPlan(etat.plan.jour);
     messageCouchages.className = "ok";
-    messageCouchages.textContent =
-      unite.cle === TAS
-        ? `${personne.prenom} n'a plus de place attribuée.`
-        : `${personne.prenom} → ${unite.nom}.`;
+    messageCouchages.textContent = direDeplacement(aDeplacer, unite);
   } catch (erreur) {
     messageCouchages.className = "erreur";
     messageCouchages.textContent = erreur.message;
@@ -1537,11 +1593,11 @@ for (const cible of [window, document]) {
   }
 }
 
-// Le clavier, sur un jeton saisi.
+// Le clavier, sur ce qui est saisi -- un jeton ou vingt.
 //
-//   Échap  repose le jeton. Sans cette porte de sortie, un jeton saisi par
-//          erreur suit le prochain clic n'importe ou.
-//   Suppr  le sort de sa chambre et le renvoie a placer. C'est le geste
+//   Échap  repose la selection. Sans cette porte de sortie, un jeton saisi
+//          par erreur suit le prochain clic n'importe ou.
+//   Suppr  la sort de sa chambre et la renvoie a placer. C'est le geste
 //          inverse du deplacement, et le seul qui manquait : ressortir
 //          quelqu'un demandait de viser le tas, donc de le retrouver en
 //          haut de l'ecran.
@@ -1549,7 +1605,7 @@ for (const cible of [window, document]) {
 // Retour arriere vaut Suppr : sur un portable sans pave numerique, c'est
 // la touche qu'on a sous les doigts.
 document.addEventListener("keydown", (e) => {
-  if (!saisi) return;
+  if (!saisis.size) return;
 
   // Dans un champ de saisie, ces touches gardent leur sens ordinaire --
   // effacer une lettre, pas vider une chambre.
@@ -1558,7 +1614,7 @@ document.addEventListener("keydown", (e) => {
   }
 
   if (e.key === "Escape") {
-    saisi = null;
+    saisis.clear();
     dessinerPlan();
     return;
   }
@@ -1567,9 +1623,9 @@ document.addEventListener("keydown", (e) => {
     // `preventDefault` surtout pour le retour arriere, que certaines
     // configurations font encore reculer d'une page.
     e.preventDefault();
-    // Quelqu'un qui n'etait nulle part y reste : `placer` le voit deja la
-    // et se contente de le reposer.
-    placer(saisi, UNITE_TAS);
+    // Ceux qui n'etaient nulle part y restent : `placer` les voit deja la
+    // et se contente de reposer la selection.
+    placer(saisis, UNITE_TAS);
   }
 });
 

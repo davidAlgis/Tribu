@@ -309,17 +309,26 @@ personnes présentes ces nuits-là.
 saisit d'un clic et on le pose d'un autre. Un jeton lâché à côté d'un
 rectangle retombe là où il était.
 
-Sur un nom saisi, deux touches :
+**<kbd>Ctrl</kbd>+clic saisit plusieurs noms à la fois**, comme les curseurs
+multiples d'un éditeur de texte (<kbd>Cmd</kbd> sur un Mac). Un clic simple
+remplace la sélection — c'est le geste courant, il reste le plus court. Une
+famille de cinq se pose ensuite d'un seul clic sur le rectangle ; elle se
+glisse aussi d'un bloc, et le fantôme annonce combien il emporte.
+
+Sur ce qui est saisi, deux touches :
 
 | Touche | Effet |
 |---|---|
-| <kbd>Suppr</kbd> (ou <kbd>Retour arrière</kbd>) | le ressort de sa chambre et le renvoie à **À placer** |
-| <kbd>Échap</kbd> | le repose là où il était |
+| <kbd>Suppr</kbd> (ou <kbd>Retour arrière</kbd>) | ressort de la chambre et renvoie à **À placer** |
+| <kbd>Échap</kbd> | repose la sélection là où elle était |
 
 `Suppr` est le geste inverse du déplacement, et le seul qui manquait :
 ressortir quelqu'un demandait de viser le tas, donc de le retrouver en haut
 de l'écran. Dans un champ de saisie, ces touches gardent leur sens
 ordinaire — effacer une lettre, pas vider une chambre.
+
+Ce qui est déjà en place n'est pas réécrit : reposer cinq personnes dont
+trois ne bougent pas n'envoie que deux écritures.
 
 ### Le glisser n'est pas celui du navigateur
 
