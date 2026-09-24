@@ -177,12 +177,32 @@ function parId(id) {
   return etat.participants.find((p) => p.id === id);
 }
 
+// `conjoint_id` est pose des DEUX cotes par `admin_ajouter` -- mais le
+// schema lui-meme prevoit qu'il ne le soit que d'un (section 5 en tient
+// compte pour les droits). On regarde donc dans les deux sens : autrement,
+// la moitie d'un couple parait celibataire, et c'est justement celle-la
+// qu'on cherchait a nommer.
+function conjointDe(personne) {
+  return (
+    parId(personne.conjoint_id) ||
+    etat.participants.find((p) => p.conjoint_id === personne.id)
+  );
+}
+
+// « enfant de Alice » fait buter la lecture. L'elision n'est pas un detail
+// de style ici : la precision n'existe que pour etre lue d'un coup d'oeil.
+// Tout h initial est traite comme muet. Les quelques prenoms a h aspire,
+// ou l'elision serait fautive, sont assez rares pour qu'on l'assume.
+function de(prenom) {
+  return /^[aeiouyàâäéèêëîïôöùûüh]/i.test(prenom) ? `d'${prenom}` : `de ${prenom}`;
+}
+
 function decrireLien(personne) {
-  const conjoint = parId(personne.conjoint_id);
-  if (conjoint) return `conjoint·e de ${conjoint.prenom}`;
+  const conjoint = conjointDe(personne);
+  if (conjoint) return `conjoint·e ${de(conjoint.prenom)}`;
 
   const parent = parId(personne.parent_id);
-  if (parent) return `${personne.invite ? "invité·e" : "enfant"} de ${parent.prenom}`;
+  if (parent) return `${personne.invite ? "invité·e" : "enfant"} ${de(parent.prenom)}`;
 
   return personne.invite ? "indépendant·e" : "—";
 }
@@ -1036,6 +1056,16 @@ let saisi = null;
 
 const TAS = "tas"; // l'unite qui n'en est pas une : ceux qui restent a placer
 
+// Ce qu'un jeton met dans le presse-papiers du glisser-deposer.
+//
+// Un type A NOUS, et surtout PAS `text/plain`. Avec du texte ordinaire, un
+// depose qui rate la boite -- l'espace entre deux rectangles suffit --
+// n'est plus notre affaire : le navigateur reprend la main et fait ce
+// qu'il fait de tout texte lache sur une page, c'est-a-dire l'ouvrir dans
+// un onglet et le chercher sur Google. Avec un type inconnu de lui, il n'a
+// rien a en faire.
+const TYPE_JETON = "application/x-tribu-jeton";
+
 function cleUnite(logementId, numero) {
   return `${logementId}#${numero}`;
 }
@@ -1061,6 +1091,47 @@ function nommerUnites(unites) {
     };
   });
 }
+
+// Soixante personnes, quelques prenoms portes deux fois : « Marie » sur un
+// jeton ne designe alors personne. On precise -- mais SEULEMENT pour les
+// prenoms qui reviennent, sinon chaque rectangle porterait une phrase la ou
+// un mot suffit.
+//
+// L'ambiguite se juge sur la FAMILLE ENTIERE, et non sur les dormeurs du
+// soir : une personne qui changerait d'etiquette d'une nuit a l'autre --
+// precisee mardi, nue mercredi parce que son homonyme est reparti -- serait
+// plus deroutante que deux jetons identiques.
+function prenomsPortesPlusieursFois() {
+  const comptes = new Map();
+  for (const p of etat.participants) {
+    comptes.set(p.prenom, (comptes.get(p.prenom) || 0) + 1);
+  }
+  return new Set([...comptes].filter(([, n]) => n > 1).map(([nom]) => nom));
+}
+
+// Le plus court qui suffise a trancher, dans cet ordre : le conjoint, puis
+// le parent, puis la branche. `admin_couchages` ne renvoie pas les liens de
+// parente -- c'est `admin_lister` qui les porte -- d'ou la jointure par
+// identifiant.
+function preciser(id) {
+  const personne = parId(id);
+  if (!personne) return "";
+
+  const conjoint = conjointDe(personne);
+  if (conjoint) return `conjoint ${de(conjoint.prenom)}`;
+
+  const parent = parId(personne.parent_id);
+  if (parent) return `${personne.invite ? "invité" : "enfant"} ${de(parent.prenom)}`;
+
+  // Reste les tetes de branche, que rien ne rattache. `famille` porte le
+  // prenom du chef de branche : il ne dit rien quand c'est le sien.
+  if (personne.famille && personne.famille !== personne.prenom) {
+    return `branche ${personne.famille}`;
+  }
+  return "";
+}
+
+let ambigus = new Set();
 
 async function rechargerPlan(jour) {
   const d = await rpc("admin_couchages", { p_code: etat.code, p_jour: jour || null });
@@ -1107,6 +1178,15 @@ function jeton(personne, dansUneUnite) {
   b.dataset.personne = personne.id;
   b.append(span(personne.prenom, "nom"));
 
+  // Le detail qui tranche entre deux homonymes. Il ne parait que si le
+  // prenom revient ; l'infobulle, elle, le donne toujours -- elle a la
+  // place, et le survol est le bon endroit pour ce qu'on ne lit qu'en cas
+  // de doute.
+  const precision = preciser(personne.id);
+  if (precision && ambigus.has(personne.prenom)) {
+    b.append(span(`(${precision})`, "precision"));
+  }
+
   if (personne.categorie_age !== "adulte") {
     b.append(span(AGES[personne.categorie_age], "etiquette"));
   }
@@ -1118,17 +1198,21 @@ function jeton(personne, dansUneUnite) {
 
   if (saisi === personne.id) b.classList.add("saisi");
   b.setAttribute("aria-pressed", saisi === personne.id ? "true" : "false");
+  const nomComplet = precision ? `${personne.prenom} (${precision})` : personne.prenom;
   b.title = dansUneUnite
-    ? `${personne.prenom} — cliquer pour le déplacer`
-    : `${personne.prenom} — à placer`;
+    ? `${nomComplet} — cliquer pour le déplacer`
+    : `${nomComplet} — à placer`;
 
   b.addEventListener("click", () => {
     saisi = saisi === personne.id ? null : personne.id;
     dessinerPlan();
   });
   b.addEventListener("dragstart", (e) => {
-    saisi = personne.id;
-    e.dataTransfer.setData("text/plain", personne.id);
+    // On ne touche PAS a `saisi` : cet etat-la sert au clic-clic, et un
+    // glisser qui rate sa cible le laisserait arme. Le prochain clic
+    // n'importe ou deplacerait alors quelqu'un sans qu'on l'ait demande.
+    // La classe suffit a montrer le jeton en vol, et `dragend` la retire.
+    e.dataTransfer.setData(TYPE_JETON, personne.id);
     e.dataTransfer.effectAllowed = "move";
     b.classList.add("saisi");
   });
@@ -1185,7 +1269,7 @@ function rectangle(unite, occupants) {
   boite.addEventListener("drop", (e) => {
     e.preventDefault();
     boite.classList.remove("visee");
-    placer(e.dataTransfer.getData("text/plain"), unite);
+    placer(e.dataTransfer.getData(TYPE_JETON), unite);
   });
   // Le meme geste au clic, pour le doigt et pour le clavier.
   boite.addEventListener("click", (e) => {
@@ -1203,6 +1287,7 @@ function etiquetteDemande(valeur) {
 
 function dessinerPlan() {
   const { unites, dormeurs, jour } = etat.plan;
+  ambigus = prenomsPortesPlusieursFois();
   zonePlan.textContent = "";
 
   const places = dormeurs.filter((d) => d.logement_id).length;
@@ -1272,6 +1357,24 @@ async function placer(personneId, unite) {
     // Le serveur a refuse : l'ecran doit revenir a ce que la base contient.
     await rechargerPlan(etat.plan.jour);
   }
+}
+
+// Le reste de la page absorbe nos deposes rates.
+//
+// Entre deux rectangles il y a dix pixels, et sous eux toute une note. Un
+// jeton lache la n'atteint aucune zone d'arrivee : sans ces deux lignes, le
+// navigateur reprend la main sur le geste. On l'annule partout ou il
+// s'agit d'un de NOS jetons -- reconnus a leur type -- et nulle part
+// ailleurs : un fichier depose sur la page reste l'affaire du navigateur.
+//
+// Rien n'est pose ici. Rater sa cible ne doit pas deplacer quelqu'un au
+// hasard ; cela doit ne rien faire du tout.
+for (const evenement of ["dragover", "drop"]) {
+  document.addEventListener(evenement, (e) => {
+    if (e.dataTransfer && [...e.dataTransfer.types].includes(TYPE_JETON)) {
+      e.preventDefault();
+    }
+  });
 }
 
 // Échap repose ce qu'on avait saisi. Sans cette porte de sortie, un jeton

@@ -309,6 +309,19 @@ personnes présentes ces nuits-là.
 ne répond ni au doigt ni au clavier ; un jeton qu'on saisit d'un clic et
 qu'on pose d'un autre répond aux trois. Échap repose ce qu'on avait saisi.
 
+Un jeton lâché **à côté** d'un rectangle ne fait rien. Il ouvrait un onglet
+de recherche : le geste transportait le nom en texte ordinaire, et le
+navigateur reprenait la main dès que le dépôt manquait sa cible. Il
+transporte désormais un type qui n'appartient qu'à cette page, et la page
+annule le geste partout où il ne mène nulle part — sans toucher aux
+fichiers qu'on déposerait dessus, qui ne la regardent pas.
+
+**Les homonymes** portent leur filiation entre parenthèses : « Marie
+(conjoint de Gérard) », « Marie (enfant d'Alice) ». Seulement eux — un
+prénom porté une fois n'a rien à préciser — et l'ambiguïté se juge sur la
+famille entière, pour qu'une personne ne change pas d'étiquette d'une nuit
+à l'autre selon qui est là. L'infobulle, elle, donne toujours le détail.
+
 Ce que la page **signale sans l'interdire** :
 
 - une chambre trop pleine passe au rouge — sept personnes dans un gîte de

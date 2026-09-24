@@ -725,6 +725,15 @@ fieldset.panneau-resultat .note {
 .jeton:hover { background: var(--survol); border-color: var(--doux); }
 .jeton .etiquette { font-size: 0.68rem; padding: 0 6px; }
 
+/* Ce qui distingue deux « Marie ». Nettement plus discret que le prenom :
+   on cherche le prenom, on ne lit la precision que si l'on hesite. */
+.jeton .precision {
+  font-size: 0.76rem;
+  font-weight: 400;
+  color: var(--doux);
+}
+.jeton.saisi .precision { color: rgba(255, 255, 255, 0.85); }
+
 /* Saisi : il attend qu'on designe une arrivee. L'etat se voit de loin,
    parce qu'entre-temps le prochain clic n'importe ou le deplacera. */
 .jeton.saisi {
