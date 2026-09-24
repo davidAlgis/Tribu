@@ -444,10 +444,23 @@ en base.
 > Le moteur de tarifs n'en a pas besoin, et moins de données personnelles
 > franchissent la frontière, mieux c'est.
 
-## Corriger un prénom
+## Corriger un prénom, une date de naissance
 
-Le bouton ✎ en face de la personne, sur `admin.html`. Le nom devient un
-champ là où il se lisait ; Entrée valide, Échap annule.
+Le bouton ✎ en face de la personne, sur `admin.html`. Le nom et la date
+deviennent deux champs là où ils se lisaient ; Entrée valide, Échap annule.
+Les deux partent **en un seul envoi**, et rien ne part si rien n'a bougé.
+
+C'est aussi par là qu'on **ajoute** une date que le GEDCOM ne donnait pas —
+les invités n'y figurent pas, et il en manque pour les plus anciens. Le
+champ laissé vide **efface** : ne pas savoir est une réponse, et il faut
+pouvoir revenir dessus quand le GEDCOM s'est trompé de personne. Une date
+dans l'avenir ou antérieure à 1900 est refusée : c'est une faute de frappe,
+et une faute qui ne se verrait pas autrement — elle donnerait seulement un
+âge étrange, des mois plus tard, sur une facture.
+
+Corriger une date **ne change pas la catégorie d'âge** au passage : elle se
+refait en bloc depuis l'onglet Séjour, et une facture n'a pas à bouger dans
+ton dos.
 
 Il fallait auparavant retirer la personne et la recréer — ce qui emportait
 ses présences et coupait les liens de parenté autour d'elle, pour une

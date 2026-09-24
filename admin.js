@@ -72,6 +72,7 @@ const MESSAGES = {
   DATES_MANQUANTES: "Il manque une des deux dates du séjour.",
   REGLAGES_ABSENTS: "Les réglages du séjour sont absents de la base.",
   AGE_INVALIDE: "Les bornes d'âge doivent être des nombres positifs.",
+  NAISSANCE_INVALIDE: "Cette date de naissance est impossible : ni dans l'avenir, ni avant 1900.",
   AGES_INVERSES: "La borne des bébés doit être inférieure à celle des enfants.",
   CATEGORIE_INCONNUE: "Type de couchage inconnu.",
   CAPACITE_INVALIDE: "La capacité doit être un nombre entre 1 et 30.",
@@ -263,9 +264,9 @@ function dessinerListe() {
       renommer.type = "button";
       renommer.className = "modifier";
       renommer.textContent = "✎";
-      renommer.title = `Renommer ${personne.prenom}`;
-      renommer.setAttribute("aria-label", `Renommer ${personne.prenom}`);
-      renommer.addEventListener("click", () => editerPrenom(personne, gauche));
+      renommer.title = `Corriger ${personne.prenom} — prénom, date de naissance`;
+      renommer.setAttribute("aria-label", `Corriger ${personne.prenom}`);
+      renommer.addEventListener("click", () => editerPersonne(personne, gauche));
 
       const retirer = document.createElement("button");
       retirer.type = "button";
@@ -281,22 +282,36 @@ function dessinerListe() {
   }
 }
 
-// ---------------------------------------------------------- renommer
+// ---------------------------------------------------------- corriger
 //
 // Une faute de frappe dans un prenom n'obligeait qu'a retirer la personne
 // et a la recreer -- ce qui emportait ses presences et cassait les liens
 // de parente autour d'elle. Le RPC existait ; il n'avait pas de bouton.
+//
+// La date de naissance a rejoint le meme formulaire. Le GEDCOM en pose
+// beaucoup, jamais toutes : les invites n'y figurent pas, et il en manque
+// pour les plus anciens. Les saisir une par une demandait jusqu'ici de
+// passer par l'editeur SQL.
 
-function editerPrenom(personne, zone) {
+function editerPersonne(personne, zone) {
   const champ = document.createElement("input");
   champ.type = "text";
   champ.value = personne.prenom;
   champ.maxLength = 40;
   champ.setAttribute("aria-label", `Nouveau prénom pour ${personne.prenom}`);
 
+  const naissance = document.createElement("input");
+  naissance.type = "date";
+  // Vide quand on ne sait pas -- et le rester est une reponse valable : la
+  // laisser vide vaut mieux qu'une date inventee, qui donnerait un age faux
+  // sans jamais se signaler.
+  naissance.value = personne.date_naissance || "";
+  naissance.max = new Date().toISOString().slice(0, 10);
+  naissance.setAttribute("aria-label", `Date de naissance de ${personne.prenom}`);
+
   const valider = document.createElement("button");
   valider.type = "button";
-  valider.textContent = "Renommer";
+  valider.textContent = "Corriger";
 
   const annuler = document.createElement("button");
   annuler.type = "button";
@@ -305,7 +320,7 @@ function editerPrenom(personne, zone) {
 
   const bloc = document.createElement("div");
   bloc.className = "renommage";
-  bloc.append(champ, valider, annuler);
+  bloc.append(champ, naissance, valider, annuler);
 
   // On remplace le contenu de la ligne plutot que d'ouvrir une boite :
   // le nom se corrige la ou il se lit.
@@ -313,33 +328,71 @@ function editerPrenom(personne, zone) {
   champ.focus();
   champ.select();
 
+  const saisie = () => ({ prenom: champ.value, naissance: naissance.value });
+
   annuler.addEventListener("click", dessinerListe);
-  valider.addEventListener("click", () => renommer(personne, champ.value));
-  champ.addEventListener("keydown", (e) => {
-    if (e.key === "Enter") renommer(personne, champ.value);
-    if (e.key === "Escape") dessinerListe();
+  valider.addEventListener("click", () => corriger(personne, saisie()));
+  for (const entree of [champ, naissance]) {
+    entree.addEventListener("keydown", (e) => {
+      if (e.key === "Enter") corriger(personne, saisie());
+      if (e.key === "Escape") dessinerListe();
+    });
+  }
+}
+
+// « 12 juin 1965 » plutot que « 1965-06-12 » : on relit une date de
+// naissance, on ne la trie pas.
+function afficherNaissance(iso) {
+  return new Date(`${iso}T12:00:00`).toLocaleDateString("fr-FR", {
+    day: "numeric",
+    month: "long",
+    year: "numeric",
   });
 }
 
-async function renommer(personne, saisi) {
-  const neuf = saisi.trim();
-  if (!neuf || neuf === personne.prenom) return dessinerListe();
+async function corriger(personne, saisie) {
+  const neuf = saisie.prenom.trim();
+  const avantNaissance = personne.date_naissance || "";
+  const apresNaissance = saisie.naissance || "";
+
+  // Rien n'a bouge : on referme sans rien envoyer. Un enregistrement pour
+  // rien poserait une sauvegarde hebdomadaire, et brouillerait la
+  // comparaison des copies.
+  if ((!neuf || neuf === personne.prenom) && apresNaissance === avantNaissance) {
+    return dessinerListe();
+  }
 
   message.className = "";
-  message.textContent = "Renommage…";
+  message.textContent = "Correction…";
   try {
-    // `p_age: null` : la fonction garde la categorie d'age telle quelle.
     const r = await rpc("admin_modifier", {
       p_code: etat.code,
       p_id: personne.id,
-      p_prenom: neuf,
+      p_prenom: neuf || personne.prenom,
+      // `p_age: null` : la fonction garde la categorie d'age telle quelle.
+      // Elle se refait en bloc depuis l'onglet Sejour, apres coup -- une
+      // date corrigee ne doit pas changer une facture dans le dos.
       p_age: null,
+      // Le champ vide EFFACE : ne pas savoir est une reponse, et il faut
+      // pouvoir revenir dessus quand le GEDCOM s'est trompe de personne.
+      p_naissance: apresNaissance || null,
+      p_effacer_naissance: apresNaissance === "",
     });
     const ancien = personne.prenom;
     await recharger();
+
+    const dits = [];
+    if (r.prenom !== ancien) dits.push(`« ${ancien} » devient « ${r.prenom} »`);
+    if (apresNaissance !== avantNaissance) {
+      dits.push(
+        r.date_naissance
+          ? `né·e le ${afficherNaissance(r.date_naissance)}`
+          : "date de naissance effacée"
+      );
+    }
     message.className = "ok";
     message.textContent =
-      `« ${ancien} » devient « ${r.prenom} ».` +
+      `${r.prenom} : ${dits.join(", ")}.` +
       // `famille` porte le prenom du chef de branche : quand c'est lui
       // qu'on renomme, le libelle suit pour toute sa descendance.
       (r.branche ? ` La branche du même nom suit : ${r.branche} personne(s).` : "");

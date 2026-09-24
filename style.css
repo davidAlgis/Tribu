@@ -387,6 +387,9 @@ button.modifier:hover {
    de quoi se lire en entier. */
 .renommage select { flex: 0 1 auto; width: auto; min-width: 9.5em; }
 .renommage input[type="number"] { flex: 0 0 4.5em; min-width: 0; }
+/* Une date a une largeur qu'elle connait : le navigateur y dessine trois
+   champs et un calendrier, et l'etirer ne la rend pas plus lisible. */
+.renommage input[type="date"] { flex: 0 0 auto; width: auto; min-width: 0; }
 
 /* Un de plus, un de moins : le geste le plus frequent de l'inventaire, et
    celui qui ne merite pas d'ouvrir un formulaire. Le nombre au milieu n'est

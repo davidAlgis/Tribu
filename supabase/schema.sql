@@ -701,11 +701,30 @@ begin
 end $fn$;
 
 -- ---- 8c. Corriger une faute de frappe ou un age ----
+-- La signature a gagne deux parametres : `create or replace` ne remplace
+-- que la fonction de MEME signature, l'ancienne survivrait a cote et
+-- PostgREST ne saurait plus laquelle appeler.
+drop function if exists public.admin_modifier(text, uuid, text, text);
+
+-- `p_naissance` et `p_effacer_naissance` forment un tri-etat, et c'est
+-- voulu :
+--
+--   effacer = true            -> la date part (on s'etait trompe de
+--                                personne, ou le GEDCOM disait n'importe
+--                                quoi)
+--   effacer = false, date <>  -> la date est posee
+--   effacer = false, date nul -> on n'y touche pas
+--
+-- Un appelant qui ne vient que renommer n'a rien a passer, et n'efface donc
+-- rien par omission. C'est la seule facon d'avoir « poser null » sans que
+-- « ne rien dire » veuille dire la meme chose.
 create or replace function public.admin_modifier(
-  p_code   text,
-  p_id     uuid,
-  p_prenom text,
-  p_age    text
+  p_code                text,
+  p_id                  uuid,
+  p_prenom              text,
+  p_age                 text default null,
+  p_naissance           date default null,
+  p_effacer_naissance   boolean default false
 )
 returns jsonb
 language plpgsql security definer
@@ -726,9 +745,22 @@ begin
 
   neuf := coalesce(nullif(trim(p_prenom), ''), avant.prenom);
 
+  -- Une date de naissance dans l'avenir, ou avant 1900, est une faute de
+  -- frappe -- et une faute qui ne se voit pas : elle donnerait seulement un
+  -- age etrange, des mois plus tard, sur une facture.
+  if p_naissance is not null
+     and (p_naissance > current_date or p_naissance < date '1900-01-01') then
+    raise exception 'NAISSANCE_INVALIDE' using errcode = 'P0001';
+  end if;
+
   update private.participants
      set prenom = neuf,
-         categorie_age = coalesce(p_age, categorie_age)
+         categorie_age = coalesce(p_age, categorie_age),
+         date_naissance = case
+                            when p_effacer_naissance then null
+                            when p_naissance is not null then p_naissance
+                            else date_naissance
+                          end
    where id = p_id;
 
   -- Un prenom ne vit qu'a UN endroit, et tout le reste designe la personne
@@ -752,7 +784,14 @@ begin
     get diagnostics branche = row_count;
   end if;
 
-  return jsonb_build_object('id', p_id, 'prenom', neuf, 'branche', branche);
+  return jsonb_build_object(
+    'id', p_id,
+    'prenom', neuf,
+    'branche', branche,
+    -- Ce que la date VAUT maintenant, et non ce qu'on a demande : la page
+    -- affiche un fait, pas une intention.
+    'date_naissance', (select date_naissance from private.participants where id = p_id)
+  );
 end $fn$;
 
 -- ---- 8c bis. Restreindre la portee de quelqu'un ----
@@ -1223,7 +1262,7 @@ grant execute on function public.admin_saisie_ouvrir(text, boolean)    to anon;
 
 grant execute on function public.admin_lister(text)                                         to anon;
 grant execute on function public.admin_ajouter(text, text, text, uuid, uuid, boolean, text, date) to anon;
-grant execute on function public.admin_modifier(text, uuid, text, text)                     to anon;
+grant execute on function public.admin_modifier(text, uuid, text, text, date, boolean)      to anon;
 grant execute on function public.admin_portee(text, uuid, text)                             to anon;
 grant execute on function public.admin_retirer(text, uuid)                                  to anon;
 grant execute on function public.admin_importer(text, jsonb)                                to anon;
