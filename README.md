@@ -306,8 +306,20 @@ cette nuit sur les suivantes** le fait en un geste — en ne suivant que les
 personnes présentes ces nuits-là.
 
 **Deux façons de déplacer**, et non une : on glisse le jeton, ou bien on le
-saisit d'un clic et on le pose d'un autre. Échap repose ce qu'on avait
-saisi, et un jeton lâché à côté d'un rectangle retombe là où il était.
+saisit d'un clic et on le pose d'un autre. Un jeton lâché à côté d'un
+rectangle retombe là où il était.
+
+Sur un nom saisi, deux touches :
+
+| Touche | Effet |
+|---|---|
+| <kbd>Suppr</kbd> (ou <kbd>Retour arrière</kbd>) | le ressort de sa chambre et le renvoie à **À placer** |
+| <kbd>Échap</kbd> | le repose là où il était |
+
+`Suppr` est le geste inverse du déplacement, et le seul qui manquait :
+ressortir quelqu'un demandait de viser le tas, donc de le retrouver en haut
+de l'écran. Dans un champ de saisie, ces touches gardent leur sens
+ordinaire — effacer une lettre, pas vider une chambre.
 
 ### Le glisser n'est pas celui du navigateur
 

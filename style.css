@@ -605,6 +605,21 @@ fieldset.panneau-resultat .note {
   cursor: pointer;
 }
 
+/* Une touche du clavier, citee dans une note. Le navigateur lui donne une
+   fonte a chasse fixe et rien d'autre ; sans ce cadre, « Suppr » se lit
+   comme un mot ordinaire au milieu d'une phrase. */
+kbd {
+  font: inherit;
+  font-size: 0.82em;
+  padding: 1px 6px;
+  border: 1px solid var(--trait);
+  border-bottom-width: 2px;
+  border-radius: 4px;
+  background: var(--carte);
+  color: var(--texte);
+  white-space: nowrap;
+}
+
 /* ---------- Plan de couchage ---------- */
 
 /* Les nuits du sejour. Pas des onglets ARIA -- la page en a deja une rangee

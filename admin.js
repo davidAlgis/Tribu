@@ -1056,6 +1056,11 @@ let saisi = null;
 
 const TAS = "tas"; // l'unite qui n'en est pas une : ceux qui restent a placer
 
+// Le tas comme destination. Il se vise de trois facons -- on y glisse un
+// jeton, on l'y pose au clic, ou l'on appuie sur Suppr -- et son libelle
+// parait dans les messages : une seule definition, donc.
+const UNITE_TAS = { cle: TAS, nom: "À placer" };
+
 // Ce qu'un jeton met dans le presse-papiers du glisser-deposer.
 //
 // LE GLISSER N'EST PAS CELUI DU NAVIGATEUR
@@ -1453,7 +1458,7 @@ function dessinerPlan() {
 
   zonePlan.appendChild(
     rectangle(
-      { cle: TAS, nom: "À placer" },
+      UNITE_TAS,
       dormeurs.filter((d) => !d.logement_id)
     )
   );
@@ -1532,12 +1537,39 @@ for (const cible of [window, document]) {
   }
 }
 
-// Échap repose ce qu'on avait saisi. Sans cette porte de sortie, un jeton
-// saisi par erreur suit le prochain clic n'importe ou.
+// Le clavier, sur un jeton saisi.
+//
+//   Échap  repose le jeton. Sans cette porte de sortie, un jeton saisi par
+//          erreur suit le prochain clic n'importe ou.
+//   Suppr  le sort de sa chambre et le renvoie a placer. C'est le geste
+//          inverse du deplacement, et le seul qui manquait : ressortir
+//          quelqu'un demandait de viser le tas, donc de le retrouver en
+//          haut de l'ecran.
+//
+// Retour arriere vaut Suppr : sur un portable sans pave numerique, c'est
+// la touche qu'on a sous les doigts.
 document.addEventListener("keydown", (e) => {
-  if (e.key === "Escape" && saisi) {
+  if (!saisi) return;
+
+  // Dans un champ de saisie, ces touches gardent leur sens ordinaire --
+  // effacer une lettre, pas vider une chambre.
+  if (e.target && e.target.closest && e.target.closest("input, textarea, select")) {
+    return;
+  }
+
+  if (e.key === "Escape") {
     saisi = null;
     dessinerPlan();
+    return;
+  }
+
+  if (e.key === "Delete" || e.key === "Backspace") {
+    // `preventDefault` surtout pour le retour arriere, que certaines
+    // configurations font encore reculer d'une page.
+    e.preventDefault();
+    // Quelqu'un qui n'etait nulle part y reste : `placer` le voit deja la
+    // et se contente de le reposer.
+    placer(saisi, UNITE_TAS);
   }
 });
 
