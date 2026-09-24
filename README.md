@@ -319,13 +319,17 @@ Firefox seulement. Trois causes indépendantes, toutes supprimées :
 - `dragenter` n'était pas annulé. La spécification demande d'annuler
   `dragenter` **et** `dragover` pour déclarer une zone d'arrivée ; Chromium
   se contente du second, Firefox exige les deux ;
-- le garde-fou de la page reconnaissait nos glissers en **lisant le
-  presse-papiers**, dont l'accès est restreint pendant le survol et varie
-  d'un navigateur à l'autre. Un garde-fou qui peut ne rien lire est un
-  garde-fou qui se tait. C'est désormais un drapeau que pose notre propre
-  `dragstart`, et qui ne peut pas mentir.
+- le garde-fou de la page était **conditionnel**, et il a fui deux fois
+  pour cette seule raison : d'abord parce qu'il reconnaissait nos glissers
+  en lisant le presse-papiers, dont l'accès est restreint pendant le survol
+  et varie d'un navigateur à l'autre ; puis, une fois cette lecture
+  remplacée par un drapeau, parce que le dépôt filait encore sous Firefox.
 
-Un fichier déposé sur la page, lui, reste l'affaire du navigateur.
+La condition était la précaution de trop. **La page refuse maintenant tout
+dépôt, sans condition** — il n'existe aucun cas où l'on veuille que le
+navigateur fasse quelque chose de ce qu'on lâche ici. Seuls les champs de
+saisie gardent leur comportement : y glisser du texte est le seul geste
+légitime de la page.
 
 **Les homonymes** portent leur filiation entre parenthèses : « Marie
 (conjoint de Gérard) », « Marie (enfant d'Alice) ». Seulement eux — un

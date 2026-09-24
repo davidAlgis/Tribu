@@ -1066,18 +1066,6 @@ const TAS = "tas"; // l'unite qui n'en est pas une : ceux qui restent a placer
 // rien a en faire.
 const TYPE_JETON = "application/x-tribu-jeton";
 
-// Un de NOS jetons est en vol.
-//
-// Le garde-fou d'en bas se fiait a `dataTransfer.types` pour reconnaitre
-// nos glissers. C'etait une erreur : pendant le survol, le presse-papiers
-// est en « mode protege », et ce que le navigateur accepte d'en montrer
-// varie de l'un a l'autre. Un garde-fou qui peut ne rien lire est un
-// garde-fou qui se tait -- et quand il se tait, le navigateur ramasse le
-// geste.
-//
-// Un drapeau pose par notre propre `dragstart` ne peut pas mentir. Il
-// distingue tout aussi bien un jeton d'un fichier lache sur la page.
-let jetonEnVol = false;
 
 function cleUnite(logementId, numero) {
   return `${logementId}#${numero}`;
@@ -1225,15 +1213,11 @@ function jeton(personne, dansUneUnite) {
     // glisser qui rate sa cible le laisserait arme. Le prochain clic
     // n'importe ou deplacerait alors quelqu'un sans qu'on l'ait demande.
     // La classe suffit a montrer le jeton en vol, et `dragend` la retire.
-    jetonEnVol = true;
     e.dataTransfer.setData(TYPE_JETON, personne.id);
     e.dataTransfer.effectAllowed = "move";
     b.classList.add("saisi");
   });
-  b.addEventListener("dragend", () => {
-    jetonEnVol = false;
-    b.classList.remove("saisi");
-  });
+  b.addEventListener("dragend", () => b.classList.remove("saisi"));
   return b;
 }
 
@@ -1389,37 +1373,42 @@ async function placer(personneId, unite) {
   }
 }
 
-// Le reste de la page absorbe nos deposes rates.
+// Cette page n'attend RIEN de ce qu'on lache dessus.
 //
-// Entre deux rectangles il y a dix pixels, et sous eux toute une note. Un
-// jeton lache la n'atteint aucune zone d'arrivee : sans ces lignes, le
-// navigateur reprend la main sur le geste et ouvre ce qu'on lui a donne
-// dans un onglet.
+// Ce garde-fou a ete conditionnel deux fois, et il a fui deux fois. Il a
+// d'abord reconnu nos glissers en lisant le presse-papiers -- illisible
+// sous Firefox pendant le survol. Puis a un drapeau pose par notre propre
+// `dragstart` -- et le depose filait encore au navigateur, qui cherchait le
+// texte recu : vide, il ouvrait la page d'accueil de Google.
 //
-// Les TROIS evenements, pour la meme raison que sur la boite : annuler
-// `dragover` seul suffit a Chromium, pas a Firefox. En phase de CAPTURE,
-// pour passer avant tout le monde -- un garde-fou qui s'execute en dernier
-// n'en est pas un.
+// La condition etait la precaution de trop. Entre deux rectangles il y a
+// dix pixels, et sous eux toute une note ; un jeton lache la n'atteint
+// aucune zone d'arrivee, et il n'existe AUCUN cas ou l'on veuille que le
+// navigateur en fasse quelque chose. On annule donc sans condition.
+//
+// Les trois evenements : annuler `dragover` seul suffit a Chromium, pas a
+// Firefox, qui suit la specification et demande aussi `dragenter`. Sur
+// `window` autant que sur `document`, en phase de CAPTURE -- un garde-fou
+// qui s'execute en dernier n'en est pas un.
 //
 // Rien n'est pose ici. Rater sa cible ne doit pas deplacer quelqu'un au
-// hasard ; cela doit ne rien faire du tout. Et le drapeau nous garde de
-// confisquer un fichier depose sur la page : celui-la ne nous regarde pas.
-for (const evenement of ["dragenter", "dragover", "drop"]) {
-  document.addEventListener(
-    evenement,
-    (e) => {
-      if (jetonEnVol) e.preventDefault();
-    },
-    true
-  );
+// hasard ; cela doit ne rien faire du tout.
+for (const cible of [window, document]) {
+  for (const evenement of ["dragenter", "dragover", "drop"]) {
+    cible.addEventListener(
+      evenement,
+      (e) => {
+        // Un champ de saisie garde son comportement : y glisser du texte
+        // est un geste legitime, et c'est le seul de cette page.
+        if (e.target && e.target.closest && e.target.closest("input, textarea")) {
+          return;
+        }
+        e.preventDefault();
+      },
+      true
+    );
+  }
 }
-
-// `dragend` retombe sur le jeton d'origine -- que `placer` a pu remplacer
-// entre-temps, en redessinant le plan. Le depose baisse donc le drapeau
-// lui aussi, pour qu'il ne reste jamais leve.
-document.addEventListener("drop", () => {
-  jetonEnVol = false;
-});
 
 // Échap repose ce qu'on avait saisi. Sans cette porte de sortie, un jeton
 // saisi par erreur suit le prochain clic n'importe ou.
