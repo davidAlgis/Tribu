@@ -206,6 +206,40 @@
           la saisie reste ouverte, c'est à toi de trancher.
         </p>
       </fieldset>
+
+      <fieldset>
+        <legend>Le plan de couchage <span id="compteur-couchages" class="discret-inline"></span></legend>
+
+        <!--
+          Une nuit à la fois. Le plan change d'un soir à l'autre — c'est
+          tout l'intérêt — mais on n'en organise qu'un seul en même temps,
+          sans quoi le tableau deviendrait illisible.
+
+          Ces boutons ne sont pas des onglets ARIA : la page en a déjà une
+          rangée en tête, et deux `tablist` imbriqués annonceraient deux
+          niveaux là où il n'y a qu'un choix. `aria-pressed` dit ce qu'il
+          faut — celui-ci est enfoncé.
+        -->
+        <div class="nuits" id="choix-nuit" role="group" aria-label="Nuit à organiser"></div>
+
+        <div id="plan"></div>
+
+        <div class="actions">
+          <button type="button" id="couchages-reporter" class="discret">
+            Reporter cette nuit sur les suivantes
+          </button>
+        </div>
+        <p id="message-couchages" role="status" aria-live="polite"></p>
+
+        <p class="note">
+          Glisse un nom d'un rectangle à l'autre. Sans souris&nbsp;: un clic
+          sur le nom le saisit, un clic sur le rectangle d'arrivée le pose —
+          et la touche Échap le repose où il était.
+          Seules les personnes qui ont déclaré dormir sur place cette
+          nuit-là apparaissent. Une chambre trop pleine est signalée, jamais
+          refusée.
+        </p>
+      </fieldset>
     </div>
 
     <!-- ---- Week-ends ------------------------------------------- -->

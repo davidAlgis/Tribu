@@ -180,3 +180,26 @@ def test_le_code_organisateur_est_lisible_par_un_gestionnaire(admin):
     assert regle, "la classe .hors-ecran a disparu de style.css"
     assert "position: absolute" in regle.group(1)
     assert "display" not in regle.group(1)
+
+
+def test_chaque_message_d_etat_porte_une_couleur():
+    """Un refus affiché dans la couleur du texte courant se lit comme une
+    phrase ordinaire.
+
+    Chaque panneau a fini par avoir son propre paragraphe d'état —
+    `#message-sejour`, `#message-lieux`, `#message-couchages`… — et la règle
+    d'origine ne visait que `#message`. Le test liste les identifiants tels
+    qu'ils sont dans les pages, et vérifie qu'un sélecteur les atteint.
+    """
+    style = (RACINE / "style.css").read_text(encoding="utf-8")
+    prefixes = re.findall(r'\[id\^="([^"]+)"\]\.erreur', style)
+    nommes = set(re.findall(r"#([\w-]+)\.erreur", style))
+
+    orphelins = []
+    for page in PAGES:
+        html = (RACINE / page).read_text(encoding="utf-8")
+        for ident in re.findall(r'\bid="(message[\w-]*)"', html):
+            atteint = ident in nommes or any(ident.startswith(p) for p in prefixes)
+            if not atteint:
+                orphelins.append(f"{page}#{ident}")
+    assert sorted(set(orphelins)) == [], "paragraphes d'état sans couleur d'erreur"

@@ -1736,6 +1736,252 @@ grant execute on function public.admin_logement_modifier(text, uuid, text, integ
 grant execute on function public.admin_logement_retirer(text, uuid)                     to anon;
 
 
+-- ---- 11c. Le plan de couchage ----
+--
+--  L'inventaire dit COMBIEN de couchages. Ceci dit QUI est dans lequel.
+--
+--  UNE LIGNE PAR PERSONNE ET PAR NUIT
+--
+--  C'est la souplesse demandee : on dort avec sa soeur le premier soir et
+--  avec trois cousins le lendemain. Une affectation valable pour tout le
+--  sejour ne saurait pas le dire, et obligerait a tout reprendre des qu'un
+--  seul soir differe.
+--
+--  Le report d'une nuit sur les suivantes rend le cas courant -- « la meme
+--  chose toute la semaine » -- aussi court qu'une affectation unique. La
+--  souplesse ne coute donc rien a celui qui n'en veut pas.
+--
+--  UNE UNITE N'EST PAS UNE LIGNE DE `logements`
+--
+--  « 4 chambres de 2 » est UNE ligne d'inventaire et QUATRE couchages. Une
+--  unite se designe donc par un couple : la ligne, et le rang de
+--  l'exemplaire parmi les siens. C'est ce qui evite de poser quatre lignes
+--  jumelles dans l'inventaire pour le seul besoin de les nommer.
+--
+--  Baisser le nombre d'un type laisse des affectations au-dela du rang.
+--  Elles sont ECARTEES A LA LECTURE -- les personnes reapparaissent a
+--  placer -- mais pas effacees : remonter le nombre les retrouve. Retirer
+--  le type, lui, les emporte pour de bon (`on delete cascade`).
+--
+--  LA CAPACITE NE BLOQUE PAS
+--
+--  Comme le panneau de tension : un depassement se voit, il ne se refuse
+--  pas. Sept personnes dans un gite de six est arrive pour de vrai, et la
+--  base n'a pas a trancher ce que l'organisateur assume.
+--
+
+create table if not exists private.couchages (
+  id             uuid primary key default gen_random_uuid(),
+  participant_id uuid not null references private.participants(id) on delete cascade,
+  jour           date not null,
+  logement_id    uuid not null references private.logements(id) on delete cascade,
+  numero         smallint not null check (numero between 1 and 200),
+  maj_le         timestamptz not null default now(),
+  -- Un seul lit par personne et par nuit. C'est aussi ce qui permet a
+  -- « placer » d'etre un upsert : deplacer quelqu'un est la meme operation
+  -- que le poser.
+  unique (participant_id, jour)
+);
+
+create index if not exists couchages_jour_idx on private.couchages (jour);
+
+-- La table nait apres le `revoke all` de la section 6 : il ne la couvre pas.
+revoke all on private.couchages from anon, authenticated;
+
+-- Le plan d'une nuit : les unites, les dormeurs, et ou chacun se trouve.
+--
+-- Les trois partent ensemble parce qu'ils ne se lisent qu'ensemble : une
+-- unite sans ses occupants ne dit rien, et un dormeur sans les unites n'a
+-- nulle part ou aller. `nuits` accompagne le tout pour que la page puisse
+-- proposer les autres soirs sans un second appel.
+create or replace function public.admin_couchages(p_code text, p_jour date default null)
+returns jsonb
+language plpgsql stable security definer
+set search_path = private, pg_temp as $fn$
+declare
+  r private.reglages;
+  j date;
+begin
+  perform private.verifier_code(p_code, 'admin');
+  select * into r from private.reglages;
+  if r.id is null then
+    raise exception 'REGLAGES_ABSENTS' using errcode = 'P0001';
+  end if;
+
+  -- Sans jour demande, la premiere nuit ou quelqu'un dort sur place -- et
+  -- a defaut le premier jour du sejour, pour que la page ait toujours une
+  -- date a afficher.
+  j := coalesce(
+    p_jour,
+    (select min(pr.jour) from public.presences pr
+      where pr.jour between r.date_debut and r.date_fin
+        and pr.hebergement <> 'exterieur'),
+    r.date_debut
+  );
+
+  return jsonb_build_object(
+    'jour', j,
+
+    -- Toutes les nuits du sejour, avec leur nombre de dormeurs : c'est le
+    -- selecteur de la page, et il doit montrer les soirs vides aussi.
+    'nuits', coalesce((
+      select jsonb_agg(jsonb_build_object(
+               'jour', d.jour,
+               'dormeurs', (select count(*) from public.presences pr
+                             where pr.jour = d.jour and pr.hebergement <> 'exterieur')
+             ) order by d.jour)
+      from (select (r.date_debut + i) as jour
+              from generate_series(0, r.date_fin - r.date_debut) as i) d
+    ), '[]'::jsonb),
+
+    -- « 4 chambres de 2 » se deplie ici en quatre unites. Le rang vient de
+    -- `generate_series` : il n'est pas stocke dans l'inventaire, il se
+    -- recalcule, et il ne veut rien dire de plus que « la deuxieme ».
+    'unites', coalesce((
+      select jsonb_agg(jsonb_build_object(
+               'logement_id', u.id,
+               'numero', u.n,
+               'categorie', u.categorie,
+               'capacite', u.capacite,
+               'vue_mer', u.vue_mer
+             ) order by u.categorie, u.vue_mer, u.capacite, u.n)
+      from (select l.*, n from private.logements l, generate_series(1, l.nombre) as n) u
+    ), '[]'::jsonb),
+
+    -- Qui a besoin d'un lit cette nuit-la, et ou il est pose. « exterieur »
+    -- ne dort pas sur place : il n'a rien a faire dans le plan.
+    'dormeurs', coalesce((
+      select jsonb_agg(jsonb_build_object(
+               'id', p.id,
+               'prenom', p.prenom,
+               'famille', p.famille,
+               'categorie_age', p.categorie_age,
+               'hebergement', pr.hebergement,
+               'vue_mer', pr.vue_mer,
+               'logement_id', c.logement_id,
+               'numero', c.numero
+             ) order by p.famille, p.prenom)
+      from public.presences pr
+      join private.participants p on p.id = pr.participant_id
+      -- La jointure ecarte les affectations tombees au-dela du rang apres
+      -- une baisse du nombre : la personne revient simplement a placer.
+      left join private.couchages c
+        on c.participant_id = p.id
+       and c.jour = pr.jour
+       and c.numero <= (select l.nombre from private.logements l where l.id = c.logement_id)
+      where pr.jour = j and pr.hebergement <> 'exterieur'
+    ), '[]'::jsonb)
+  );
+end $fn$;
+
+-- Poser quelqu'un, le deplacer, ou le sortir : un seul verbe. Deplacer
+-- n'est qu'un poser ailleurs, et `p_logement` nul est le retour au tas.
+create or replace function public.admin_couchage_placer(
+  p_code        text,
+  p_participant uuid,
+  p_jour        date,
+  p_logement    uuid default null,
+  p_numero      integer default null
+)
+returns jsonb
+language plpgsql security definer
+set search_path = private, pg_temp as $fn$
+declare
+  gite private.logements;
+begin
+  perform private.verifier_code(p_code, 'admin');
+  -- Le premier changement de la semaine emporte une copie de l'avant.
+  perform private.sauver_si_nouvelle_semaine();
+
+  if not exists (select 1 from private.participants where id = p_participant) then
+    raise exception 'INCONNU' using errcode = 'P0001';
+  end if;
+
+  if p_logement is null then
+    delete from private.couchages
+     where participant_id = p_participant and jour = p_jour;
+    return jsonb_build_object('place', false);
+  end if;
+
+  select * into gite from private.logements where id = p_logement;
+  if gite.id is null then
+    raise exception 'INCONNU' using errcode = 'P0001';
+  end if;
+  if p_numero is null or p_numero < 1 or p_numero > gite.nombre then
+    raise exception 'UNITE_INCONNUE' using errcode = 'P0001';
+  end if;
+
+  -- Placer quelqu'un qui n'a pas declare dormir sur place ecrirait une
+  -- ligne que la lecture n'affiche jamais : un fantome dans la base, et un
+  -- lit compte pour rien.
+  if not exists (
+    select 1 from public.presences pr
+     where pr.participant_id = p_participant
+       and pr.jour = p_jour
+       and pr.hebergement <> 'exterieur'
+  ) then
+    raise exception 'PAS_SUR_PLACE' using errcode = 'P0001';
+  end if;
+
+  -- Aucune verification de capacite : un depassement se voit sur la page,
+  -- il ne se refuse pas ici (cf. l'en-tete de cette sous-partie).
+  insert into private.couchages (participant_id, jour, logement_id, numero)
+  values (p_participant, p_jour, p_logement, p_numero)
+  on conflict (participant_id, jour) do update set logement_id = excluded.logement_id, numero = excluded.numero, maj_le = now();
+
+  return jsonb_build_object('place', true);
+end $fn$;
+
+-- « La meme chose les soirs suivants ». Sans ce bouton, la souplesse d'une
+-- ligne par nuit se paierait huit fois pour le cas le plus courant.
+--
+-- Ne suit que les personnes qui dorment AUSSI ces nuits-la : reporter ne
+-- doit pas donner un lit a quelqu'un qui repart le lendemain.
+create or replace function public.admin_couchages_reporter(p_code text, p_jour date)
+returns jsonb
+language plpgsql security definer
+set search_path = private, pg_temp as $fn$
+declare
+  r      private.reglages;
+  ecrits integer;
+  nuits  integer;
+begin
+  perform private.verifier_code(p_code, 'admin');
+  perform private.sauver_si_nouvelle_semaine();
+
+  select * into r from private.reglages;
+  if r.id is null then
+    raise exception 'REGLAGES_ABSENTS' using errcode = 'P0001';
+  end if;
+
+  select count(*) into nuits
+    from generate_series(0, r.date_fin - r.date_debut) as i
+   where (r.date_debut + i) > p_jour;
+
+  insert into private.couchages (participant_id, jour, logement_id, numero)
+  select c.participant_id, d.jour, c.logement_id, c.numero
+    from private.couchages c
+    cross join (select (r.date_debut + i) as jour
+                  from generate_series(0, r.date_fin - r.date_debut) as i) d
+   where c.jour = p_jour
+     and d.jour > p_jour
+     and exists (
+       select 1 from public.presences pr
+        where pr.participant_id = c.participant_id
+          and pr.jour = d.jour
+          and pr.hebergement <> 'exterieur'
+     )
+  on conflict (participant_id, jour) do update set logement_id = excluded.logement_id, numero = excluded.numero, maj_le = now();
+  get diagnostics ecrits = row_count;
+
+  return jsonb_build_object('nuits', nuits, 'ecrits', ecrits);
+end $fn$;
+
+grant execute on function public.admin_couchages(text, date)                            to anon;
+grant execute on function public.admin_couchage_placer(text, uuid, date, uuid, integer) to anon;
+grant execute on function public.admin_couchages_reporter(text, date)                   to anon;
+
+
 -- ============================================================
 --  12. Revenir en arriere
 -- ============================================================
@@ -1762,7 +2008,7 @@ grant execute on function public.admin_logement_retirer(text, uuid)             
 --
 --  CE QU'IL CONTIENT
 --
---  Les six tables qui portent de la donnee saisie, dans un seul jsonb.
+--  Les sept tables qui portent de la donnee saisie, dans un seul jsonb.
 --  Ce n'est pas la forme la plus compacte ; c'est la plus simple a relire
 --  dans cinq semaines, et vingt personnes tiennent en quelques dizaines
 --  de kilo-octets.
@@ -1829,7 +2075,9 @@ set search_path = private, pg_temp as $fn$
     'refus_lieu', coalesce(
       (select jsonb_agg(to_jsonb(r) order by r.participant_id, r.departement) from public.refus_lieu r), '[]'::jsonb),
     'logements', coalesce(
-      (select jsonb_agg(to_jsonb(l) order by l.id) from private.logements l), '[]'::jsonb)
+      (select jsonb_agg(to_jsonb(l) order by l.id) from private.logements l), '[]'::jsonb),
+    'couchages', coalesce(
+      (select jsonb_agg(to_jsonb(c) order by c.participant_id, c.jour) from private.couchages c), '[]'::jsonb)
   )
 $fn$;
 
@@ -1891,7 +2139,8 @@ begin
                'voeux',        jsonb_array_length(coalesce(s.contenu->'voeux', '[]'::jsonb)),
                'refus_lieu',   jsonb_array_length(coalesce(s.contenu->'refus_lieu', '[]'::jsonb)),
                'options_date', jsonb_array_length(coalesce(s.contenu->'options_date', '[]'::jsonb)),
-               'logements',    jsonb_array_length(coalesce(s.contenu->'logements', '[]'::jsonb))
+               'logements',    jsonb_array_length(coalesce(s.contenu->'logements', '[]'::jsonb)),
+               'couchages',    jsonb_array_length(coalesce(s.contenu->'couchages', '[]'::jsonb))
              )
            ) order by s.prise_le desc)
       from private.sauvegardes s
@@ -1974,6 +2223,7 @@ declare
   n_refus        integer;
   n_options      integer;
   n_logements    integer;   -- reste null si la copie ne dit rien des logements
+  n_couchages    integer;   -- idem pour le plan de couchage
 begin
   perform private.verifier_code(p_code, 'admin');
 
@@ -1987,7 +2237,7 @@ begin
           'avant_restauration', private.etat_courant());
 
   truncate table public.presences, public.voeux, public.refus_lieu,
-                 private.options_date, private.participants;
+                 private.couchages, private.options_date, private.participants;
 
   insert into private.participants
     (id, prenom, famille, categorie_age, parent_id, conjoint_id, invite, portee, cree_le)
@@ -2061,6 +2311,21 @@ begin
     get diagnostics n_logements = row_count;
   end if;
 
+  -- Meme regle pour le plan : une copie qui n'en parle pas n'autorise pas
+  -- a l'effacer. Il depend des logements et se remet donc apres eux.
+  if c ? 'couchages' then
+    truncate table private.couchages;
+    insert into private.couchages (id, participant_id, jour, logement_id, numero, maj_le)
+    select (l->>'id')::uuid,
+           (l->>'participant_id')::uuid,
+           (l->>'jour')::date,
+           (l->>'logement_id')::uuid,
+           (l->>'numero')::smallint,
+           coalesce((l->>'maj_le')::timestamptz, now())
+      from jsonb_array_elements(c->'couchages') as l;
+    get diagnostics n_couchages = row_count;
+  end if;
+
   perform private.sauvegardes_purger();
 
   return jsonb_build_object(
@@ -2069,7 +2334,8 @@ begin
     'presences', n_presences,
     'voeux', n_voeux,
     'refus_lieu', n_refus,
-    'logements', n_logements
+    'logements', n_logements,
+    'couchages', n_couchages
   );
 end $fn$;
 
@@ -2094,6 +2360,7 @@ grant execute on function public.admin_sauvegarde_restaurer(text, uuid)  to anon
 --    voeux          les reponses de la famille au sondage des dates
 --    refus_lieu     les departements peints en rouge sur la carte
 --    logements      l'inventaire des couchages, pose depuis admin.html
+--    couchages      qui dort ou, nuit par nuit
 --    sauvegardes    0 tant que personne n'a rien modifie cette semaine
 --
 select
@@ -2106,4 +2373,5 @@ select
   (select count(*) from public.voeux)         as voeux,
   (select count(*) from public.refus_lieu)    as refus_lieu,
   (select count(*) from private.logements)    as logements,
+  (select count(*) from private.couchages)    as couchages,
   (select count(*) from private.sauvegardes)  as sauvegardes;

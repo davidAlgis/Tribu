@@ -20,7 +20,7 @@ Trois pages pour la famille, une pour toi :
 | [`lieux.html`](lieux.html) | la famille | où l'on n'a pas envie d'aller |
 | [`dates.html`](dates.html) | la famille | quel week-end arrange chacun, et où en est le choix |
 | [`index.html`](index.html) | la famille | qui vient, quelles nuits, quels repas |
-| [`admin.html`](admin.html) | toi | dates du séjour, participants, droits, logements, week-ends, résultat de la carte, retour en arrière |
+| [`admin.html`](admin.html) | toi | dates du séjour, participants, droits, logements et plan de couchage, week-ends, résultat de la carte, retour en arrière |
 
 Les trois pages familiales portent le même menu en tête — **Le lieu**, **La
 date**, **Les présences** — dans l'ordre où les décisions se prennent. Celle
@@ -286,9 +286,45 @@ six, et le schéma n'a pas à changer entre deux éditions. Une autre année,
 un autre lieu — on retape l'inventaire, comme on retape les dates du
 séjour, et le reste suit.
 
-Ce que cela ne fait **pas** : dire qui dort avec qui. C'est une autre
-question, et la mélanger à celle-ci ferait de la saisie d'un nombre une
-réunion de famille.
+## Le plan de couchage
+
+Sous l'inventaire, dans le même onglet. L'inventaire dit **combien** de
+couchages ; le plan dit **qui est dans lequel**.
+
+Un rectangle par couchage, un jeton par personne, et l'on glisse les
+seconds entre les premiers. « 4 chambres de 2 » donne quatre rectangles :
+une unité est une ligne d'inventaire **plus un rang**, ce qui évite de
+poser quatre lignes jumelles dans l'inventaire pour le seul besoin de les
+nommer.
+
+**Une nuit à la fois.** C'était la demande de départ : quelqu'un dort avec
+sa sœur le premier soir et avec trois cousins le lendemain. Une affectation
+valable pour tout le séjour ne saurait pas le dire. Les boutons en tête
+choisissent le soir, et montrent combien de gens y dorment. Et parce que le
+cas courant reste « la même chose toute la semaine », le bouton **Reporter
+cette nuit sur les suivantes** le fait en un geste — en ne suivant que les
+personnes présentes ces nuits-là.
+
+**Deux façons de déplacer**, et non une. Le glisser-déposer du navigateur
+ne répond ni au doigt ni au clavier ; un jeton qu'on saisit d'un clic et
+qu'on pose d'un autre répond aux trois. Échap repose ce qu'on avait saisi.
+
+Ce que la page **signale sans l'interdire** :
+
+- une chambre trop pleine passe au rouge — sept personnes dans un gîte de
+  six est arrivé pour de vrai, et la base n'a pas à trancher ce que tu
+  assumes ;
+- un jeton posé ailleurs que ce que la personne avait demandé prend un
+  liseré pointillé, et dit dans son infobulle ce qu'elle avait coché.
+
+Seules les personnes ayant déclaré **dormir sur place** cette nuit-là
+apparaissent : placer quelqu'un d'absent écrirait une ligne que rien
+n'affiche, et occuperait un lit pour rien.
+
+Baisser le nombre d'un type laisse des affectations au-delà du rang. Elles
+sont **écartées à la lecture** — les personnes reviennent à placer — mais
+pas effacées : remonter le nombre les retrouve. Retirer le type, lui, les
+emporte pour de bon.
 
 ## Corriger un prénom
 

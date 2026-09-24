@@ -76,9 +76,18 @@ const MESSAGES = {
   NOMBRE_INVALIDE: "Le nombre de logements doit être entre 1 et 200.",
   VUE_MER_HORS_CHAMBRE: "La vue mer ne concerne que les chambres.",
   LOGEMENT_EXISTANT: "Ce type est déjà dans l'inventaire : corrige plutôt sa ligne.",
+  UNITE_INCONNUE: "Ce couchage n'existe plus. Recharge la page.",
+  PAS_SUR_PLACE: "Cette personne n'a pas déclaré dormir sur place cette nuit-là.",
 };
 
-const etat = { code: "", participants: [], type: "famille", logements: [], nuits: [] };
+const etat = {
+  code: "",
+  participants: [],
+  type: "famille",
+  logements: [],
+  nuits: [],
+  plan: { jour: null, nuits: [], unites: [], dormeurs: [] },
+};
 
 // ---------------------------------------------------------------- reseau
 
@@ -480,7 +489,9 @@ function montrer(id) {
 // lui, un seul onglet est atteignable et les fleches passent de l'un a
 // l'autre, comme dans n'importe quelle barre d'onglets.
 
-const onglets = [...document.querySelectorAll('[role="tab"]')];
+// La requete est ancree sur `.onglets` : une autre rangee de boutons
+// ailleurs dans la page ne doit pas se retrouver pilotee d'ici.
+const onglets = [...document.querySelectorAll('.onglets [role="tab"]')];
 
 function ouvrirOnglet(onglet) {
   for (const o of onglets) {
@@ -687,6 +698,9 @@ async function rechargerLogements() {
   etat.nuits = d.nuits || [];
   dessinerLogements();
   dessinerTension();
+  // Le plan depend de l'inventaire : retirer un type ou baisser son nombre
+  // change les rectangles sous les jetons. On garde la nuit regardee.
+  await rechargerPlan(etat.plan.jour);
 }
 
 function dessinerLogements() {
@@ -995,6 +1009,313 @@ async function retirerLogement(ligne) {
 }
 
 
+// ---------------------------------------------------- plan de couchage
+//
+// L'inventaire dit COMBIEN de couchages ; ce panneau dit QUI est dans
+// lequel. Un rectangle par unite, un jeton par personne, et l'on deplace
+// les seconds entre les premiers.
+//
+// UNE NUIT A LA FOIS. Le plan change d'un soir a l'autre -- c'est tout
+// l'interet -- mais huit tableaux cote a cote ne se lisent pas. Le bouton
+// « reporter » rend ensuite le cas courant, « la meme chose toute la
+// semaine », aussi court qu'une affectation unique.
+//
+// DEUX FACONS DE DEPLACER, et non une. Le glisser-deposer du navigateur
+// ne repond pas au doigt et pas au clavier ; un jeton qu'on saisit d'un
+// clic et qu'on pose d'un autre repond aux trois. Les deux chemins
+// aboutissent a `placer()`, qui est le seul a ecrire.
+
+const zonePlan = document.getElementById("plan");
+const zoneNuits = document.getElementById("choix-nuit");
+const compteurCouchages = document.getElementById("compteur-couchages");
+const messageCouchages = document.getElementById("message-couchages");
+
+// `null` = personne de saisi. C'est le seul etat que ce panneau garde pour
+// lui : tout le reste vient de la base a chaque rechargement.
+let saisi = null;
+
+const TAS = "tas"; // l'unite qui n'en est pas une : ceux qui restent a placer
+
+function cleUnite(logementId, numero) {
+  return `${logementId}#${numero}`;
+}
+
+// « Chambre 3 », « Gîte 1 ». Le rang vient de la position dans la liste, et
+// se compte PAR CATEGORIE : deux lignes d'inventaire de chambres donnent
+// une seule suite de chambres, sans quoi la page afficherait deux
+// « Chambre 1 ».
+function nommerUnites(unites) {
+  const rangs = {};
+  return unites.map((u) => {
+    rangs[u.categorie] = (rangs[u.categorie] || 0) + 1;
+    // Le rang se compte par CATEGORIE, pas par type d'interface : une
+    // chambre vue mer reste une chambre, et elle prend son tour dans la
+    // meme suite. Le supplement se dit apres le numero -- « Chambre 7
+    // (vue mer) » se lit, « Chambre vue mer 7 » se dechiffre.
+    const t = TYPES_LOGEMENT[u.categorie] || { un: u.categorie };
+    const base = `${t.un.charAt(0).toUpperCase()}${t.un.slice(1)}`;
+    return {
+      ...u,
+      cle: cleUnite(u.logement_id, u.numero),
+      nom: `${base} ${rangs[u.categorie]}${u.vue_mer ? " (vue mer)" : ""}`,
+    };
+  });
+}
+
+async function rechargerPlan(jour) {
+  const d = await rpc("admin_couchages", { p_code: etat.code, p_jour: jour || null });
+  etat.plan = { ...d, unites: nommerUnites(d.unites || []) };
+  saisi = null;
+  dessinerNuits();
+  dessinerPlan();
+}
+
+function dessinerNuits() {
+  const { nuits, jour } = etat.plan;
+  zoneNuits.textContent = "";
+  for (const n of nuits || []) {
+    const b = document.createElement("button");
+    b.type = "button";
+    b.className = "nuit";
+    b.setAttribute("aria-pressed", n.jour === jour ? "true" : "false");
+    b.append(span(afficherJour(n.jour), "jour"), span(`${n.dormeurs}`, "combien"));
+    b.title = `${n.dormeurs} personne(s) dorment sur place la nuit du ${afficherJour(n.jour)}`;
+    b.addEventListener("click", () => changerNuit(n.jour));
+    zoneNuits.appendChild(b);
+  }
+}
+
+async function changerNuit(jour) {
+  messageCouchages.className = "";
+  messageCouchages.textContent = "";
+  try {
+    await rechargerPlan(jour);
+  } catch (erreur) {
+    messageCouchages.className = "erreur";
+    messageCouchages.textContent = erreur.message;
+  }
+}
+
+// Le jeton d'une personne. C'est un vrai bouton : il prend le focus, il
+// s'active a la barre d'espace, et un lecteur d'ecran l'annonce -- ce
+// qu'un <div draggable> ne fait pas.
+function jeton(personne, dansUneUnite) {
+  const b = document.createElement("button");
+  b.type = "button";
+  b.className = "jeton";
+  b.draggable = true;
+  b.dataset.personne = personne.id;
+  b.append(span(personne.prenom, "nom"));
+
+  if (personne.categorie_age !== "adulte") {
+    b.append(span(AGES[personne.categorie_age], "etiquette"));
+  }
+
+  // Ce que la personne a demande dans sa grille. On ne l'impose pas -- c'est
+  // l'organisateur qui arbitre -- mais un ecart doit se voir, sinon il ne
+  // se decouvre qu'a l'arrivee.
+  b.dataset.demande = personne.vue_mer ? CHAMBRE_VUE_MER : personne.hebergement;
+
+  if (saisi === personne.id) b.classList.add("saisi");
+  b.setAttribute("aria-pressed", saisi === personne.id ? "true" : "false");
+  b.title = dansUneUnite
+    ? `${personne.prenom} — cliquer pour le déplacer`
+    : `${personne.prenom} — à placer`;
+
+  b.addEventListener("click", () => {
+    saisi = saisi === personne.id ? null : personne.id;
+    dessinerPlan();
+  });
+  b.addEventListener("dragstart", (e) => {
+    saisi = personne.id;
+    e.dataTransfer.setData("text/plain", personne.id);
+    e.dataTransfer.effectAllowed = "move";
+    b.classList.add("saisi");
+  });
+  b.addEventListener("dragend", () => b.classList.remove("saisi"));
+  return b;
+}
+
+// Le rectangle d'une unite -- ou le tas de ceux qui restent a placer, qui
+// se comporte comme une unite sans capacite.
+function rectangle(unite, occupants) {
+  const boite = document.createElement("div");
+  boite.className = unite.cle === TAS ? "unite tas" : "unite";
+
+  const titre = document.createElement("h4");
+  titre.append(span(unite.nom, "titre-unite"));
+
+  if (unite.cle === TAS) {
+    titre.append(span(`${occupants.length}`, "compte-unite"));
+  } else {
+    const compte = span(`${occupants.length} / ${unite.capacite}`, "compte-unite");
+    if (occupants.length > unite.capacite) {
+      compte.classList.add("trop");
+      compte.title = `${occupants.length - unite.capacite} de plus que la capacité`;
+      boite.classList.add("debordee");
+    }
+    titre.append(compte);
+  }
+  boite.appendChild(titre);
+
+  const places = document.createElement("div");
+  places.className = "places";
+  for (const p of occupants) {
+    const j = jeton(p, unite.cle !== TAS);
+    // Un lit de chambre pour qui a demande un gite : l'ecart se marque sur
+    // le jeton, la ou il se lit, et pas dans un message a part.
+    if (unite.cle !== TAS && j.dataset.demande !== typeDe(unite)) {
+      j.classList.add("ecart");
+      j.title += ` — a demandé « ${etiquetteDemande(j.dataset.demande)} »`;
+    }
+    places.appendChild(j);
+  }
+  if (!occupants.length) places.append(span("vide", "vide"));
+  boite.appendChild(places);
+
+  // La zone de depot est la boite entiere, et non la seule bande des
+  // jetons : viser trois pixels de haut dans un rectangle vide serait un
+  // jeu d'adresse.
+  boite.addEventListener("dragover", (e) => {
+    e.preventDefault();
+    e.dataTransfer.dropEffect = "move";
+    boite.classList.add("visee");
+  });
+  boite.addEventListener("dragleave", () => boite.classList.remove("visee"));
+  boite.addEventListener("drop", (e) => {
+    e.preventDefault();
+    boite.classList.remove("visee");
+    placer(e.dataTransfer.getData("text/plain"), unite);
+  });
+  // Le meme geste au clic, pour le doigt et pour le clavier.
+  boite.addEventListener("click", (e) => {
+    if (e.target.closest(".jeton")) return; // le jeton gere son propre clic
+    if (saisi) placer(saisi, unite);
+  });
+
+  return boite;
+}
+
+function etiquetteDemande(valeur) {
+  const t = TYPES_LOGEMENT[valeur];
+  return t ? t.un : valeur;
+}
+
+function dessinerPlan() {
+  const { unites, dormeurs, jour } = etat.plan;
+  zonePlan.textContent = "";
+
+  const places = dormeurs.filter((d) => d.logement_id).length;
+  compteurCouchages.textContent = dormeurs.length
+    ? `nuit du ${afficherJour(jour)} — ${places} placé(s) sur ${dormeurs.length}`
+    : `nuit du ${afficherJour(jour)} — personne ne dort sur place`;
+
+  if (!unites.length) {
+    const rien = document.createElement("p");
+    rien.className = "note";
+    rien.textContent =
+      "L'inventaire est vide : il n'y a aucun couchage où poser quelqu'un.";
+    zonePlan.appendChild(rien);
+    return;
+  }
+
+  // Ceux qui restent a placer d'abord, en pleine largeur : c'est le tas qui
+  // doit se vider, et c'est donc lui qu'on regarde.
+  const dans = (cle) =>
+    dormeurs.filter((d) => cleUnite(d.logement_id, d.numero) === cle);
+
+  zonePlan.appendChild(
+    rectangle(
+      { cle: TAS, nom: "À placer" },
+      dormeurs.filter((d) => !d.logement_id)
+    )
+  );
+
+  const grille = document.createElement("div");
+  grille.className = "plan-grille";
+  for (const u of unites) grille.appendChild(rectangle(u, dans(u.cle)));
+  zonePlan.appendChild(grille);
+}
+
+async function placer(personneId, unite) {
+  const personne = etat.plan.dormeurs.find((d) => d.id === personneId);
+  if (!personne) return;
+
+  const dejaLa =
+    unite.cle === TAS
+      ? !personne.logement_id
+      : cleUnite(personne.logement_id, personne.numero) === unite.cle;
+  if (dejaLa) {
+    saisi = null;
+    return dessinerPlan();
+  }
+
+  messageCouchages.className = "";
+  messageCouchages.textContent = "Enregistrement…";
+  try {
+    await rpc("admin_couchage_placer", {
+      p_code: etat.code,
+      p_participant: personneId,
+      p_jour: etat.plan.jour,
+      p_logement: unite.cle === TAS ? null : unite.logement_id,
+      p_numero: unite.cle === TAS ? null : unite.numero,
+    });
+    await rechargerPlan(etat.plan.jour);
+    messageCouchages.className = "ok";
+    messageCouchages.textContent =
+      unite.cle === TAS
+        ? `${personne.prenom} n'a plus de place attribuée.`
+        : `${personne.prenom} → ${unite.nom}.`;
+  } catch (erreur) {
+    messageCouchages.className = "erreur";
+    messageCouchages.textContent = erreur.message;
+    // Le serveur a refuse : l'ecran doit revenir a ce que la base contient.
+    await rechargerPlan(etat.plan.jour);
+  }
+}
+
+// Échap repose ce qu'on avait saisi. Sans cette porte de sortie, un jeton
+// saisi par erreur suit le prochain clic n'importe ou.
+document.addEventListener("keydown", (e) => {
+  if (e.key === "Escape" && saisi) {
+    saisi = null;
+    dessinerPlan();
+  }
+});
+
+document.getElementById("couchages-reporter").addEventListener("click", async () => {
+  const { jour, nuits } = etat.plan;
+  const suivantes = (nuits || []).filter((n) => n.jour > jour).length;
+  if (!suivantes) {
+    messageCouchages.className = "erreur";
+    messageCouchages.textContent = "C'est la dernière nuit du séjour.";
+    return;
+  }
+  if (
+    !confirm(
+      `Reporter le plan de la nuit du ${afficherJour(jour)} sur les ` +
+        `${suivantes} nuit(s) suivantes ?\n\nCe qui y était déjà posé sera ` +
+        `remplacé. Seules les personnes présentes ces nuits-là suivent.`
+    )
+  ) {
+    return;
+  }
+
+  messageCouchages.className = "";
+  messageCouchages.textContent = "Report…";
+  try {
+    const r = await rpc("admin_couchages_reporter", { p_code: etat.code, p_jour: jour });
+    await rechargerPlan(jour);
+    messageCouchages.className = "ok";
+    messageCouchages.textContent =
+      `${r.ecrits} place(s) posée(s) sur ${r.nuits} nuit(s) suivante(s).`;
+  } catch (erreur) {
+    messageCouchages.className = "erreur";
+    messageCouchages.textContent = erreur.message;
+  }
+});
+
+
 // ------------------------------------------------------------ le lieu
 //
 // La carte se peint sur lieux.html ; ici on ne montre que le resultat du
@@ -1103,6 +1424,15 @@ const COMPARABLES = [
     clef: "refus_lieu",
     nom: "Lieux",
     cle: ["participant_id", "departement"],
+    ignorer: ["id", "maj_le"],
+  },
+  // Le plan de couchage se compte comme les presences : une ligne par
+  // personne et par nuit, donc la meme cle naturelle et le meme affichage
+  // « untel : 4 -> 6 ».
+  {
+    clef: "couchages",
+    nom: "Couchages",
+    cle: ["participant_id", "jour"],
     ignorer: ["id", "maj_le"],
   },
 ];

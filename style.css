@@ -165,9 +165,15 @@ button {
 }
 button:disabled { opacity: 0.5; cursor: default; }
 
-#message { margin-top: 14px; font-size: 0.93rem; min-height: 1.5em; }
-#message.ok { color: var(--ok); }
-#message.erreur { color: var(--erreur); }
+/* Tous les paragraphes d'etat, et non le seul `#message`.
+   Chaque panneau a fini par avoir le sien -- `#message-sejour`,
+   `#message-lieux`, `#message-couchages`... -- et aucun n'heritait de ces
+   trois lignes : un refus s'affichait dans la couleur du texte courant,
+   c'est-a-dire comme une phrase ordinaire. Le selecteur les prend tous,
+   et un panneau ajoute demain sera colore sans qu'on y pense. */
+[id^="message"] { margin-top: 14px; font-size: 0.93rem; min-height: 1.5em; }
+[id^="message"].ok { color: var(--ok); }
+[id^="message"].erreur { color: var(--erreur); }
 
 .note {
   font-size: 0.85rem;
@@ -597,6 +603,145 @@ fieldset.panneau-resultat .note {
   margin: 8px 0 0;
   color: var(--texte);
   cursor: pointer;
+}
+
+/* ---------- Plan de couchage ---------- */
+
+/* Les nuits du sejour. Pas des onglets ARIA -- la page en a deja une rangee
+   en tete -- mais des boutons a deux etages : la date, et combien de gens
+   dorment sur place ce soir-la. Le second chiffre evite d'ouvrir une nuit
+   vide pour s'en apercevoir. */
+.nuits {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin: 0 0 16px;
+}
+.nuits .nuit {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 1px;
+  background: transparent;
+  color: var(--doux);
+  border: 1px solid var(--trait);
+  border-radius: 8px;
+  padding: 6px 12px;
+  font-size: 0.86rem;
+  font-weight: 500;
+}
+.nuits .nuit:hover { background: var(--survol); color: var(--texte); }
+.nuits .nuit .combien {
+  font-size: 0.74rem;
+  font-variant-numeric: tabular-nums;
+  opacity: 0.8;
+}
+.nuits .nuit[aria-pressed="true"] {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: #fff;
+}
+
+/* Un rectangle par couchage. Ils se rangent tout seuls : l'inventaire en
+   compte quatre une annee et onze la suivante, et aucune largeur fixe ne
+   tiendrait les deux. */
+.plan-grille {
+  display: grid;
+  gap: 10px;
+  grid-template-columns: repeat(auto-fill, minmax(190px, 1fr));
+}
+
+.unite {
+  border: 1px solid var(--trait);
+  border-radius: 10px;
+  background: var(--carte);
+  padding: 10px 12px 12px;
+}
+.unite h4 {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 8px;
+  margin: 0 0 8px;
+  font-size: 0.92rem;
+}
+.unite .compte-unite {
+  font-size: 0.8rem;
+  font-weight: 400;
+  color: var(--doux);
+  font-variant-numeric: tabular-nums;
+}
+.unite .compte-unite.trop { color: var(--erreur); font-weight: 700; }
+.unite.debordee { border-color: var(--erreur); }
+
+/* Le tas de ceux qui restent a placer n'est pas une unite : c'est lui qu'on
+   regarde, et c'est lui qui doit se vider. Il prend donc toute la largeur,
+   au-dessus, et un aplat qui le distingue des chambres. */
+.unite.tas {
+  background: var(--bandeau);
+  border: 0;
+  border-left: 4px solid var(--accent);
+  border-radius: 0 10px 10px 0;
+  margin-bottom: 14px;
+}
+
+/* La boite entiere recoit le depot, pas la seule bande des jetons : viser
+   trois pixels de haut dans un rectangle vide serait un jeu d'adresse. */
+.unite .places {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  min-height: 38px;
+  align-content: flex-start;
+}
+.unite .places .vide {
+  color: var(--doux);
+  font-size: 0.82rem;
+  font-style: italic;
+  align-self: center;
+}
+.unite.visee {
+  border-color: var(--accent);
+  background: var(--survol);
+}
+
+/* Un jeton est un vrai bouton : il prend le focus, il s'active a la barre
+   d'espace, et un lecteur d'ecran l'annonce -- ce qu'un <div draggable> ne
+   fait pas. Le glisser-deposer ne repond ni au doigt ni au clavier ; le
+   clic, si. */
+.jeton {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 5px;
+  background: var(--carte);
+  color: var(--texte);
+  border: 1px solid var(--trait);
+  border-radius: 999px;
+  padding: 5px 12px;
+  font-size: 0.88rem;
+  font-weight: 500;
+  cursor: grab;
+}
+.jeton:hover { background: var(--survol); border-color: var(--doux); }
+.jeton .etiquette { font-size: 0.68rem; padding: 0 6px; }
+
+/* Saisi : il attend qu'on designe une arrivee. L'etat se voit de loin,
+   parce qu'entre-temps le prochain clic n'importe ou le deplacera. */
+.jeton.saisi {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: #fff;
+  cursor: grabbing;
+}
+.jeton.saisi .etiquette { color: #fff; border-color: rgba(255, 255, 255, 0.6); }
+
+/* Pose ailleurs que ce qu'il avait demande. Ce n'est pas une erreur --
+   l'organisateur arbitre -- mais l'ecart doit se lire sur le jeton, la ou
+   il est, et non dans un message a part. Le pointille le dit sans crier,
+   et le `title` donne le detail. */
+.jeton.ecart {
+  border-style: dashed;
+  border-color: var(--erreur);
 }
 
 /* ---------- Carte des départements ---------- */
