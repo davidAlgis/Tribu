@@ -26,13 +26,12 @@ PAGES = {
     "index.html": "app.js",
     "dates.html": "dates.js",
     "lieux.html": "lieux.js",
-    "couchage.html": "couchage.js",
     "admin.html": "admin.js",
 }
 
 # Les pages qui portent le menu commun. Une page ajoutée sans lui serait un
 # cul-de-sac, et les pages déjà là n'y mèneraient pas.
-FAMILIALES = ("index.html", "dates.html", "lieux.html", "couchage.html")
+FAMILIALES = ("index.html", "dates.html", "lieux.html")
 
 
 def identifiants(html: str) -> set[str]:
@@ -228,7 +227,7 @@ def test_le_plan_n_amorce_aucun_glisser_deposer_natif(pages):
     """
     # Le plateau vit dans `plan.js`, partagé par les deux pages qui le
     # montrent : c'est lui qu'il faut regarder, et ses deux hôtes avec.
-    for fichier in ("plan.js", "admin.js", "couchage.js"):
+    for fichier in ("plan.js", "admin.js", "app.js"):
         js = (RACINE / fichier).read_text(encoding="utf-8")
         # Les commentaires en parlent, et doivent pouvoir continuer.
         code = "\n".join(l for l in js.splitlines() if not l.lstrip().startswith("//"))

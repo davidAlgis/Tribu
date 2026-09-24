@@ -9,11 +9,10 @@
 </head>
 <body>
 <main>
-  <nav class="menu" aria-label="Les étapes du séjour">
+  <nav class="menu" aria-label="Les trois étapes du séjour">
     <a href="./lieux.html">Le lieu</a>
     <a href="./dates.html">La date</a>
     <a href="./index.html" aria-current="page">Les présences</a>
-    <a href="./couchage.html">Le couchage</a>
   </nav>
 
   <h1>Séjour Tribu</h1>
@@ -97,6 +96,35 @@
       </p>
     </fieldset>
 
+    <!-- Le plan de couchage, sous la grille : on dit d'abord QUELLES NUITS
+         on dort sur place, et seulement ensuite OU. L'ordre n'est pas un
+         gout de mise en page -- une personne ne parait dans le plan d'une
+         nuit que si elle a declare y dormir. -->
+    <fieldset id="bloc-couchage" hidden>
+      <legend>Qui dort où <span id="compteur-couchages" class="discret-inline"></span></legend>
+
+      <div class="nuits" id="choix-nuit" role="group" aria-label="Nuit à organiser"></div>
+
+      <div id="plan"></div>
+
+      <p id="message-couchages" role="status" aria-live="polite"></p>
+
+      <p class="note">
+        Les noms <strong class="exemple-mien">cerclés de vert</strong> sont
+        ceux que tu peux déplacer&nbsp;: les mêmes que ci-dessus. Les autres
+        apparaissent pour que tu voies avec qui tu dors, mais eux seuls
+        peuvent se déplacer.
+      </p>
+
+      <p class="note">
+        Glisse un nom d'un rectangle à l'autre. Sans souris&nbsp;: un clic sur
+        le nom le saisit, un clic sur le rectangle d'arrivée le pose.
+        <kbd>Ctrl</kbd>+clic en saisit plusieurs à la fois&nbsp;; sur ce qui
+        est saisi, <kbd>Suppr</kbd> le ressort de sa chambre et
+        <kbd>Échap</kbd> le repose où il était.
+      </p>
+    </fieldset>
+
     <div class="actions">
       <button type="button" id="enregistrer">Enregistrer</button>
       <button type="button" id="appliquer-tous" class="discret" hidden></button>
@@ -108,6 +136,7 @@
 </main>
 
 <script src="./config.js"></script>
+<script src="./plan.js"></script>
 <script src="./app.js"></script>
 </body>
 </html>

@@ -40,6 +40,11 @@ const MESSAGES = {
   SAISIE_FERMEE: "La saisie est fermée. Contacte l'organisateur.",
   TROP_DE_LIGNES: "Saisie trop volumineuse.",
   AUCUNE_CIBLE: "Aucune personne sélectionnée.",
+  PAS_A_TOI: "Ce n'est pas à toi de placer cette personne.",
+  SAISIE_CLOSE: "La saisie est fermée. Contacte l'organisateur.",
+  PAS_SUR_PLACE: "Cette personne n'a pas déclaré dormir sur place cette nuit-là.",
+  UNITE_INCONNUE: "Ce couchage n'existe plus. Recharge la page.",
+  REGLAGES_ABSENTS: "Les réglages du séjour sont absents de la base.",
 };
 
 const etat = { code: "", moi: null, donnees: null, cible: null };
@@ -237,6 +242,7 @@ async function choisirPersonne(personne) {
     listeSuggestions.innerHTML = "";
     construireSaisie();
     montrer("etape-saisie");
+    await montrerCouchage();
   } catch (erreur) {
     messagePrenom.className = "erreur";
     messagePrenom.textContent = erreur.message;
@@ -513,6 +519,11 @@ async function enregistrer(cibles) {
       zonePersonnes.querySelector(`[data-id="${cible.id}"] .vide`)?.remove();
     }
 
+    // Le plan depend de la grille : decocher une nuit retire la personne du
+    // plan de cette nuit-la, et en cocher une l'y fait paraitre. Le relire
+    // ici evite un plan qui contredit la grille juste au-dessus.
+    await montrerCouchage();
+
     const qui =
       cibles.length === 1
         ? cibles[0].prenom
@@ -593,4 +604,60 @@ function montrer(id) {
 // Le code est deja connu de cet appareil : on saute la premiere etape.
 if (champCode.value) {
   document.getElementById("form-code").requestSubmit();
+}
+
+// ------------------------------------------------------- le couchage
+//
+// Sous la grille, et non sur une page a part : on dit d'abord QUELLES
+// NUITS on dort sur place, et seulement ensuite OU. Une personne ne
+// parait dans le plan d'une nuit que si elle a declare y dormir -- mettre
+// le plan avant la grille aurait montre un plateau vide a qui n'a encore
+// rien rempli.
+//
+// Le plateau lui-meme vit dans `plan.js`, partage avec `admin.html`. Ici
+// on ne fournit que les deux portes : comment lire, comment ecrire.
+//
+// TOUT LE MONDE EST VISIBLE, et c'est voulu : un plan ampute des autres ne
+// repond pas a la question qu'on lui pose, qui est « avec qui ». Chacun ne
+// deplace en revanche que les siens -- la meme regle que pour la grille --
+// et c'est la BASE qui le refuse. Cette page grise les jetons, mais une
+// page ne fait pas foi : elle se recharge, se modifie, s'inspecte.
+
+const blocCouchage = document.getElementById("bloc-couchage");
+
+const plateau = PLAN.monter({
+  plan: document.getElementById("plan"),
+  nuits: document.getElementById("choix-nuit"),
+  compteur: document.getElementById("compteur-couchages"),
+  message: document.getElementById("message-couchages"),
+
+  charger: (jour) =>
+    rpc("couchage_charger", {
+      p_code: etat.code,
+      p_acteur: etat.moi.id,
+      p_jour: jour,
+    }),
+
+  // `unite` nul = le tas : la personne n'a plus de place attribuee.
+  ecrire: (personneId, unite) =>
+    rpc("couchage_placer", {
+      p_code: etat.code,
+      p_acteur: etat.moi.id,
+      p_participant: personneId,
+      p_jour: plateau.jour(),
+      p_logement: unite ? unite.logement_id : null,
+      p_numero: unite ? unite.numero : null,
+    }),
+});
+
+async function montrerCouchage() {
+  try {
+    await plateau.recharger(plateau.jour());
+    blocCouchage.hidden = false;
+  } catch (erreur) {
+    // Un plan indisponible ne doit pas empecher de remplir ses presences :
+    // c'est la grille qui compte, le plan vient apres. On se tait donc, et
+    // le panneau reste ferme.
+    blocCouchage.hidden = true;
+  }
 }

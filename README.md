@@ -19,13 +19,12 @@ Trois pages pour la famille, une pour toi :
 |---|---|---|
 | [`lieux.html`](lieux.html) | la famille | où l'on n'a pas envie d'aller |
 | [`dates.html`](dates.html) | la famille | quel week-end arrange chacun, et où en est le choix |
-| [`index.html`](index.html) | la famille | qui vient, quelles nuits, quels repas |
-| [`couchage.html`](couchage.html) | la famille | qui dort où, nuit par nuit |
+| [`index.html`](index.html) | la famille | qui vient, quelles nuits, quels repas, et qui dort où |
 | [`admin.html`](admin.html) | toi | dates du séjour, participants, droits, logements et plan de couchage, week-ends, résultat de la carte, retour en arrière |
 
-Les quatre pages familiales portent le même menu en tête — **Le lieu**, **La
-date**, **Les présences**, **Le couchage** — dans l'ordre où les décisions se
-prennent. Celle qu'on regarde y est remplie.
+Les trois pages familiales portent le même menu en tête — **Le lieu**, **La
+date**, **Les présences** — dans l'ordre où les décisions se prennent. Celle
+qu'on regarde y est remplie.
 
 `admin.html` n'y figure pas : elle ne s'ouvre pas avec le code famille, et
 l'annoncer à toute la famille ne ferait qu'inviter à la pousser.
@@ -290,9 +289,15 @@ séjour, et le reste suit.
 ## Le plan de couchage
 
 Deux fois la même chose, à deux endroits : sous l'inventaire dans l'onglet
-**Logements**, et sur [`couchage.html`](couchage.html) pour toute la
-famille. L'inventaire dit **combien** de couchages ; le plan dit **qui est
-dans lequel**.
+**Logements** d'`admin.html`, et **sous la grille** de
+[`index.html`](index.html) pour toute la famille. L'inventaire dit
+**combien** de couchages ; le plan dit **qui est dans lequel**.
+
+Sous la grille, et non sur une page à part : on dit d'abord **quelles nuits**
+on dort sur place, et seulement ensuite **où**. Une personne ne paraît dans
+le plan d'une nuit que si elle a déclaré y dormir — un plan placé avant la
+grille montrerait un plateau vide à qui n'a encore rien rempli. Enregistrer
+la grille recharge donc le plan : décocher une nuit en retire la personne.
 
 Le plateau lui-même vit dans [`plan.js`](plan.js), partagé par les deux
 pages. C'est l'exception au « chaque page porte ses propres aides » du reste
@@ -300,7 +305,7 @@ du projet : cette convention vaut pour des fonctions de trois lignes, pas
 pour un plateau de jeu. Deux copies auraient fini par se contredire, et la
 contradiction se serait vue sur le couchage de quelqu'un.
 
-### Côté famille : chacun déplace les siens
+### Chacun déplace les siens
 
 Tout le monde est **visible** — un plan amputé des autres ne répond pas à la
 question qu'on lui pose, qui est « avec qui ». Mais chacun ne déplace que
