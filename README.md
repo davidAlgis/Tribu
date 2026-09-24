@@ -310,11 +310,22 @@ ne répond ni au doigt ni au clavier ; un jeton qu'on saisit d'un clic et
 qu'on pose d'un autre répond aux trois. Échap repose ce qu'on avait saisi.
 
 Un jeton lâché **à côté** d'un rectangle ne fait rien. Il ouvrait un onglet
-de recherche : le geste transportait le nom en texte ordinaire, et le
-navigateur reprenait la main dès que le dépôt manquait sa cible. Il
-transporte désormais un type qui n'appartient qu'à cette page, et la page
-annule le geste partout où il ne mène nulle part — sans toucher aux
-fichiers qu'on déposerait dessus, qui ne la regardent pas.
+de recherche — d'abord sous Chrome, puis, après un premier correctif, sous
+Firefox seulement. Trois causes indépendantes, toutes supprimées :
+
+- le geste transportait le nom **en texte ordinaire**, que le navigateur
+  reprend dès que le dépôt manque sa cible. Il transporte maintenant un
+  type qui n'appartient qu'à cette page ;
+- `dragenter` n'était pas annulé. La spécification demande d'annuler
+  `dragenter` **et** `dragover` pour déclarer une zone d'arrivée ; Chromium
+  se contente du second, Firefox exige les deux ;
+- le garde-fou de la page reconnaissait nos glissers en **lisant le
+  presse-papiers**, dont l'accès est restreint pendant le survol et varie
+  d'un navigateur à l'autre. Un garde-fou qui peut ne rien lire est un
+  garde-fou qui se tait. C'est désormais un drapeau que pose notre propre
+  `dragstart`, et qui ne peut pas mentir.
+
+Un fichier déposé sur la page, lui, reste l'affaire du navigateur.
 
 **Les homonymes** portent leur filiation entre parenthèses : « Marie
 (conjoint de Gérard) », « Marie (enfant d'Alice) ». Seulement eux — un
