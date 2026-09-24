@@ -460,7 +460,16 @@ courants des exemples et des tests sont déclarés dans
 ## Mise en route
 
 1. **Supabase** — projet en région UE, puis coller
-   [`supabase/schema.sql`](supabase/schema.sql) dans le SQL Editor.
+   [`supabase/schema.sql`](supabase/schema.sql) dans le SQL Editor. Le
+   fichier se recolle **en entier** à chaque changement — c'est la seule
+   façon de poser une fonction — et il est écrit pour que ce geste ne
+   détruise rien : chaque table se crée *si elle manque*, et les colonnes
+   venues après coup s'ajoutent une par une.
+
+   > Cela n'a pas toujours été vrai. Un `drop table public.presences` a vécu
+   > en tête du fichier, invisible tant que la table était vide, et il a fini
+   > par effacer la saisie de soixante personnes lors d'un recollage.
+   > Deux tests montent désormais la garde ([`tests/test_schema.py`](tests/test_schema.py)).
 2. **Dates et code famille** — adapter
    [`supabase/reglages.exemple.sql`](supabase/reglages.exemple.sql). Les
    dates se corrigent ensuite depuis `admin.html`, sans repasser par le SQL.

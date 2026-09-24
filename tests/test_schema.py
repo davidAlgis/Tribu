@@ -105,3 +105,47 @@ def test_chaque_fonction_publique_est_appelable():
     )
     assert posees, "aucune fonction publique trouvee, le test ne sert a rien"
     assert sorted(posees - ouvertes) == [], "fonctions publiques sans `grant execute`"
+
+
+# --- Recoller le script ne doit rien effacer -----------------------------
+#
+# Le fichier se recolle EN ENTIER a chaque changement : c'est la seule
+# facon de poser une fonction. Toute instruction destructrice de premier
+# niveau s'execute donc à chaque fois. Un `drop table public.presences` y a
+# vécu longtemps sans se voir — tant que la table était vide — puis a
+# emporté la saisie de soixante personnes d'un coup.
+
+# Les tables qui portent de la donnée saisie ou déclarée. Les perdre, c'est
+# perdre du travail que personne ne peut deviner.
+SAISIE = [
+    "public.presences",
+    "public.voeux",
+    "public.refus_lieu",
+    "private.participants",
+    "private.options_date",
+    "private.logements",
+    "private.couchages",
+    "private.sauvegardes",
+    "private.reglages",
+    "private.acces",
+    "private.acces_admin",
+]
+
+
+def test_aucune_table_de_donnees_n_est_detruite_au_recollage():
+    """Un `drop table` de premier niveau s'exécute à chaque recollage."""
+    detruites = set(re.findall(r"^drop table (?:if exists )?([\w.]+)", SCHEMA, re.I | re.M))
+    fautives = sorted(detruites & set(SAISIE))
+    assert fautives == [], "ces tables seraient vidées à chaque recollage du script"
+
+
+def test_chaque_table_de_donnees_se_cree_sans_ecraser():
+    """`create table` sans `if not exists` échoue sur une base déjà en
+    place — et le script s'arrête là, à moitié posé."""
+    manquantes = []
+    for table in SAISIE:
+        pose = re.search(r"^create table (if not exists )?" + re.escape(table) + r"\s*\(",
+                         SCHEMA, re.I | re.M)
+        if pose and not pose.group(1):
+            manquantes.append(table)
+    assert manquantes == [], "`create table` sans `if not exists`"

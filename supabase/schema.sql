@@ -24,8 +24,21 @@
 --     n'a aucune ligne. Saisir, c'est declarer une presence.
 -- ============================================================
 
-drop table if exists public.presences cascade;
+-- `public.personnes` est une table des premieres versions, remplacee par
+-- `private.participants`. Elle ne porte plus rien : on la solde.
 drop table if exists public.personnes cascade;
+
+-- IL N'Y A PLUS DE `drop table public.presences`.
+--
+-- Il y en avait un, et il a coute une saisie entiere. Le script se recolle
+-- a chaque changement -- c'est la seule facon de poser une fonction -- et
+-- il emportait donc les presences a chaque fois. Tant que la table etait
+-- vide, cela ne se voyait pas ; le jour ou soixante personnes y etaient,
+-- tout le monde est redevenu absent d'un coup.
+--
+-- Les presences suivent desormais la regle du reste du fichier : la table
+-- se cree si elle manque, et les colonnes venues apres coup s'ajoutent une
+-- par une (section 4). Rien n'est jamais detruit par un recollage.
 
 create schema if not exists private;
 grant usage on schema private to anon;   -- juste de quoi appeler les fonctions
@@ -222,7 +235,7 @@ alter table private.participants add constraint participants_portee_valide
 --
 --  Pas de ligne = absent. C'est l'etat par defaut de tout le monde.
 --
-create table public.presences (
+create table if not exists public.presences (
   id              uuid primary key default gen_random_uuid(),
   participant_id  uuid not null references private.participants(id) on delete cascade,
   jour            date not null,
@@ -234,6 +247,14 @@ create table public.presences (
   maj_le          timestamptz not null default now(),
   unique (participant_id, jour)
 );
+
+-- `create table if not exists` ne MODIFIE pas une table deja presente : sur
+-- une base creee par une version anterieure, ces colonnes n'auraient jamais
+-- vu le jour. Meme precaution que pour `private.participants`.
+alter table public.presences
+  add column if not exists vue_mer boolean not null default false;
+alter table public.presences
+  add column if not exists maj_le timestamptz not null default now();
 
 create index if not exists presences_jour_idx on public.presences (jour);
 
@@ -2224,6 +2245,7 @@ declare
   n_options      integer;
   n_logements    integer;   -- reste null si la copie ne dit rien des logements
   n_couchages    integer;   -- idem pour le plan de couchage
+  couchages_gardes jsonb;   -- le plan mis de cote quand la copie l'ignore
 begin
   perform private.verifier_code(p_code, 'admin');
 
@@ -2235,6 +2257,15 @@ begin
   insert into private.sauvegardes (semaine, motif, contenu)
   values (date_trunc('week', now() at time zone 'Europe/Paris')::date,
           'avant_restauration', private.etat_courant());
+
+  -- Une copie anterieure au plan de couchage n'en dit rien, et le silence
+  -- n'est pas « il n'y en avait aucun ». Mais `couchages` reference
+  -- `participants` : Postgres refuse de vider seule une table referencee,
+  -- meme quand la referencante n'a aucune ligne. Elle doit donc figurer
+  -- dans le TRUNCATE -- on la met de cote, et on la repose apres.
+  if not (c ? 'couchages') then
+    select jsonb_agg(to_jsonb(x)) into couchages_gardes from private.couchages x;
+  end if;
 
   truncate table public.presences, public.voeux, public.refus_lieu,
                  private.couchages, private.options_date, private.participants;
@@ -2299,7 +2330,9 @@ begin
   -- le dit en renvoyant `null` plutot que zero. `logements` ne figure pas
   -- dans le TRUNCATE ci-dessus pour cette seule raison.
   if c ? 'logements' then
-    truncate table private.logements;
+    -- `couchages` est deja vide, mais il reference `logements` : le vider
+    -- avec lui est la seule forme que Postgres accepte.
+    truncate table private.logements, private.couchages;
     insert into private.logements (id, categorie, capacite, nombre, vue_mer, cree_le)
     select (l->>'id')::uuid,
            l->>'categorie',
@@ -2311,10 +2344,9 @@ begin
     get diagnostics n_logements = row_count;
   end if;
 
-  -- Meme regle pour le plan : une copie qui n'en parle pas n'autorise pas
-  -- a l'effacer. Il depend des logements et se remet donc apres eux.
+  -- Le plan revient apres les participants ET les logements : il pointe
+  -- vers les deux.
   if c ? 'couchages' then
-    truncate table private.couchages;
     insert into private.couchages (id, participant_id, jour, logement_id, numero, maj_le)
     select (l->>'id')::uuid,
            (l->>'participant_id')::uuid,
@@ -2324,6 +2356,25 @@ begin
            coalesce((l->>'maj_le')::timestamptz, now())
       from jsonb_array_elements(c->'couchages') as l;
     get diagnostics n_couchages = row_count;
+
+  elsif couchages_gardes is not null then
+    -- La copie ne parle pas du plan : on le remet tel qu'il etait. Seules
+    -- partent les lignes dont la personne ou le couchage n'existe plus
+    -- apres la restauration -- les garder violerait les cles etrangeres,
+    -- et elles ne designeraient plus rien.
+    insert into private.couchages (id, participant_id, jour, logement_id, numero, maj_le)
+    select (l->>'id')::uuid,
+           (l->>'participant_id')::uuid,
+           (l->>'jour')::date,
+           (l->>'logement_id')::uuid,
+           (l->>'numero')::smallint,
+           coalesce((l->>'maj_le')::timestamptz, now())
+      from jsonb_array_elements(couchages_gardes) as l
+     where exists (select 1 from private.participants p
+                    where p.id = (l->>'participant_id')::uuid)
+       and exists (select 1 from private.logements g
+                    where g.id = (l->>'logement_id')::uuid);
+    -- `n_couchages` reste null : rien n'a ete RESTAURE, seulement conserve.
   end if;
 
   perform private.sauvegardes_purger();
@@ -2355,7 +2406,7 @@ grant execute on function public.admin_sauvegarde_restaurer(text, uuid)  to anon
 --    codes_admin    doit valoir 1  -> sinon, lancer creer_code_admin.py
 --    reglages       doit valoir 1  -> sinon, passer reglages.exemple.sql
 --    participants   0 avant l'amorcage, puis la taille de la famille
---    presences      remis a 0 par ce script, c'est normal
+--    presences      ce qui a ete saisi -- ce script n'y touche plus
 --    options_date   les week-ends proposes, poses depuis admin.html
 --    voeux          les reponses de la famille au sondage des dates
 --    refus_lieu     les departements peints en rouge sur la carte
