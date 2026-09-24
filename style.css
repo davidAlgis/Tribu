@@ -780,6 +780,41 @@ kbd {
 }
 .jeton.saisi .precision { color: rgba(255, 255, 255, 0.85); }
 
+/* Ceux dont on a la charge, et ceux qu'on ne fait que regarder.
+   Le cercle vert n'est pas une decoration : c'est la seule chose qui dise,
+   avant le premier clic, ce que la page laissera faire. Et le grise dit
+   l'inverse sans avoir a l'ecrire soixante fois.
+   Les deux tiennent aussi sans la couleur -- le trait est plus epais d'un
+   cote, le jeton est en retrait de l'autre -- et le `title` de chaque jeton
+   verrouille le dit en toutes lettres. */
+.jeton.mien {
+  border-width: 2px;
+  border-color: var(--ok);
+}
+.jeton.mien:hover { border-color: var(--ok); background: #eaf3ed; }
+
+.jeton.verrouille {
+  background: transparent;
+  color: var(--doux);
+  border-style: dotted;
+  cursor: default;
+  /* Pas d'`opacity` : elle delaverait aussi le texte. Mesure faite, le gris
+     a 75 % tombe a 3.2 contre le blanc -- sous le seuil, pour un prenom
+     qu'on doit pouvoir lire meme quand on ne peut pas le deplacer. Le trait
+     pointille et la couleur douce suffisent a dire « pas a toi ». */
+}
+.jeton.verrouille .precision,
+.jeton.verrouille .etiquette { color: var(--doux); }
+
+/* La note qui explique le cercle vert le montre plutot que de le decrire. */
+.exemple-mien {
+  border: 2px solid var(--ok);
+  border-radius: 999px;
+  padding: 0 8px;
+  font-weight: 500;
+  color: var(--texte);
+}
+
 /* Saisi : il attend qu'on designe une arrivee. L'etat se voit de loin,
    parce qu'entre-temps le prochain clic n'importe ou le deplacera. */
 .jeton.saisi {

@@ -4,7 +4,7 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="robots" content="noindex">
-  <title>Tribu</title>
+  <title>Tribu — le couchage</title>
   <link rel="stylesheet" href="./style.css">
 </head>
 <body>
@@ -12,15 +12,12 @@
   <nav class="menu" aria-label="Les étapes du séjour">
     <a href="./lieux.html">Le lieu</a>
     <a href="./dates.html">La date</a>
-    <a href="./index.html" aria-current="page">Les présences</a>
-    <a href="./couchage.html">Le couchage</a>
+    <a href="./index.html">Les présences</a>
+    <a href="./couchage.html" aria-current="page">Le couchage</a>
   </nav>
 
-  <h1>Séjour Tribu</h1>
+  <h1>Qui dort où</h1>
 
-  <!-- Reste affiché une fois le code accepté : c'est le signe que la page
-       a bougé, là où deux champs de texte au même endroit ne le disent
-       pas. -->
   <p id="fil" class="fil" role="status" hidden>
     <strong>✓ Code accepté.</strong>
     <span id="fil-suite">Reste à dire qui tu es.</span>
@@ -61,53 +58,41 @@
     </fieldset>
   </section>
 
-  <!-- ÉTAPE 3 — la saisie ------------------------------------------ -->
-  <section id="etape-saisie" hidden>
-    <fieldset>
-      <legend>Pour qui remplis-tu&nbsp;?</legend>
-      <div id="personnes" class="pastilles"></div>
+  <!-- ÉTAPE 3 — le plan -------------------------------------------- -->
+  <section id="etape-plan" hidden>
+    <fieldset class="panneau-saisie surgit">
+      <legend>Le plan de couchage <span id="compteur-couchages" class="discret-inline"></span></legend>
+
+      <div class="nuits" id="choix-nuit" role="group" aria-label="Nuit à organiser"></div>
+
+      <div id="plan"></div>
+
+      <p id="message-couchages" role="status" aria-live="polite"></p>
+
       <p class="note">
-        Tout le monde est <strong>absent par défaut</strong>. Ne remplis que
-        les jours de présence — et reviens modifier quand tu veux.
-        Enregistrer ne touche qu'à la personne sélectionnée.
+        Les noms <strong class="exemple-mien">cerclés de vert</strong> sont
+        ceux que tu peux déplacer&nbsp;: toi, ton conjoint, tes descendants et
+        les leurs — la même règle que pour les présences. Les autres
+        apparaissent pour que tu voies avec qui tu dors, mais eux seuls
+        peuvent se déplacer.
+      </p>
+
+      <p class="note">
+        Glisse un nom d'un rectangle à l'autre. Sans souris&nbsp;: un clic sur
+        le nom le saisit, un clic sur le rectangle d'arrivée le pose.
+        <kbd>Ctrl</kbd>+clic en saisit plusieurs à la fois&nbsp;; sur ce qui
+        est saisi, <kbd>Suppr</kbd> le ressort de sa chambre et
+        <kbd>Échap</kbd> le repose où il était.
+        Seules les personnes qui ont déclaré dormir sur place cette nuit-là
+        apparaissent&nbsp;: la nuit se dit sur
+        <a href="./index.html">la page des présences</a>.
       </p>
     </fieldset>
-
-    <fieldset>
-      <legend id="legende-jours">Séjour</legend>
-      <div class="defilement">
-        <table>
-          <thead>
-            <tr>
-              <th>Jour</th>
-              <th>La nuit…</th>
-              <th>Déjeuner</th>
-              <th>Dîner</th>
-            </tr>
-          </thead>
-          <tbody id="jours"></tbody>
-        </table>
-      </div>
-      <p class="note">
-        La colonne «&nbsp;la nuit…&nbsp;» concerne <strong>la nuit qui suit</strong>
-        le jour indiqué. Les repas sont ceux pris <strong>ce jour-là</strong>.
-        Le petit-déjeuner ne se coche pas&nbsp;: il vient avec la nuit en
-        chambre, jamais avec le gîte. Une journée sans rien de coché veut
-        dire que tu n'es pas là.
-      </p>
-    </fieldset>
-
-    <div class="actions">
-      <button type="button" id="enregistrer">Enregistrer</button>
-      <button type="button" id="appliquer-tous" class="discret" hidden></button>
-      <button type="button" id="changer" class="discret">Changer de personne</button>
-    </div>
-    <p class="note" id="portee-saisie"></p>
-    <p id="message" role="status" aria-live="polite"></p>
   </section>
 </main>
 
 <script src="./config.js"></script>
-<script src="./app.js"></script>
+<script src="./plan.js"></script>
+<script src="./couchage.js"></script>
 </body>
 </html>

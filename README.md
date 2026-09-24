@@ -20,11 +20,12 @@ Trois pages pour la famille, une pour toi :
 | [`lieux.html`](lieux.html) | la famille | où l'on n'a pas envie d'aller |
 | [`dates.html`](dates.html) | la famille | quel week-end arrange chacun, et où en est le choix |
 | [`index.html`](index.html) | la famille | qui vient, quelles nuits, quels repas |
+| [`couchage.html`](couchage.html) | la famille | qui dort où, nuit par nuit |
 | [`admin.html`](admin.html) | toi | dates du séjour, participants, droits, logements et plan de couchage, week-ends, résultat de la carte, retour en arrière |
 
-Les trois pages familiales portent le même menu en tête — **Le lieu**, **La
-date**, **Les présences** — dans l'ordre où les décisions se prennent. Celle
-qu'on regarde y est remplie.
+Les quatre pages familiales portent le même menu en tête — **Le lieu**, **La
+date**, **Les présences**, **Le couchage** — dans l'ordre où les décisions se
+prennent. Celle qu'on regarde y est remplie.
 
 `admin.html` n'y figure pas : elle ne s'ouvre pas avec le code famille, et
 l'annoncer à toute la famille ne ferait qu'inviter à la pousser.
@@ -288,8 +289,38 @@ séjour, et le reste suit.
 
 ## Le plan de couchage
 
-Sous l'inventaire, dans le même onglet. L'inventaire dit **combien** de
-couchages ; le plan dit **qui est dans lequel**.
+Deux fois la même chose, à deux endroits : sous l'inventaire dans l'onglet
+**Logements**, et sur [`couchage.html`](couchage.html) pour toute la
+famille. L'inventaire dit **combien** de couchages ; le plan dit **qui est
+dans lequel**.
+
+Le plateau lui-même vit dans [`plan.js`](plan.js), partagé par les deux
+pages. C'est l'exception au « chaque page porte ses propres aides » du reste
+du projet : cette convention vaut pour des fonctions de trois lignes, pas
+pour un plateau de jeu. Deux copies auraient fini par se contredire, et la
+contradiction se serait vue sur le couchage de quelqu'un.
+
+### Côté famille : chacun déplace les siens
+
+Tout le monde est **visible** — un plan amputé des autres ne répond pas à la
+question qu'on lui pose, qui est « avec qui ». Mais chacun ne déplace que
+**soi, son conjoint, ses descendants et leurs conjoints** : exactement la
+règle qui vaut déjà pour les présences, donc rien de nouveau à expliquer ni
+à tenir à jour.
+
+Les jetons qu'on peut bouger sont **cerclés de vert** ; les autres sont
+grisés, en pointillé, et leur infobulle le dit. Les deux tiennent aussi sans
+la couleur — le trait est plus épais d'un côté, le jeton en retrait de
+l'autre.
+
+> Le refus est posé **en base**, pas dans la page. Celle-ci grise les
+> jetons, mais une page ne fait pas foi : elle se recharge, elle se modifie,
+> elle s'inspecte.
+
+Cela expose **qui dort avec qui** à toute personne ayant le code famille.
+Les prénoms l'étaient déjà — la saisie des présences en propose la liste
+entière — mais la répartition, non. C'est le prix de la question, et il est
+assumé.
 
 Un rectangle par couchage, un jeton par personne, et l'on glisse les
 seconds entre les premiers. « 4 chambres de 2 » donne quatre rectangles :

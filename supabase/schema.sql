@@ -538,6 +538,201 @@ grant execute on function public.sejour_charger(text, uuid)                  to 
 grant execute on function public.sejour_enregistrer(text, uuid, uuid[], jsonb) to anon;
 
 -- ============================================================
+--  6b. Le plan de couchage, cote famille
+-- ============================================================
+--
+--  Le plan etait reserve a l'organisateur. Le voila ouvert a tous -- mais
+--  CHACUN NE DEPLACE QUE LES SIENS : soi, son conjoint, ses descendants et
+--  leurs conjoints, exactement la regle qui vaut deja pour les presences
+--  (`private.personnes_modifiables`, section 5). Rien de nouveau a
+--  expliquer a la famille, et rien de nouveau a tenir a jour.
+--
+--  TOUT LE MONDE EST VISIBLE, et c'est voulu : un plan de couchage ampute
+--  des autres ne repond pas a la question qu'on lui pose, qui est « avec
+--  qui ». Les jetons qu'on ne peut pas bouger paraissent donc, grises.
+--
+--  Cela expose QUI DORT AVEC QUI a toute personne ayant le code famille.
+--  Les prenoms l'etaient deja -- la saisie des presences en propose la
+--  liste entiere -- mais la repartition, non. C'est le prix de la
+--  question, et il est assume.
+--
+--  Le refus de deplacer quelqu'un d'autre est pose ICI, en base. La page
+--  grise les jetons, mais une page ne fait pas foi : elle se recharge, se
+--  modifie, s'inspecte.
+--
+
+create or replace function public.couchage_charger(
+  p_code text, p_acteur uuid, p_jour date default null
+)
+returns jsonb
+language plpgsql stable security definer
+set search_path = private, pg_temp as $fn$
+declare
+  r private.reglages;
+  j date;
+begin
+  perform private.verifier_code(p_code);
+  select * into r from private.reglages;
+  if r.id is null then
+    raise exception 'REGLAGES_ABSENTS' using errcode = 'P0001';
+  end if;
+
+  j := coalesce(
+    p_jour,
+    (select min(pr.jour) from public.presences pr
+      where pr.jour between r.date_debut and r.date_fin
+        and pr.hebergement <> 'exterieur'),
+    r.date_debut
+  );
+
+  return jsonb_build_object(
+    'jour', j,
+    'saisie_ouverte', r.saisie_ouverte,
+
+    'nuits', coalesce((
+      select jsonb_agg(jsonb_build_object(
+               'jour', d.jour,
+               'dormeurs', (select count(*) from public.presences pr
+                             where pr.jour = d.jour and pr.hebergement <> 'exterieur')
+             ) order by d.jour)
+      from (select (r.date_debut + i) as jour
+              from generate_series(0, r.date_fin - r.date_debut) as i) d
+    ), '[]'::jsonb),
+
+    'unites', coalesce((
+      select jsonb_agg(jsonb_build_object(
+               'logement_id', u.id,
+               'numero', u.n,
+               'categorie', u.categorie,
+               'capacite', u.capacite,
+               'vue_mer', u.vue_mer
+             ) order by u.categorie, u.vue_mer, u.capacite, u.n)
+      from (select l.*, n from private.logements l, generate_series(1, l.nombre) as n) u
+    ), '[]'::jsonb),
+
+    -- Qui a besoin d'un lit cette nuit-la, et ou il est pose. « exterieur »
+    -- ne dort pas sur place : il n'a rien a faire dans le plan.
+    --
+    -- Chaque dormeur porte de quoi le DISTINGUER d'un homonyme : le prenom
+    -- de son parent, celui de son conjoint, sa branche -- et surtout le
+    -- fait de savoir s'il est homonyme, qui se juge sur la famille ENTIERE
+    -- et non sur les dormeurs du soir. Sans cela, quelqu'un serait precise
+    -- un soir et nu le lendemain, selon qui est la.
+    'dormeurs', coalesce((
+      select jsonb_agg(jsonb_build_object(
+               'id', p.id,
+               'prenom', p.prenom,
+               'famille', p.famille,
+               'categorie_age', p.categorie_age,
+               'homonyme', exists (
+                 select 1 from private.participants q
+                  where q.prenom = p.prenom and q.id <> p.id
+               ),
+               'parent_prenom', (
+                 select q.prenom from private.participants q where q.id = p.parent_id
+               ),
+               -- Des DEUX cotes : le lien peut n'etre pose que d'un seul,
+               -- et c'est justement la moitie qu'on cherchait a nommer.
+               'conjoint_prenom', (
+                 select q.prenom from private.participants q
+                  where q.id = p.conjoint_id or q.conjoint_id = p.id
+                  limit 1
+               ),
+               'invite', p.invite,
+               'hebergement', pr.hebergement,
+               'vue_mer', pr.vue_mer,
+               'logement_id', c.logement_id,
+               'numero', c.numero,
+                              -- Qui l'acteur a le droit de deplacer. La page s'en sert
+               -- pour griser les autres ; la base s'en sert pour refuser.
+               'mien', exists (
+                 select 1 from private.personnes_modifiables(p_acteur) m
+                  where m.id = p.id
+               )
+             ) order by p.famille, p.prenom)
+      from public.presences pr
+      join private.participants p on p.id = pr.participant_id
+      -- La jointure ecarte les affectations tombees au-dela du rang apres
+      -- une baisse du nombre : la personne revient simplement a placer.
+      left join private.couchages c
+        on c.participant_id = p.id
+       and c.jour = pr.jour
+       and c.numero <= (select l.nombre from private.logements l where l.id = c.logement_id)
+      where pr.jour = j and pr.hebergement <> 'exterieur'
+    ), '[]'::jsonb)
+  );
+end $fn$;
+
+-- Poser quelqu'un, le deplacer, ou le sortir -- a condition d'en avoir la
+-- charge. La verification n'est pas un doublon de ce que fait la page :
+-- c'est la seule qui compte.
+create or replace function public.couchage_placer(
+  p_code        text,
+  p_acteur      uuid,
+  p_participant uuid,
+  p_jour        date,
+  p_logement    uuid default null,
+  p_numero      integer default null
+)
+returns jsonb
+language plpgsql security definer
+set search_path = private, pg_temp as $fn$
+declare
+  gite private.logements;
+begin
+  perform private.verifier_code(p_code);
+
+  if not (select saisie_ouverte from private.reglages) then
+    raise exception 'SAISIE_CLOSE' using errcode = 'P0001';
+  end if;
+
+  -- La regle des presences, mot pour mot : soi, son conjoint, ses
+  -- descendants et leurs conjoints.
+  if not exists (
+    select 1 from private.personnes_modifiables(p_acteur) m where m.id = p_participant
+  ) then
+    raise exception 'PAS_A_TOI' using errcode = 'P0001';
+  end if;
+
+  -- Le premier changement de la semaine emporte une copie de l'avant.
+  perform private.sauver_si_nouvelle_semaine();
+
+  if p_logement is null then
+    delete from private.couchages
+     where participant_id = p_participant and jour = p_jour;
+    return jsonb_build_object('place', false);
+  end if;
+
+  select * into gite from private.logements where id = p_logement;
+  if gite.id is null then
+    raise exception 'INCONNU' using errcode = 'P0001';
+  end if;
+  if p_numero is null or p_numero < 1 or p_numero > gite.nombre then
+    raise exception 'UNITE_INCONNUE' using errcode = 'P0001';
+  end if;
+
+  if not exists (
+    select 1 from public.presences pr
+     where pr.participant_id = p_participant
+       and pr.jour = p_jour
+       and pr.hebergement <> 'exterieur'
+  ) then
+    raise exception 'PAS_SUR_PLACE' using errcode = 'P0001';
+  end if;
+
+  -- Pas de controle de capacite, ici non plus : un depassement se voit sur
+  -- la page, il ne se refuse pas. La meme regle des deux cotes.
+  insert into private.couchages (participant_id, jour, logement_id, numero)
+  values (p_participant, p_jour, p_logement, p_numero)
+  on conflict (participant_id, jour) do update set logement_id = excluded.logement_id, numero = excluded.numero, maj_le = now();
+
+  return jsonb_build_object('place', true);
+end $fn$;
+
+grant execute on function public.couchage_charger(text, uuid, date)                  to anon;
+grant execute on function public.couchage_placer(text, uuid, uuid, date, uuid, integer) to anon;
+
+-- ============================================================
 --  7. La porte de sortie : l'export Python
 -- ============================================================
 --
@@ -2136,16 +2331,39 @@ begin
 
     -- Qui a besoin d'un lit cette nuit-la, et ou il est pose. « exterieur »
     -- ne dort pas sur place : il n'a rien a faire dans le plan.
+    --
+    -- Chaque dormeur porte de quoi le DISTINGUER d'un homonyme : le prenom
+    -- de son parent, celui de son conjoint, sa branche -- et surtout le
+    -- fait de savoir s'il est homonyme, qui se juge sur la famille ENTIERE
+    -- et non sur les dormeurs du soir. Sans cela, quelqu'un serait precise
+    -- un soir et nu le lendemain, selon qui est la.
     'dormeurs', coalesce((
       select jsonb_agg(jsonb_build_object(
                'id', p.id,
                'prenom', p.prenom,
                'famille', p.famille,
                'categorie_age', p.categorie_age,
+               'homonyme', exists (
+                 select 1 from private.participants q
+                  where q.prenom = p.prenom and q.id <> p.id
+               ),
+               'parent_prenom', (
+                 select q.prenom from private.participants q where q.id = p.parent_id
+               ),
+               -- Des DEUX cotes : le lien peut n'etre pose que d'un seul,
+               -- et c'est justement la moitie qu'on cherchait a nommer.
+               'conjoint_prenom', (
+                 select q.prenom from private.participants q
+                  where q.id = p.conjoint_id or q.conjoint_id = p.id
+                  limit 1
+               ),
+               'invite', p.invite,
                'hebergement', pr.hebergement,
                'vue_mer', pr.vue_mer,
                'logement_id', c.logement_id,
-               'numero', c.numero
+               'numero', c.numero,
+               -- L'organisateur deplace tout le monde.
+               'mien', true
              ) order by p.famille, p.prenom)
       from public.presences pr
       join private.participants p on p.id = pr.participant_id

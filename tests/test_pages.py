@@ -26,8 +26,13 @@ PAGES = {
     "index.html": "app.js",
     "dates.html": "dates.js",
     "lieux.html": "lieux.js",
+    "couchage.html": "couchage.js",
     "admin.html": "admin.js",
 }
+
+# Les pages qui portent le menu commun. Une page ajoutée sans lui serait un
+# cul-de-sac, et les pages déjà là n'y mèneraient pas.
+FAMILIALES = ("index.html", "dates.html", "lieux.html", "couchage.html")
 
 
 def identifiants(html: str) -> set[str]:
@@ -89,20 +94,19 @@ def test_les_identifiants_sont_uniques(page, pages):
     assert doublons == [], f"{page} : identifiants en double"
 
 
-def test_les_trois_pages_familiales_portent_le_menu(pages):
-    """Le menu se pose à la main dans chaque page : une page ajoutée sans
-    lui serait un cul-de-sac."""
-    for page in ("index.html", "dates.html", "lieux.html"):
+def test_les_pages_familiales_portent_le_menu(pages):
+    """Le menu se pose à la main dans chaque page."""
+    for page in FAMILIALES:
         html, _ = pages[page]
         assert 'class="menu"' in html, f"{page} n'a pas le menu principal"
-        for cible in ("./lieux.html", "./dates.html", "./index.html"):
-            assert cible in html, f"{page} ne renvoie pas vers {cible}"
+        for cible in FAMILIALES:
+            assert f"./{cible}" in html, f"{page} ne renvoie pas vers {cible}"
 
 
 def test_une_seule_page_est_marquee_courante(pages):
     """`aria-current` dit où l'on est. Deux marques, ou aucune, et le menu
     ment."""
-    for page in ("index.html", "dates.html", "lieux.html"):
+    for page in FAMILIALES:
         html, _ = pages[page]
         marques = re.findall(r'<a href="\./([^"]+)"[^>]*aria-current="page"', html)
         assert marques == [page], f"{page} : marquage courant = {marques}"
@@ -222,9 +226,12 @@ def test_le_plan_n_amorce_aucun_glisser_deposer_natif(pages):
     Ces trois marques suffisent à le dire : sans `draggable` aucun élément
     ne part, et sans `dataTransfer` rien n'est transporté.
     """
-    _, js = pages["admin.html"]
-    # Les commentaires en parlent, et doivent pouvoir continuer.
-    code = "\n".join(l for l in js.splitlines() if not l.lstrip().startswith("//"))
+    # Le plateau vit dans `plan.js`, partagé par les deux pages qui le
+    # montrent : c'est lui qu'il faut regarder, et ses deux hôtes avec.
+    for fichier in ("plan.js", "admin.js", "couchage.js"):
+        js = (RACINE / fichier).read_text(encoding="utf-8")
+        # Les commentaires en parlent, et doivent pouvoir continuer.
+        code = "\n".join(l for l in js.splitlines() if not l.lstrip().startswith("//"))
 
-    fautifs = sorted(set(re.findall(r"\b(dataTransfer|draggable|ondrag\w*)\b", code)))
-    assert fautifs == [], "le plan est revenu au glisser-déposer du navigateur"
+        fautifs = sorted(set(re.findall(r"\b(dataTransfer|draggable|ondrag\w*)\b", code)))
+        assert fautifs == [], f"{fichier} est revenu au glisser-déposer du navigateur"
