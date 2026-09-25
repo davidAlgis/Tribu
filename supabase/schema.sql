@@ -2125,6 +2125,26 @@ begin
       from private.logements l
     ), '[]'::jsonb),
 
+    -- Ce qui a ete declare SANS taille, par categorie. Le tableur ne donne
+    -- la capacite que des gites -- « chambre_4 » y est la chambre n° 4, pas
+    -- une chambre de quatre -- et toutes les chambres importees arrivent
+    -- donc ainsi. Le compte dit s'il reste quelque chose a preciser.
+    'sans_taille', coalesce((
+      select jsonb_agg(jsonb_build_object(
+               'categorie', t.hebergement,
+               'vue_mer', t.vue_mer,
+               'lignes', t.n
+             ) order by t.hebergement, t.vue_mer)
+      from (
+        select p.hebergement, p.vue_mer, count(*) as n
+          from public.presences p
+         where p.logement_id is null
+           and p.hebergement <> 'exterieur'
+           and p.jour between r.date_debut and r.date_fin
+         group by p.hebergement, p.vue_mer
+      ) t
+    ), '[]'::jsonb),
+
     -- Les nuits deja declarees, dans les bornes du sejour. `hebergement`
     -- porte la nuit QUI SUIT le jour (cf. section 4), donc une ligne par
     -- nuit et non par journee. « exterieur » ne dort pas sur place : il ne
@@ -2302,7 +2322,63 @@ grant execute on function public.admin_logement_modifier(text, uuid, text, integ
 grant execute on function public.admin_logement_retirer(text, uuid)                     to anon;
 
 
--- ---- 11c. Le plan de couchage ----
+-- ---- 11c. Donner une taille a ce qui n'en a pas ----
+--
+--  Le tableur ne donne la capacite QUE DES GITES : « chambre_4 » y est la
+--  chambre n° 4, pas une chambre de quatre. Toutes les chambres importees
+--  arrivent donc sans taille, et les preciser une par une sur soixante
+--  personnes et cinq nuits n'est pas une option.
+--
+--  Cette fonction en pose une d'un coup : toutes les declarations de la
+--  MEME CATEGORIE qui n'ont pas de type prennent celui qu'on lui donne.
+--
+--  Elle ne touche a rien d'autre. Une declaration qui porte deja un type
+--  est laissee telle quelle -- meme d'une autre taille : quelqu'un qui a
+--  choisi « chambre 3 pers. » l'a choisi, et un bouton de rattrapage n'a
+--  pas a le contredire.
+--
+--  La vue mer separe : preciser « chambre de 2 » ne touche pas aux
+--  chambres avec vue, qui sont une autre ligne d'inventaire et un autre
+--  tarif.
+--
+create or replace function public.admin_presences_preciser(p_code text, p_logement uuid)
+returns jsonb
+language plpgsql security definer
+set search_path = private, pg_temp as $fn$
+declare
+  g private.logements;
+  n integer;
+begin
+  perform private.verifier_code(p_code, 'admin');
+  -- Le premier changement de la semaine emporte une copie de l'avant : ce
+  -- geste touche potentiellement toute la saisie, il doit s'annuler.
+  perform private.sauver_si_nouvelle_semaine();
+
+  select * into g from private.logements where id = p_logement;
+  if g.id is null then
+    raise exception 'INCONNU' using errcode = 'P0001';
+  end if;
+
+  -- `logement_id is null` suffit : la cle etrangere est en `on delete set
+  -- null`, un type retire laisse donc un trou, jamais un identifiant mort.
+  update public.presences p
+     set logement_id = g.id
+   where p.hebergement = g.categorie
+     and p.vue_mer = g.vue_mer
+     and p.logement_id is null;
+  get diagnostics n = row_count;
+
+  return jsonb_build_object(
+    'precisees', n,
+    'categorie', g.categorie,
+    'capacite', g.capacite,
+    'vue_mer', g.vue_mer
+  );
+end $fn$;
+
+grant execute on function public.admin_presences_preciser(text, uuid) to anon;
+
+-- ---- 11d. Le plan de couchage ----
 --
 --  L'inventaire dit COMBIEN de couchages. Ceci dit QUI est dans lequel.
 --

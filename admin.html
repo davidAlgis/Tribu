@@ -222,6 +222,21 @@
 
         <div id="liste-logements"></div>
 
+        <!-- Ne paraît que s'il reste des déclarations sans taille : un
+             contrôle qui ne sert à rien est un contrôle qui fait douter. -->
+        <div class="grille" id="bloc-preciser" hidden>
+          <div>
+            <label for="preciser-type">
+              Donner une taille aux déclarations qui n'en ont pas
+              <span id="compteur-sans-taille" class="discret-inline"></span>
+            </label>
+            <select id="preciser-type"></select>
+          </div>
+          <div class="actions" style="align-items:flex-end">
+            <button type="button" id="preciser-appliquer" class="discret">Appliquer</button>
+          </div>
+        </div>
+
         <p class="note">
           Un type par ligne&nbsp;: «&nbsp;4 chambres de 2&nbsp;» est une ligne
           qu'on corrige, pas quatre lignes qu'on additionne. Une fois posée,
@@ -230,6 +245,15 @@
           <strong>✎</strong> rouvre le type, la capacité et le nombre, et
           <strong>✕</strong> retire la ligne entière. L'inventaire se retape
           d'une année sur l'autre&nbsp;; rien n'est écrit dans le code.
+        </p>
+
+        <p class="note">
+          Le tableur ne donne la capacité <strong>que des gîtes</strong>&nbsp;:
+          «&nbsp;chambre_4&nbsp;» y est la chambre n°&nbsp;4, pas une chambre
+          de quatre. Toutes les chambres importées arrivent donc sans taille.
+          «&nbsp;Appliquer&nbsp;» en pose une d'un coup, pour la catégorie du
+          type choisi — et ne touche pas aux déclarations qui en ont déjà une,
+          même d'une autre taille.
         </p>
       </fieldset>
 

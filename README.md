@@ -710,6 +710,16 @@ Le second cas n'est pas théorique : le tableur ne donne la capacité **que
 des gîtes** — `chambre_4` y est la chambre n° 4, pas une chambre de quatre.
 Toutes les chambres importées arrivent donc sans taille.
 
+C'est à ça que sert **« Donner une taille aux déclarations qui n'en ont
+pas »**, dans l'onglet Logements : on choisit un type, et toutes les
+déclarations de sa catégorie qui n'en avaient pas le prennent. Celles qui en
+ont déjà une ne bougent pas — même d'une autre taille : quelqu'un qui a
+choisi « chambre 3 pers. » l'a choisi, et un bouton de rattrapage n'a pas à
+le contredire. La vue mer sépare, c'est une autre ligne d'inventaire et un
+autre tarif. Le bloc disparaît dès qu'il n'y a plus rien à préciser, et une
+copie de sauvegarde part avant : le geste touche potentiellement toute la
+saisie.
+
 `hebergement` reste renseigné dans tous les cas et garde la facture : **le
 type précise, il ne remplace pas**.
 Quand il est là, c'est pourtant lui qui fait foi — la catégorie et le

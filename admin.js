@@ -89,6 +89,7 @@ const etat = {
   type: "famille",
   logements: [],
   nuits: [],
+  sansTaille: [],
 };
 
 // ---------------------------------------------------------------- reseau
@@ -788,7 +789,9 @@ async function rechargerLogements() {
   const d = await rpc("admin_logements", { p_code: etat.code });
   etat.logements = d.logements || [];
   etat.nuits = d.nuits || [];
+  etat.sansTaille = d.sans_taille || [];
   dessinerLogements();
+  dessinerPreciser();
   dessinerTension();
   // Le plan depend de l'inventaire : retirer un type ou baisser son nombre
   // change les rectangles sous les jetons. On garde la nuit regardee.
@@ -973,6 +976,92 @@ async function modifierLogement(avant, apres) {
     dessinerLogements();
   }
 }
+
+// ---------------------------------------------------- donner une taille
+//
+// Le tableur ne donne la capacite QUE DES GITES : « chambre_4 » y est la
+// chambre n° 4, pas une chambre de quatre. Toutes les chambres importees
+// arrivent donc sans taille, et les preciser une par une sur soixante
+// personnes et cinq nuits n'est pas une option.
+//
+// Le bloc ne parait que s'il reste quelque chose a preciser : un controle
+// qui ne sert a rien est un controle qui fait douter.
+
+const blocPreciser = document.getElementById("bloc-preciser");
+const choixPreciser = document.getElementById("preciser-type");
+const compteurSansTaille = document.getElementById("compteur-sans-taille");
+
+function memeCategorie(a, b) {
+  return a.categorie === b.categorie && !!a.vue_mer === !!b.vue_mer;
+}
+
+function dessinerPreciser() {
+  // On ne propose que les types dont la categorie a effectivement des
+  // declarations en attente : offrir « gîte de 6 » quand tous les gites
+  // sont deja precises ferait croire qu'il reste du travail.
+  const utiles = etat.logements.filter((l) =>
+    (etat.sansTaille || []).some((x) => memeCategorie(x, l))
+  );
+
+  blocPreciser.hidden = !utiles.length;
+  if (!utiles.length) {
+    compteurSansTaille.textContent = "";
+    return;
+  }
+
+  const total = (etat.sansTaille || []).reduce((n, x) => n + x.lignes, 0);
+  // Le tiret separe : sans lui, le compte se colle au libelle et la
+  // phrase devient « …qui n'en ont pas 41 journées ».
+  compteurSansTaille.textContent = `— ${total} journée(s)`;
+
+  const garde = choixPreciser.value;
+  choixPreciser.textContent = "";
+  for (const l of utiles) {
+    const attente = (etat.sansTaille || []).find((x) => memeCategorie(x, l));
+    choixPreciser.add(
+      new Option(`${nommerLogement({ ...l, nombre: 1 }).replace(/^1 /, "")} (${attente.lignes} j.)`, l.id)
+    );
+  }
+  if ([...choixPreciser.options].some((o) => o.value === garde)) choixPreciser.value = garde;
+}
+
+document.getElementById("preciser-appliquer").addEventListener("click", async () => {
+  const type = etat.logements.find((l) => l.id === choixPreciser.value);
+  if (!type) return;
+
+  const attente = (etat.sansTaille || []).find((x) => memeCategorie(x, type));
+  const quoi = nommerLogement({ ...type, nombre: 1 }).replace(/^1 /, "");
+  if (
+    !confirm(
+      `Donner « ${quoi} » aux ${attente ? attente.lignes : 0} journée(s) de cette ` +
+        `catégorie qui n'ont pas de taille ?
+
+Celles qui en ont déjà une ne ` +
+        `bougent pas, même d'une autre taille. Une copie de sauvegarde est ` +
+        `prise avant.`
+    )
+  ) {
+    return;
+  }
+
+  messageLogements.className = "";
+  messageLogements.textContent = "Application…";
+  try {
+    const r = await rpc("admin_presences_preciser", {
+      p_code: etat.code,
+      p_logement: type.id,
+    });
+    await rechargerLogements();
+    messageLogements.className = "ok";
+    messageLogements.textContent = r.precisees
+      ? `${r.precisees} journée(s) précisée(s) en « ${quoi} ».`
+      : "Rien à préciser : toutes ces déclarations avaient déjà une taille.";
+  } catch (erreur) {
+    messageLogements.className = "erreur";
+    messageLogements.textContent = erreur.message;
+  }
+});
+
 
 const COLONNES_TENSION = [
   ["chambre", "Chambre"],
