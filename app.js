@@ -55,15 +55,51 @@ const DEHORS = {
 let nuitsPossibles = [];
 const nuitParValeur = new Map();
 
-function construireChoixNuit(logements) {
+function construireChoixNuit(logements, presences) {
+  const inventaire = logements || [];
+  const connus = new Set(inventaire.map((l) => l.id));
+
+  // Une declaration qu'AUCUNE taille ne sait dire : soit elle n'en cite
+  // pas -- le tableur ne donne la capacite que des gites, jamais des
+  // chambres -- soit elle cite un type retire de l'inventaire depuis.
+  const sansTaille = (p) => !p.logement_id || !connus.has(p.logement_id);
+
   nuitsPossibles = [DEHORS];
 
   for (const g of GENERIQUES) {
-    nuitsPossibles.push(g);
+    const tailles = inventaire.filter(
+      (l) => l.categorie === g.categorie && l.vue_mer === g.vue_mer
+    );
+
+    // LE GENERIQUE NE PARAIT QUE S'IL APPORTE QUELQUE CHOSE.
+    //
+    // A cote de « en chambre — 2 pers. », un « en chambre » tout court ne
+    // dit rien de plus : c'est un doublon, et un doublon dans une liste
+    // deroulante est une hesitation qu'on impose a soixante personnes.
+    //
+    // Il reste offert dans deux cas, et deux seulement :
+    //
+    //   - l'inventaire ignore cette categorie. Sans lui, elle deviendrait
+    //     indicible, et la grille doit se remplir avant que l'organisateur
+    //     ait tout saisi.
+    //
+    //   - quelqu'un l'a DEJA declaree sans taille. Le retirer alors ne
+    //     supprimerait pas sa reponse : il la rendrait irrepresentable, et
+    //     le prochain enregistrement l'ecraserait en silence. Il porte
+    //     dans ce cas une mention qui le distingue de ses tailles.
+    const aRattraper = (presences || []).some(
+      (p) => p.hebergement === g.categorie && !!p.vue_mer === g.vue_mer && sansTaille(p)
+    );
+
+    if (!tailles.length) {
+      nuitsPossibles.push(g);
+    } else if (aRattraper) {
+      nuitsPossibles.push({ ...g, libelle: `${g.libelle} — sans précision` });
+    }
+
     // Les tailles de cette categorie, juste apres elle : la liste se lit
     // par famille de couchage, du plus vague au plus precis.
-    for (const l of logements || []) {
-      if (l.categorie !== g.categorie || l.vue_mer !== g.vue_mer) continue;
+    for (const l of tailles) {
       nuitsPossibles.push({
         valeur: l.id,
         libelle: `${g.libelle} — ${l.capacite} pers.`,
@@ -308,8 +344,10 @@ const legendeJours = document.getElementById("legende-jours");
 const message = document.getElementById("message");
 
 function construireSaisie() {
-  // Avant les lignes : chacune recopie la liste des choix.
-  construireChoixNuit(etat.donnees.logements);
+  // Avant les lignes : chacune recopie la liste des choix. Les presences
+  // deja enregistrees comptent, car l'une d'elles peut reclamer un choix
+  // generique que l'inventaire seul ne justifierait plus.
+  construireChoixNuit(etat.donnees.logements, etat.donnees.presences);
   const { date_debut, date_fin, saisie_ouverte, modifiables } = etat.donnees;
 
   // Le sous-titre portait les dates du sejour. Il a ete retire de la page,

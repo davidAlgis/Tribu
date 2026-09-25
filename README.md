@@ -694,11 +694,24 @@ désormais vers une ligne de l'inventaire — vers un **type**, « un gîte de
 six », et non vers un exemplaire : quel gîte au juste est une question de
 plan de couchage.
 
-Les trois catégories restent proposées telles quelles, et ce n'est pas une
-hésitation : on ne sait pas toujours dans quel gîte on ira, une déclaration
-d'avant l'inventaire n'a pas de type, et l'inventaire peut être vide — la
-grille doit se remplir quand même. `hebergement` reste donc renseigné dans
-tous les cas et garde la facture : **le type précise, il ne remplace pas**.
+**Le générique disparaît dès qu'une taille existe** : à côté de « en chambre
+— 2 pers. », un « en chambre » tout court ne dit rien de plus, et un doublon
+dans une liste déroulante est une hésitation qu'on impose à soixante
+personnes. Il reste offert dans deux cas, et deux seulement :
+
+- **l'inventaire ignore cette catégorie.** Sans lui, elle deviendrait
+  indicible, et la grille doit se remplir avant que tout soit saisi ;
+- **quelqu'un l'a déjà déclarée sans taille.** Le retirer alors ne
+  supprimerait pas sa réponse : il la rendrait irreprésentable, et le
+  prochain enregistrement l'écraserait en silence. Il porte dans ce cas la
+  mention « sans précision », qui le distingue de ses tailles.
+
+Le second cas n'est pas théorique : le tableur ne donne la capacité **que
+des gîtes** — `chambre_4` y est la chambre n° 4, pas une chambre de quatre.
+Toutes les chambres importées arrivent donc sans taille.
+
+`hebergement` reste renseigné dans tous les cas et garde la facture : **le
+type précise, il ne remplace pas**.
 Quand il est là, c'est pourtant lui qui fait foi — la catégorie et le
 supplément s'en déduisent à l'enregistrement, parce que deux sources pour un
 même fait finissent toujours par se contredire, et qu'ici la contradiction
