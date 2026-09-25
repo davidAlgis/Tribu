@@ -280,6 +280,12 @@ saisie reste ouverte, et c'est à toi de trancher. Poser la contrainte dans
 la base bloquerait toute la famille les jours où l'inventaire n'est pas
 encore saisi.
 
+> **L'inventaire sert trois fois**, et c'est pourquoi il vaut mieux le poser
+> tôt : il remplit la colonne « la nuit… » de la grille — « en gîte — 4
+> pers. » plutôt que « en gîte » —, il fournit les rectangles du plan de
+> couchage, et il permet à l'import du tableur de retrouver « gîte 4
+> places ». L'import le dit quand un type lui manque, et il est rejouable.
+
 **Rien n'est écrit dans le code.** L'inventaire est une table, pas des
 colonnes : un hôtel a deux sortes de chambres, un village de vacances en a
 six, et le schéma n'a pas à changer entre deux éditions. Une autre année,
@@ -679,6 +685,29 @@ comme une variante de chambre, et non comme une case à part : elle tenait
 une colonne entière, désactivée les trois quarts du temps puisque seule une
 chambre peut l'avoir. La base, elle, garde deux champs — un hébergement et
 un supplément — parce que c'est ainsi que l'hôtel facture.
+
+**Et les tailles de l'inventaire s'y ajoutent** : « en gîte — 4 pers. », « en
+gîte — 6 pers. », chacune juste après sa catégorie. Le tableur d'origine
+faisait cette différence ; la base ne connaissait que « gîte », et l'import
+l'écrasait faute d'un endroit où la mettre. `presences.logement_id` pointe
+désormais vers une ligne de l'inventaire — vers un **type**, « un gîte de
+six », et non vers un exemplaire : quel gîte au juste est une question de
+plan de couchage.
+
+Les trois catégories restent proposées telles quelles, et ce n'est pas une
+hésitation : on ne sait pas toujours dans quel gîte on ira, une déclaration
+d'avant l'inventaire n'a pas de type, et l'inventaire peut être vide — la
+grille doit se remplir quand même. `hebergement` reste donc renseigné dans
+tous les cas et garde la facture : **le type précise, il ne remplace pas**.
+Quand il est là, c'est pourtant lui qui fait foi — la catégorie et le
+supplément s'en déduisent à l'enregistrement, parce que deux sources pour un
+même fait finissent toujours par se contredire, et qu'ici la contradiction
+se lirait sur une facture.
+
+Retirer un type de l'inventaire ne casse rien : la déclaration redevient
+générique (`on delete set null`), la personne garde sa présence. Et dans le
+plan de couchage, l'écart se juge alors sur le type : un gîte de quatre
+n'est pas un gîte de six.
 
 **Le petit-déjeuner n'a pas de case** : il vient avec la nuit en chambre, et
 seulement avec elle — l'hôtel le sert, le gîte non, on y fait son café

@@ -314,6 +314,28 @@ alter table public.presences
 alter table public.presences
   add column if not exists maj_le timestamptz not null default now();
 
+-- LE TYPE DE COUCHAGE DEMANDE, quand on le connait.
+--
+-- `hebergement` ne distingue que trois categories, parce que c'est tout ce
+-- que la FACTURE demande. Mais le tableur d'origine savait plus : « gîte 4
+-- places » et « gîte 6 places » n'y etaient pas la meme chose, et l'import
+-- jetait cette difference faute d'un endroit ou la mettre.
+--
+-- Voici cet endroit. `logement_id` pointe vers une ligne de l'inventaire
+-- (section 11), c'est-a-dire vers un TYPE -- « gîte de 6 » -- et non vers
+-- un exemplaire : quel gite au juste, c'est le plan de couchage qui le dit.
+--
+-- Nullable, et il le restera : l'inventaire peut etre vide, et une annee
+-- passee n'en avait pas. `hebergement` reste renseigne dans tous les cas et
+-- garde la facture : le type PRECISE, il ne remplace pas.
+--
+-- `on delete set null` et non `cascade` : retirer un type de l'inventaire
+-- ne doit pas effacer la presence de qui l'avait demande. La declaration
+-- redevient simplement generique.
+alter table public.presences
+  add column if not exists logement_id uuid
+  references private.logements(id) on delete set null;
+
 create index if not exists presences_jour_idx on public.presences (jour);
 
 -- ============================================================
@@ -414,6 +436,22 @@ begin
     'date_debut', r.date_debut,
     'date_fin', r.date_fin,
     'saisie_ouverte', r.saisie_ouverte,
+
+    -- Les types de couchage a proposer dans la colonne « la nuit… ». C'est
+    -- l'inventaire de l'organisateur, et rien d'autre : la page n'invente
+    -- pas de categorie que l'hotel ne facture pas.
+    --
+    -- Vide tant que l'inventaire n'est pas saisi -- la page retombe alors
+    -- sur les trois categories generiques, et la saisie reste possible.
+    'logements', coalesce((
+      select jsonb_agg(jsonb_build_object(
+               'id', l.id,
+               'categorie', l.categorie,
+               'capacite', l.capacite,
+               'vue_mer', l.vue_mer
+             ) order by l.categorie, l.vue_mer, l.capacite)
+      from private.logements l
+    ), '[]'::jsonb),
     'modifiables', coalesce((
       select jsonb_agg(jsonb_build_object(
                'id', p.id,
@@ -433,7 +471,8 @@ begin
                'petit_dejeuner', pr.petit_dejeuner,
                'dejeuner', pr.dejeuner,
                'diner', pr.diner,
-               'vue_mer', pr.vue_mer
+               'vue_mer', pr.vue_mer,
+               'logement_id', pr.logement_id
              ))
       from public.presences pr
       where pr.participant_id in (select m.id from private.personnes_modifiables(p_acteur) m)
@@ -507,21 +546,32 @@ begin
   foreach cible in array cibles loop
     delete from public.presences where participant_id = cible;
 
+    -- Quand un TYPE est donne, c'est LUI qui fait foi : la categorie et le
+    -- supplement s'en deduisent. La page envoie bien les trois, mais deux
+    -- sources pour un meme fait finissent toujours par se contredire, et
+    -- ici la contradiction se lirait sur une facture.
+    --
+    -- Un type inconnu -- retire de l'inventaire entre-temps -- retombe sur
+    -- ce que la page a dit, plutot que de refuser toute la grille.
     insert into public.presences (
-      participant_id, jour, hebergement, petit_dejeuner, dejeuner, diner, vue_mer
+      participant_id, jour, hebergement, petit_dejeuner, dejeuner, diner,
+      vue_mer, logement_id
     )
     select
       cible,
       (l->>'jour')::date,
-      l->>'hebergement',
+      coalesce(g.categorie, l->>'hebergement'),
       coalesce((l->>'petit_dejeuner')::boolean, false),
       coalesce((l->>'dejeuner')::boolean, false),
       coalesce((l->>'diner')::boolean, false),
       -- Le supplement vue mer n'existe que pour les chambres.
-      coalesce((l->>'vue_mer')::boolean, false) and l->>'hebergement' = 'chambre'
+      coalesce(g.vue_mer, (l->>'vue_mer')::boolean, false)
+        and coalesce(g.categorie, l->>'hebergement') = 'chambre',
+      g.id
     from jsonb_array_elements(coalesce(p_lignes, '[]'::jsonb)) as l
+    left join private.logements g on g.id = nullif(l->>'logement_id', '')::uuid
     where (l->>'jour')::date between r.date_debut and r.date_fin
-      and l->>'hebergement' in ('chambre', 'gite', 'exterieur');
+      and coalesce(g.categorie, l->>'hebergement') in ('chambre', 'gite', 'exterieur');
 
     get diagnostics nb = row_count;
     total := total + nb;
@@ -641,6 +691,10 @@ begin
                'invite', p.invite,
                'hebergement', pr.hebergement,
                'vue_mer', pr.vue_mer,
+               -- Le TYPE demande, quand il est connu. Il ne se confond pas
+               -- avec `logement_id` plus bas, qui dit ou la personne est
+               -- POSEE : l'un est un souhait, l'autre une place.
+               'demande_id', pr.logement_id,
                'logement_id', c.logement_id,
                'numero', c.numero,
                               -- Qui l'acteur a le droit de deplacer. La page s'en sert
@@ -1184,8 +1238,19 @@ begin
 
   delete from public.presences where participant_id = any(cibles);
 
+  -- Le tableur sait « gîte 4 places » la ou la base ne savait que « gîte ».
+  -- Il n'en connait pas l'identifiant -- il n'a jamais vu l'inventaire --
+  -- mais il en donne la CAPACITE, et le couple (categorie, capacite, vue
+  -- mer) designe une ligne et une seule : c'est l'index unique de la
+  -- section 11.
+  --
+  -- Un type absent de l'inventaire ne fait pas echouer l'import : la ligne
+  -- s'ecrit sans type, donc generique. Le compte rendu le dit, pour que
+  -- l'organisateur sache qu'il lui manque « 3 gîtes de 4 » dans l'onglet
+  -- Logements et puisse relancer.
   insert into public.presences
-    (participant_id, jour, hebergement, petit_dejeuner, dejeuner, diner, vue_mer)
+    (participant_id, jour, hebergement, petit_dejeuner, dejeuner, diner,
+     vue_mer, logement_id)
   select (l->>'participant_id')::uuid,
          (l->>'jour')::date,
          l->>'hebergement',
@@ -1193,7 +1258,11 @@ begin
          coalesce((l->>'dejeuner')::boolean, false),
          coalesce((l->>'diner')::boolean, false),
          -- Le supplement vue mer n'existe que pour les chambres.
-         coalesce((l->>'vue_mer')::boolean, false) and l->>'hebergement' = 'chambre'
+         coalesce((l->>'vue_mer')::boolean, false) and l->>'hebergement' = 'chambre',
+         (select g.id from private.logements g
+           where g.categorie = l->>'hebergement'
+             and g.capacite = (l->>'capacite')::smallint
+             and g.vue_mer = coalesce((l->>'vue_mer')::boolean, false))
     from jsonb_array_elements(p_lignes) as l
    where (l->>'jour')::date between r.date_debut and r.date_fin
      and l->>'hebergement' in ('chambre', 'gite', 'exterieur');
@@ -1204,6 +1273,22 @@ begin
     'personnes', array_length(cibles, 1),
     'recues', jsonb_array_length(p_lignes),
     'ecrites', nb,
+    -- Les capacites que le fichier cite et que l'inventaire ignore. Sans
+    -- ce compte, l'import paraitrait complet alors que « gîte 4 » et
+    -- « gîte 6 » auraient ete confondus en « gîte ».
+    'types_manquants', coalesce((
+      select jsonb_agg(distinct jsonb_build_object(
+               'categorie', l->>'hebergement',
+               'capacite', (l->>'capacite')::smallint))
+      from jsonb_array_elements(p_lignes) as l
+      where (l->>'capacite') is not null
+        and not exists (
+          select 1 from private.logements g
+           where g.categorie = l->>'hebergement'
+             and g.capacite = (l->>'capacite')::smallint
+             and g.vue_mer = coalesce((l->>'vue_mer')::boolean, false)
+        )
+    ), '[]'::jsonb),
     'date_debut', r.date_debut,
     'date_fin', r.date_fin
   );
@@ -2360,6 +2445,10 @@ begin
                'invite', p.invite,
                'hebergement', pr.hebergement,
                'vue_mer', pr.vue_mer,
+               -- Le TYPE demande, quand il est connu. Il ne se confond pas
+               -- avec `logement_id` plus bas, qui dit ou la personne est
+               -- POSEE : l'un est un souhait, l'autre une place.
+               'demande_id', pr.logement_id,
                'logement_id', c.logement_id,
                'numero', c.numero,
                -- L'organisateur deplace tout le monde.
@@ -2729,6 +2818,7 @@ declare
   n_logements    integer;   -- reste null si la copie ne dit rien des logements
   n_couchages    integer;   -- idem pour le plan de couchage
   couchages_gardes jsonb;   -- le plan mis de cote quand la copie l'ignore
+  logements_gardes jsonb;   -- l'inventaire, de meme
 begin
   perform private.verifier_code(p_code, 'admin');
 
@@ -2749,9 +2839,17 @@ begin
   if not (c ? 'couchages') then
     select jsonb_agg(to_jsonb(x)) into couchages_gardes from private.couchages x;
   end if;
+  -- Meme raison pour l'inventaire, et une de plus : `presences.logement_id`
+  -- le reference depuis peu. Postgres refuse de vider seule une table
+  -- referencee, donc `logements` doit partir dans le MEME TRUNCATE que les
+  -- presences et les couchages -- et revenir AVANT elles.
+  if not (c ? 'logements') then
+    select jsonb_agg(to_jsonb(x)) into logements_gardes from private.logements x;
+  end if;
 
   truncate table public.presences, public.voeux, public.refus_lieu,
-                 private.couchages, private.options_date, private.participants;
+                 private.couchages, private.logements,
+                 private.options_date, private.participants;
 
   insert into private.participants
     (id, prenom, famille, categorie_age, parent_id, conjoint_id, invite, portee,
@@ -2778,8 +2876,43 @@ begin
     from jsonb_array_elements(coalesce(c->'options_date', '[]'::jsonb)) as l;
   get diagnostics n_options = row_count;
 
+  -- `logement_id` arrive APRES les logements dans cette fonction ? Non :
+  -- les presences se remettent avant eux. La cle etrangere n'etant
+  -- verifiee qu'en fin d'instruction ne suffirait pas ici, les deux inserts
+  -- etant distincts -- on pose donc la valeur seulement si le type existe
+  -- encore, et `null` sinon. Une copie restauree sur un inventaire different
+  -- rend des declarations generiques, jamais une erreur.
+  -- L'INVENTAIRE D'ABORD : les presences le visent, et un identifiant qui
+  -- ne designe rien casserait la cle etrangere. Ce qui vaut pour une copie
+  -- qui le porte vaut pour l'inventaire mis de cote : dans les deux cas, il
+  -- est en place quand les presences arrivent.
+  if c ? 'logements' then
+    insert into private.logements (id, categorie, capacite, nombre, vue_mer, cree_le)
+    select (l->>'id')::uuid,
+           l->>'categorie',
+           (l->>'capacite')::smallint,
+           (l->>'nombre')::smallint,
+           coalesce((l->>'vue_mer')::boolean, false),
+           coalesce((l->>'cree_le')::timestamptz, now())
+      from jsonb_array_elements(c->'logements') as l;
+    get diagnostics n_logements = row_count;
+
+  elsif logements_gardes is not null then
+    -- La copie n'en parle pas : on le repose tel qu'il etait. `n_logements`
+    -- reste null -- rien n'a ete RESTAURE, seulement conserve.
+    insert into private.logements (id, categorie, capacite, nombre, vue_mer, cree_le)
+    select (l->>'id')::uuid,
+           l->>'categorie',
+           (l->>'capacite')::smallint,
+           (l->>'nombre')::smallint,
+           coalesce((l->>'vue_mer')::boolean, false),
+           coalesce((l->>'cree_le')::timestamptz, now())
+      from jsonb_array_elements(logements_gardes) as l;
+  end if;
+
   insert into public.presences
-    (id, participant_id, jour, hebergement, petit_dejeuner, dejeuner, diner, vue_mer, maj_le)
+    (id, participant_id, jour, hebergement, petit_dejeuner, dejeuner, diner,
+     vue_mer, logement_id, maj_le)
   select (l->>'id')::uuid,
          (l->>'participant_id')::uuid,
          (l->>'jour')::date,
@@ -2788,6 +2921,8 @@ begin
          coalesce((l->>'dejeuner')::boolean, false),
          coalesce((l->>'diner')::boolean, false),
          coalesce((l->>'vue_mer')::boolean, false),
+         (select g.id from private.logements g
+           where g.id = nullif(l->>'logement_id', '')::uuid),
          coalesce((l->>'maj_le')::timestamptz, now())
     from jsonb_array_elements(coalesce(c->'presences', '[]'::jsonb)) as l;
   get diagnostics n_presences = row_count;
@@ -2808,26 +2943,6 @@ begin
          coalesce((l->>'maj_le')::timestamptz, now())
     from jsonb_array_elements(coalesce(c->'refus_lieu', '[]'::jsonb)) as l;
   get diagnostics n_refus = row_count;
-
-  -- L'inventaire n'entre dans les copies que depuis la section 11. Une
-  -- copie plus ancienne ne dit RIEN a son sujet -- et le silence n'est pas
-  -- « il n'y en avait aucun ». On n'y touche donc pas, et le compte rendu
-  -- le dit en renvoyant `null` plutot que zero. `logements` ne figure pas
-  -- dans le TRUNCATE ci-dessus pour cette seule raison.
-  if c ? 'logements' then
-    -- `couchages` est deja vide, mais il reference `logements` : le vider
-    -- avec lui est la seule forme que Postgres accepte.
-    truncate table private.logements, private.couchages;
-    insert into private.logements (id, categorie, capacite, nombre, vue_mer, cree_le)
-    select (l->>'id')::uuid,
-           l->>'categorie',
-           (l->>'capacite')::smallint,
-           (l->>'nombre')::smallint,
-           coalesce((l->>'vue_mer')::boolean, false),
-           coalesce((l->>'cree_le')::timestamptz, now())
-      from jsonb_array_elements(c->'logements') as l;
-    get diagnostics n_logements = row_count;
-  end if;
 
   -- Le plan revient apres les participants ET les logements : il pointe
   -- vers les deux.

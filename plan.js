@@ -174,7 +174,10 @@ window.PLAN = (function () {
         b.append(span(AGES[personne.categorie_age], "etiquette"));
       }
 
+      // Ce que la personne a demande. Le TYPE quand elle l'a precise --
+      // « gîte de 6 » et non « un gîte » -- et la categorie sinon.
       b.dataset.demande = personne.vue_mer ? CHAMBRE_VUE_MER : personne.hebergement;
+      if (personne.demande_id) b.dataset.demandeId = personne.demande_id;
 
       if (saisis.has(personne.id)) b.classList.add("saisi");
       b.setAttribute("aria-pressed", saisis.has(personne.id) ? "true" : "false");
@@ -350,10 +353,22 @@ window.PLAN = (function () {
         const j = jeton(p, unite.cle !== TAS);
         // Un lit de chambre pour qui a demande un gite : l'ecart se marque
         // sur le jeton, la ou il se lit, et pas dans un message a part.
-        if (unite.cle !== TAS && j.dataset.demande !== typeDe(unite)) {
-          j.classList.add("ecart");
-          const t = TYPES[j.dataset.demande];
-          j.title += ` — a demandé « ${t ? t.un : j.dataset.demande} »`;
+        //
+        // Sur le TYPE quand la personne l'a precise : un gite de 4 n'est
+        // pas un gite de 6, et les confondre ramenerait la grossierete que
+        // l'inventaire venait justement de lever. Sur la categorie sinon.
+        if (unite.cle !== TAS) {
+          const parType = j.dataset.demandeId
+            ? j.dataset.demandeId !== unite.logement_id
+            : j.dataset.demande !== typeDe(unite);
+          if (parType) {
+            j.classList.add("ecart");
+            const t = TYPES[j.dataset.demande];
+            const quoi = t ? t.un : j.dataset.demande;
+            j.title += ` — a demandé « ${quoi}${
+              j.dataset.demandeId ? ", d'une autre taille" : ""
+            } »`;
+          }
         }
         places.appendChild(j);
       }

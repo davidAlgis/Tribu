@@ -27,12 +27,63 @@ const REPAS_COCHABLES = ["dejeuner", "diner"];
 // deux a l'enregistrement et repliee a la relecture.
 const CHAMBRE_VUE_MER = "chambre+vue_mer";
 
-const HEBERGEMENTS = [
-  ["exterieur", "pas sur place"],
-  ["chambre", "en chambre"],
-  [CHAMBRE_VUE_MER, "en chambre, vue mer"],
-  ["gite", "en gîte"],
+// Les trois categories que la base connait, et que l'hotel facture. Elles
+// restent proposees telles quelles : on ne sait pas toujours dans quel gite
+// on ira, et « en gîte » sans plus de precision doit rester dicible.
+const GENERIQUES = [
+  { valeur: "chambre", libelle: "en chambre", categorie: "chambre", vue_mer: false },
+  { valeur: CHAMBRE_VUE_MER, libelle: "en chambre, vue mer", categorie: "chambre", vue_mer: true },
+  { valeur: "gite", libelle: "en gîte", categorie: "gite", vue_mer: false },
 ];
+
+const DEHORS = {
+  valeur: "exterieur",
+  libelle: "pas sur place",
+  categorie: "exterieur",
+  vue_mer: false,
+};
+
+// Ce que la colonne « la nuit… » propose, et ce que chaque choix veut dire.
+//
+// Le tableur d'origine savait « gîte 4 places » et « gîte 6 places » ; la
+// base ne savait que « gîte », et l'import jetait la difference. Les types
+// de l'INVENTAIRE (onglet Logements) viennent donc s'ajouter aux trois
+// categories, chacun avec sa capacite.
+//
+// Les generiques restent : une declaration ancienne n'a pas de type, et
+// l'inventaire peut etre vide -- la grille doit se remplir quand meme.
+let nuitsPossibles = [];
+const nuitParValeur = new Map();
+
+function construireChoixNuit(logements) {
+  nuitsPossibles = [DEHORS];
+
+  for (const g of GENERIQUES) {
+    nuitsPossibles.push(g);
+    // Les tailles de cette categorie, juste apres elle : la liste se lit
+    // par famille de couchage, du plus vague au plus precis.
+    for (const l of logements || []) {
+      if (l.categorie !== g.categorie || l.vue_mer !== g.vue_mer) continue;
+      nuitsPossibles.push({
+        valeur: l.id,
+        libelle: `${g.libelle} — ${l.capacite} pers.`,
+        categorie: l.categorie,
+        vue_mer: l.vue_mer,
+        logement_id: l.id,
+      });
+    }
+  }
+
+  nuitParValeur.clear();
+  for (const n of nuitsPossibles) nuitParValeur.set(n.valeur, n);
+}
+
+// Ce que dit un choix, quel qu'il soit. Passer par la plutot que de
+// comparer des chaines evite d'avoir a savoir, a chaque endroit, si la
+// valeur lue est une categorie ou l'identifiant d'un type.
+function nuitChoisie(valeur) {
+  return nuitParValeur.get(valeur) || DEHORS;
+}
 
 const MESSAGES = {
   CODE_REFUSE: "Code incorrect. Demande-le à l'organisateur.",
@@ -257,6 +308,8 @@ const legendeJours = document.getElementById("legende-jours");
 const message = document.getElementById("message");
 
 function construireSaisie() {
+  // Avant les lignes : chacune recopie la liste des choix.
+  construireChoixNuit(etat.donnees.logements);
   const { date_debut, date_fin, saisie_ouverte, modifiables } = etat.donnees;
 
   // Le sous-titre portait les dates du sejour. Il a ete retire de la page,
@@ -302,7 +355,7 @@ function construireGrille(jours) {
     const cChoix = document.createElement("td");
     const choix = document.createElement("select");
     choix.dataset.champ = "hebergement";
-    for (const [valeur, libelle] of HEBERGEMENTS) choix.add(new Option(libelle, valeur));
+    for (const n of nuitsPossibles) choix.add(new Option(n.libelle, n.valeur));
     cChoix.appendChild(choix);
     ligne.appendChild(cChoix);
 
@@ -334,13 +387,15 @@ function appliquerContraintes() {
   const lignes = [...corpsJours.querySelectorAll("tr")];
 
   lignes.forEach((ligne, i) => {
-    const hebergement = ligne.querySelector('[data-champ="hebergement"]').value;
+    const nuit = nuitChoisie(ligne.querySelector('[data-champ="hebergement"]').value);
     // Le petit-dejeuner ne s'affiche plus, mais il compte toujours : un
     // jour de depart ou l'on ne prend que lui n'est pas une absence, et ne
     // doit donc pas etre grise.
     const veille = i > 0 ? lignes[i - 1] : null;
     const enChambreLaVeille =
-      veille && veille.querySelector('[data-champ="hebergement"]').value === "chambre";
+      veille &&
+      nuitChoisie(veille.querySelector('[data-champ="hebergement"]').value)
+        .categorie === "chambre";
 
     // Les repas ne dependent de rien : on peut passer dejeuner sans dormir
     // sur place, et c'est meme le cas de tous ceux qui logent a cote.
@@ -354,7 +409,7 @@ function appliquerContraintes() {
     );
     ligne.classList.toggle(
       "absente",
-      hebergement === "exterieur" && !unRepas && !enChambreLaVeille
+      nuit.categorie === "exterieur" && !unRepas && !enChambreLaVeille
     );
   });
 }
@@ -441,11 +496,17 @@ function remplirGrille(participantId) {
 
     // Absent par defaut : sans ligne en base, la journee reste vide, et
     // « pas sur place » est ce que dit une journee dont on n'a rien dit.
+    //
+    // Le TYPE d'abord, quand il est connu et qu'il existe encore. Sinon la
+    // categorie seule -- une declaration d'avant l'inventaire, ou un type
+    // retire depuis, ne doit pas se perdre en silence.
     champ("hebergement").value = !presence
       ? "exterieur"
-      : presence.vue_mer && presence.hebergement === "chambre"
-        ? CHAMBRE_VUE_MER
-        : presence.hebergement;
+      : presence.logement_id && nuitParValeur.has(presence.logement_id)
+        ? presence.logement_id
+        : presence.vue_mer && presence.hebergement === "chambre"
+          ? CHAMBRE_VUE_MER
+          : presence.hebergement;
     for (const repas of REPAS_COCHABLES) {
       champ(repas).checked = presence ? presence[repas] : false;
     }
@@ -458,12 +519,14 @@ function remplirGrille(participantId) {
 function lireGrille() {
   const jours = [...corpsJours.querySelectorAll("tr")].map((ligne) => {
     const champ = (nom) => ligne.querySelector(`[data-champ="${nom}"]`);
-    const choisi = champ("hebergement").value;
-    const vueMer = choisi === CHAMBRE_VUE_MER;
+    const nuit = nuitChoisie(champ("hebergement").value);
     return {
       jour: ligne.dataset.jour,
-      hebergement: vueMer ? "chambre" : choisi,
-      vue_mer: vueMer,
+      // La categorie part quand meme : c'est elle qui facture, et c'est
+      // elle qui reste quand le type disparait de l'inventaire.
+      hebergement: nuit.categorie,
+      vue_mer: nuit.vue_mer,
+      logement_id: nuit.logement_id || null,
       petit_dejeuner: false, // pose juste apres, d'apres la nuit d'avant
       dejeuner: champ("dejeuner").checked,
       diner: champ("diner").checked,
