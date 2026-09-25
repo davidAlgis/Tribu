@@ -710,9 +710,17 @@ Le second cas n'est pas théorique : le tableur ne donne la capacité **que
 des gîtes** — `chambre_4` y est la chambre n° 4, pas une chambre de quatre.
 Toutes les chambres importées arrivent donc sans taille.
 
-C'est à ça que sert **« Donner une taille aux déclarations qui n'en ont
-pas »**, dans l'onglet Logements : on choisit un type, et toutes les
-déclarations de sa catégorie qui n'en avaient pas le prennent. Celles qui en
+**L'import leur en donne une d'office.** La taille d'une chambre est un
+fait du *lieu*, pas du fichier : `--chambre-pers` la dit, et vaut **2** par
+défaut. Une chambre avec vue n'y est pas soumise — c'est une autre ligne
+d'inventaire — mais la base la reconnaît seule tant qu'il n'existe qu'une
+sorte de chambre avec vue : sans capacité citée, un type unique dans sa
+catégorie ne laisse rien à choisir. Dès qu'il y en a deux, elle s'abstient.
+
+Il reste **« Donner une taille aux déclarations qui n'en ont pas »**, dans
+l'onglet Logements, pour ce qui a échappé à ces deux règles : on choisit un
+type, et toutes les déclarations de sa catégorie qui n'en avaient pas le
+prennent. Celles qui en
 ont déjà une ne bougent pas — même d'une autre taille : quelqu'un qui a
 choisi « chambre 3 pers. » l'a choisi, et un bouton de rattrapage n'a pas à
 le contredire. La vue mer sépare, c'est une autre ligne d'inventaire et un

@@ -1259,10 +1259,28 @@ begin
          coalesce((l->>'diner')::boolean, false),
          -- Le supplement vue mer n'existe que pour les chambres.
          coalesce((l->>'vue_mer')::boolean, false) and l->>'hebergement' = 'chambre',
-         (select g.id from private.logements g
-           where g.categorie = l->>'hebergement'
-             and g.capacite = (l->>'capacite')::smallint
-             and g.vue_mer = coalesce((l->>'vue_mer')::boolean, false))
+         coalesce(
+           -- La capacite donnee designe une ligne et une seule : c'est
+           -- l'index unique de cette section.
+           (select g.id from private.logements g
+             where g.categorie = l->>'hebergement'
+               and g.capacite = (l->>'capacite')::smallint
+               and g.vue_mer = coalesce((l->>'vue_mer')::boolean, false)),
+           -- Sans capacite, il reste un cas sans ambiguite : celui ou
+           -- l'inventaire ne connait QU'UNE SORTE de ce couchage. S'il n'y
+           -- a qu'un type de chambre avec vue mer, il n'y a rien a choisir,
+           -- et laisser la declaration generique serait une prudence qui ne
+           -- protege de rien. Des qu'il y en a deux, on s'abstient.
+           case
+             when (select count(*) from private.logements g
+                    where g.categorie = l->>'hebergement'
+                      and g.vue_mer = coalesce((l->>'vue_mer')::boolean, false)) = 1
+             then (select g.id from private.logements g
+                    where g.categorie = l->>'hebergement'
+                      and g.vue_mer = coalesce((l->>'vue_mer')::boolean, false)
+                    limit 1)
+           end
+         )
     from jsonb_array_elements(p_lignes) as l
    where (l->>'jour')::date between r.date_debut and r.date_fin
      and l->>'hebergement' in ('chambre', 'gite', 'exterieur');
