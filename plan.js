@@ -424,7 +424,20 @@ window.PLAN = (function () {
 
       const grille = document.createElement("div");
       grille.className = "plan-grille";
-      for (const u of unites) grille.appendChild(rectangle(u, dans(u.cle)));
+      // LES COUCHAGES VIDES EN DERNIER. On lit un plan pour savoir qui est
+      // avec qui : les rectangles qui ont quelque chose a dire passent
+      // devant, et les places libres se rangent au bout -- ou on les
+      // trouve justement quand on en cherche une.
+      //
+      // Le rang ne touche pas aux NOMS. « Chambre 3 » a ete nommee au
+      // chargement, dans l'ordre de l'inventaire, et garde son numero ou
+      // qu'elle s'affiche : sans cela les numeros danseraient a chaque
+      // depose, et l'on ne pourrait plus se dire « mets-le en chambre 3 ».
+      const garnies = unites.map((u) => ({ u, gens: dans(u.cle) }));
+      const ordre = garnies
+        .filter((x) => x.gens.length)
+        .concat(garnies.filter((x) => !x.gens.length));
+      for (const x of ordre) grille.appendChild(rectangle(x.u, x.gens));
       zonePlan.appendChild(grille);
     }
 

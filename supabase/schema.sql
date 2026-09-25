@@ -5,7 +5,8 @@
 --
 --  RE-EXECUTABLE. Ce qu'il fait a une base deja en place :
 --
---    - les PRESENCES saisies sont effacees et la table recreee ;
+--    - les PRESENCES saisies sont CONSERVEES (voir plus bas : un
+--      `drop table` y a vecu, et a coute une saisie entiere) ;
 --    - les PARTICIPANTS sont conserves : la base fait foi, ce serait
 --      perdre la liste que de la reconstruire a chaque passage ;
 --    - les colonnes apparues depuis la derniere execution sont ajoutees ;
@@ -2794,6 +2795,70 @@ grant execute on function public.admin_couchages_poser(text, date, jsonb)       
 grant execute on function public.admin_couchages_vider(text, date)                      to anon;
 grant execute on function public.admin_couchages_reporter(text, date)                   to anon;
 
+
+-- ---- 11e. Aligner la declaration sur la place ----
+--
+--  Le plan marque d'un pointille qui dort ailleurs que ce qu'il avait
+--  demande : un gite de quatre quand on avait ecrit « gite de six », une
+--  chambre quand on avait ecrit « gite ». Ce n'est pas une erreur --
+--  l'organisateur arbitre, et la place manque parfois.
+--
+--  Mais une fois l'arbitrage rendu, LA DECLARATION DOIT SUIVRE. C'est
+--  elle qui facture : une nuit en gite ne comprend aucun repas quand une
+--  nuit en chambre en comprend trois, et la vue mer porte un supplement.
+--  Quelqu'un pose en gite et declare en chambre serait facture pour une
+--  pension qu'il n'a pas prise.
+--
+--  CE GESTE CORRIGE CE QUE QUELQU'UN A ECRIT. Il ne se fait donc pas tout
+--  seul a chaque pose : le plan garde son pointille, et c'est un bouton
+--  -- precede d'une confirmation -- qui aligne. Une nuit a la fois, comme
+--  le reste du plateau.
+create or replace function public.admin_presences_aligner(p_code text, p_jour date)
+returns jsonb
+language plpgsql security definer
+set search_path = private, pg_temp as $fn$
+declare
+  alignees integer;
+begin
+  perform private.verifier_code(p_code, 'admin');
+  -- Le premier changement de la semaine emporte une copie de l'avant.
+  perform private.sauver_si_nouvelle_semaine();
+
+  if p_jour is null then
+    raise exception 'DEMANDE_INVALIDE' using errcode = 'P0001';
+  end if;
+
+  update public.presences pr
+     set hebergement = g.categorie,
+         -- La vue mer n'a de sens qu'en chambre : le calcul de
+         -- facturation refuse la combinaison, et ce n'est pas ici qu'on
+         -- va la fabriquer.
+         vue_mer     = (g.vue_mer and g.categorie = 'chambre'),
+         logement_id = g.id,
+         maj_le      = now()
+    from private.couchages c
+    join private.logements g on g.id = c.logement_id
+   where c.participant_id = pr.participant_id
+     and c.jour = pr.jour
+     and pr.jour = p_jour
+     -- Une affectation tombee au-dela du rang apres une baisse du nombre
+     -- n'est plus affichee nulle part : elle n'a pas a corriger une
+     -- declaration.
+     and c.numero <= g.nombre
+     -- `presences.hebergement` n'accepte que ces deux couchages -- et
+     -- « exterieur », qui ne dort pas sur place.
+     and g.categorie in ('chambre', 'gite')
+     -- Et seulement ce qui differe : reecrire a l'identique ferait un
+     -- compte rendu qui ment sur ce qu'il a change.
+     and (pr.hebergement is distinct from g.categorie
+          or pr.vue_mer is distinct from (g.vue_mer and g.categorie = 'chambre')
+          or pr.logement_id is distinct from g.id);
+  get diagnostics alignees = row_count;
+
+  return jsonb_build_object('alignees', alignees);
+end $fn$;
+
+grant execute on function public.admin_presences_aligner(text, date) to anon;
 
 -- ============================================================
 --  12. Revenir en arriere

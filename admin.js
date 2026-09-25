@@ -1219,6 +1219,40 @@ const plateau = PLAN.monter({
 
 const messageCouchages = document.getElementById("message-couchages");
 
+// Le pointille dit que quelqu'un dort ailleurs que ce qu'il avait
+// demande. Une fois l'arbitrage rendu, la declaration doit suivre : c'est
+// elle qui facture, et un gite ne se facture pas comme une chambre.
+document.getElementById("couchages-aligner").addEventListener("click", async () => {
+  const jour = plateau.jour();
+  if (
+    !confirm(
+      "Corriger les déclarations sur les places de cette nuit ?\n\nLes " +
+        "personnes en pointillé verront leur choix remplacé par le couchage " +
+        "où elles sont posées — c'est lui qui sera facturé. Les autres nuits " +
+        "ne bougent pas. Une copie de sauvegarde est prise avant."
+    )
+  ) {
+    return;
+  }
+  messageCouchages.className = "";
+  messageCouchages.textContent = "Correction…";
+  try {
+    const r = await rpc("admin_presences_aligner", { p_code: etat.code, p_jour: jour });
+    await plateau.recharger(jour);
+    // La demande a change : le panneau qui compare l'offre et la demande
+    // dirait le contraire de ce que le plan vient de montrer.
+    await rechargerLogements();
+    messageCouchages.className = "ok";
+    messageCouchages.textContent = r.alignees
+      ? `${r.alignees} déclaration(s) corrigée(s).`
+      : "Rien à corriger : chacun dort dans ce qu'il avait demandé.";
+  } catch (erreur) {
+    messageCouchages.className = "erreur";
+    messageCouchages.textContent = erreur.message;
+  }
+});
+
+
 // Recommencer. Sans ce bouton, une repartition qu'on n'aime pas se
 // deferait en soixante glissers -- autant dire qu'on la garderait.
 document.getElementById("couchages-vider").addEventListener("click", async () => {
