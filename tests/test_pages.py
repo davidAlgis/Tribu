@@ -234,3 +234,46 @@ def test_le_plan_n_amorce_aucun_glisser_deposer_natif(pages):
 
         fautifs = sorted(set(re.findall(r"\b(dataTransfer|draggable|ondrag\w*)\b", code)))
         assert fautifs == [], f"{fichier} est revenu au glisser-déposer du navigateur"
+
+# Les modules que les pages se partagent, et le fichier qui les pose.
+MODULES = {
+    "CONFIG": "config.js",
+    "CARTE": "carte.js",
+    "PLAN": "plan.js",
+    "REPARTIR": "repartir.js",
+}
+
+
+@pytest.mark.parametrize("page", sorted(PAGES))
+def test_chaque_module_utilise_est_charge_par_la_page(page, pages):
+    """Un script qui appelle un module que la page ne charge pas ne casse
+    rien au chargement : il casse au premier clic qui l'appelle — et ce
+    clic peut être celui de quelqu'un d'autre, des semaines plus tard.
+
+    Le lien ne tient qu'à une balise `<script>`, et rien ne rapproche les
+    deux fichiers avant l'exécution.
+    """
+    html, js = pages[page]
+    # Les commentaires en parlent, et doivent pouvoir continuer.
+    code = "\n".join(l for l in js.splitlines() if not l.lstrip().startswith("//"))
+    manquants = [
+        nom
+        for nom, fichier in MODULES.items()
+        if re.search(r"\b" + nom + r"\b", code) and f'src="./{fichier}"' not in html
+    ]
+    assert manquants == [], f"{page} : {manquants} utilisé(s), script absent de la page"
+
+
+def test_la_repartition_se_lit_sans_navigateur():
+    """`repartir.js` ne décide que d'une chose : qui dort où. Il ne touche
+    ni au DOM ni au réseau, et c'est ce qui permet de l'éprouver sur vingt
+    nuits inventées sans ouvrir une page.
+
+    La commodité d'y bricoler l'affichage se paierait la première fois
+    qu'une répartition séparerait une famille : il faudrait un navigateur
+    pour s'en apercevoir.
+    """
+    js = (RACINE / "repartir.js").read_text(encoding="utf-8")
+    code = "\n".join(l for l in js.splitlines() if not l.lstrip().startswith("//"))
+    dehors = sorted(set(re.findall(r"\b(document|fetch|localStorage|XMLHttpRequest)\b", code)))
+    assert dehors == [], "l'algorithme est sorti de son bocal"

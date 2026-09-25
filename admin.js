@@ -1219,6 +1219,48 @@ const plateau = PLAN.monter({
 
 const messageCouchages = document.getElementById("message-couchages");
 
+// La repartition automatique. Le calcul vit dans `repartir.js` -- il se
+// lit et s'essaie sans navigateur, ce qu'un algorithme merite ; ici on ne
+// fait que l'amener a la page : relire le plan, lui soumettre, envoyer.
+//
+// On relit JUSTE AVANT de calculer plutot que de se fier a ce qui est
+// affiche : la page a pu rester ouverte pendant qu'on posait des gens
+// depuis un autre onglet, et repartir sur une image perimee rangerait
+// deux personnes dans le meme lit.
+document.getElementById("couchages-repartir").addEventListener("click", async () => {
+  const jour = plateau.jour();
+  messageCouchages.className = "";
+  messageCouchages.textContent = "Répartition…";
+  try {
+    const plan = await rpc("admin_couchages", { p_code: etat.code, p_jour: jour });
+    const r = REPARTIR.repartir(plan);
+
+    if (!r.places.length) {
+      // Ne rien avoir a poser n'est pas une erreur : c'est une reponse, et
+      // elle differe selon qu'il reste du monde ou non.
+      messageCouchages.textContent = r.restent
+        ? `Personne n'a pu être placé : ${r.restent} en attente, faute de couchage libre du type demandé.`
+        : "Tout le monde est déjà placé.";
+      return;
+    }
+
+    const pose = await rpc("admin_couchages_poser", {
+      p_code: etat.code,
+      p_jour: jour,
+      p_places: r.places,
+    });
+    await plateau.recharger(jour);
+    messageCouchages.className = "ok";
+    messageCouchages.textContent =
+      `${pose.poses} personne(s) placée(s)` +
+      (r.restent ? `, ${r.restent} encore à placer.` : ".");
+  } catch (erreur) {
+    messageCouchages.className = "erreur";
+    messageCouchages.textContent = erreur.message;
+  }
+});
+
+
 document.getElementById("couchages-reporter").addEventListener("click", async () => {
   const jour = plateau.jour();
   messageCouchages.className = "";

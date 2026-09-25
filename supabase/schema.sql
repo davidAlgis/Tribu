@@ -2545,6 +2545,18 @@ begin
                'demande_id', pr.logement_id,
                'logement_id', c.logement_id,
                'numero', c.numero,
+               -- Les liens et l'age, que la REPARTITION AUTOMATIQUE lit :
+               -- qui va avec qui, et qui ne dort pas sans ses parents. Le
+               -- plateau, lui, n'en fait rien -- il affiche les prenoms du
+               -- parent et du conjoint, qui sont au-dessus.
+               --
+               -- La page familiale lit le meme plan par `couchage_charger`
+               -- et ne les recoit pas : elle n'a pas de bouton qui
+               -- repartit, et l'age de chacun n'a pas a se promener
+               -- derriere le seul code famille.
+               'parent_id', p.parent_id,
+               'conjoint_id', p.conjoint_id,
+               'age', private.age_au(p.date_naissance, r.date_debut),
                -- L'organisateur deplace tout le monde.
                'mien', true
              ) order by p.famille, p.prenom)
@@ -2619,6 +2631,83 @@ begin
   return jsonb_build_object('place', true);
 end $fn$;
 
+-- Poser PLUSIEURS places d'un coup.
+--
+-- La repartition automatique en decide vingt a la fois. Les envoyer une
+-- par une, c'est vingt allers-retours -- et vingt occasions de s'arreter
+-- au milieu, laissant une moitie de plan posee sans rien pour dire
+-- laquelle.
+--
+-- CE QUE CETTE FONCTION NE FAIT PAS : choisir. Le calcul tient dans
+-- `repartir.js`, ou il se relit et s'essaie sans navigateur ; ici on
+-- ecrit ce qu'on recoit. Et on l'ecrit avec les MEMES refus qu'un poser a
+-- l'unite : le pouvoir de placer soixante personnes d'un clic ne doit pas
+-- etre le pouvoir d'en placer une hors des regles.
+--
+-- Une place invalide est ECARTEE EN SILENCE plutot que de faire echouer
+-- les autres -- le compte rendu dit combien. Une repartition est une
+-- proposition : qu'elle soit servie a quatre-vingt-dix pour cent est un
+-- resultat utile, pas un echec.
+create or replace function public.admin_couchages_poser(
+  p_code   text,
+  p_jour   date,
+  p_places jsonb
+)
+returns jsonb
+language plpgsql security definer
+set search_path = private, pg_temp as $fn$
+declare
+  poses integer;
+begin
+  perform private.verifier_code(p_code, 'admin');
+  -- Le premier changement de la semaine emporte une copie de l'avant.
+  -- Celui-ci plus que tout autre : il touche le plan entier d'une nuit.
+  perform private.sauver_si_nouvelle_semaine();
+
+  if p_jour is null or jsonb_typeof(p_places) <> 'array' then
+    raise exception 'DEMANDE_INVALIDE' using errcode = 'P0001';
+  end if;
+
+  insert into private.couchages (participant_id, jour, logement_id, numero)
+  -- `distinct on` : deux places pour la meme personne feraient echouer
+  -- tout l'envoi -- « ON CONFLICT ne peut toucher deux fois la meme
+  -- ligne ». Le compte rendu les range parmi les ignorees.
+  select d.participant_id, p_jour, d.logement_id, d.numero
+    from (
+      select distinct on ((l->>'participant_id')::uuid)
+             (l->>'participant_id')::uuid as participant_id,
+             (l->>'logement_id')::uuid    as logement_id,
+             (l->>'numero')::smallint     as numero
+        from jsonb_array_elements(p_places) as l
+       order by (l->>'participant_id')::uuid
+    ) d
+   -- Dormir sur place cette nuit-la : sans quoi la ligne serait un
+   -- fantome que la lecture n'affiche jamais, et un lit compte pour rien.
+   where exists (
+           select 1 from public.presences pr
+            where pr.participant_id = d.participant_id
+              and pr.jour = p_jour
+              and pr.hebergement <> 'exterieur'
+         )
+   -- Et viser une unite qui existe : le rang ne depasse pas le nombre
+   -- d'exemplaires du type.
+     and exists (
+           select 1 from private.logements g
+            where g.id = d.logement_id
+              and d.numero between 1 and g.nombre
+         )
+  on conflict (participant_id, jour) do update
+    set logement_id = excluded.logement_id, numero = excluded.numero, maj_le = now();
+  get diagnostics poses = row_count;
+
+  -- Aucun controle de capacite, ici non plus : un depassement se voit sur
+  -- la page, il ne se refuse pas.
+  return jsonb_build_object(
+    'poses', poses,
+    'ignorees', jsonb_array_length(p_places) - poses
+  );
+end $fn$;
+
 -- « La meme chose les soirs suivants ». Sans ce bouton, la souplesse d'une
 -- ligne par nuit se paierait huit fois pour le cas le plus courant.
 --
@@ -2666,6 +2755,7 @@ end $fn$;
 
 grant execute on function public.admin_couchages(text, date)                            to anon;
 grant execute on function public.admin_couchage_placer(text, uuid, date, uuid, integer) to anon;
+grant execute on function public.admin_couchages_poser(text, date, jsonb)              to anon;
 grant execute on function public.admin_couchages_reporter(text, date)                   to anon;
 
 
