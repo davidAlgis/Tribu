@@ -1219,6 +1219,33 @@ const plateau = PLAN.monter({
 
 const messageCouchages = document.getElementById("message-couchages");
 
+// Recommencer. Sans ce bouton, une repartition qu'on n'aime pas se
+// deferait en soixante glissers -- autant dire qu'on la garderait.
+document.getElementById("couchages-vider").addEventListener("click", async () => {
+  const jour = plateau.jour();
+  if (
+    !confirm(
+      "Vider le plan de cette nuit ?\n\nToutes les places attribuées sont " +
+        "retirées et chacun revient « À placer ». Les autres nuits ne bougent " +
+        "pas. Une copie de sauvegarde est prise avant."
+    )
+  ) {
+    return;
+  }
+  messageCouchages.className = "";
+  messageCouchages.textContent = "Vidage…";
+  try {
+    const r = await rpc("admin_couchages_vider", { p_code: etat.code, p_jour: jour });
+    await plateau.recharger(jour);
+    messageCouchages.className = "ok";
+    messageCouchages.textContent = `${r.retirees} place(s) retirée(s) : tout est à replacer.`;
+  } catch (erreur) {
+    messageCouchages.className = "erreur";
+    messageCouchages.textContent = erreur.message;
+  }
+});
+
+
 // La repartition automatique. Le calcul vit dans `repartir.js` -- il se
 // lit et s'essaie sans navigateur, ce qu'un algorithme merite ; ici on ne
 // fait que l'amener a la page : relire le plan, lui soumettre, envoyer.

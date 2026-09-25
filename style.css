@@ -358,6 +358,15 @@ button.retirer {
 }
 button.retirer:hover { color: #fff; background: var(--erreur); border-color: var(--erreur); }
 
+/* Vider un plan n'est pas le reporter. Meme forme que ses voisins --
+   la rangee doit rester lisible -- mais le survol passe au rouge :
+   c'est la seule des trois actions qui efface. */
+#couchages-vider:hover {
+  color: #fff;
+  background: var(--erreur);
+  border-color: var(--erreur);
+}
+
 /* Meme forme que le bouton de retrait, autre intention : corriger n'est
    pas supprimer, et le survol ne doit pas passer au rouge. */
 button.modifier {

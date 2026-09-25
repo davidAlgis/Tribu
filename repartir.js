@@ -30,6 +30,13 @@
 //     Sinon ils restent a placer : un enfant de quatre ans seul dans une
 //     chambre n'est pas une demi-solution, c'en est une mauvaise.
 //
+//  4. UNE FAMILLE REMPLIT SON COUCHAGE avant qu'un autre s'ouvre. Les
+//     cousins d'une meme branche se retrouvent dans le meme gite, et les
+//     lits qui y restent leur reviennent d'abord. C'est la derniere des
+//     quatre : elle ne fait jamais changer de type ni separer un couple,
+//     elle choisit seulement, a souhait egal, LEQUEL des couchages
+//     possibles.
+//
 // Le souhait passe avant le foyer, et c'est voulu : deux conjoints qui
 // n'ont pas demande la meme chose ne forment pas un bloc, et chacun suit
 // ce qu'il a ecrit. La regle 1 prime, l'un d'eux s'est trompe, et c'est
@@ -88,22 +95,32 @@ window.REPARTIR = (function () {
   //              entier n'entre nulle part : ce qui reste de place servira
   //              aux enfants qu'on pourra quand meme emmener.
   //
-  //  A taille egale, LA PLUS VIDE. C'est ce qui evite d'empiler deux
-  //  personnes seules dans une chambre pendant que la chambre d'a cote
-  //  reste vide : personne n'a demande a partager avec quelqu'un en
-  //  particulier, et une proposition qui etale se corrige plus facilement
-  //  qu'une proposition qui tasse.
-  function meilleure(candidates, combien, restant, demande, mode) {
-    const prefere = (u) => (demande && u.logement_id === demande ? 0 : 1);
-    const libre = (u) => restant.get(cle(u));
+  //  LA FAMILLE PASSE AVANT LA TAILLE (regle 4). Un couchage ou dorment
+  //  deja des siens est choisi le premier, et parmi ceux-la LE PLUS
+  //  REMPLI : on finit le gite commence avant d'en ouvrir un second.
+  //
+  //  Entre familles, c'est l'inverse : a taille egale, LA PLUS VIDE. Deux
+  //  personnes qui ne se sont rien demande n'ont pas a etre empilees
+  //  pendant que la chambre d'a cote reste vide. Remplir entre soi, etaler
+  //  entre etrangers -- les deux disent la meme chose.
+  function meilleure(candidates, combien, etat, bloc, mode) {
+    const prefere = (u) => (bloc.demande_id && u.logement_id === bloc.demande_id ? 0 : 1);
+    const libre = (u) => etat.restant.get(cle(u));
+    const sien = (u) => {
+      const la = etat.familles.get(cle(u));
+      return la && [...bloc.familles].some((f) => la.has(f)) ? 0 : 1;
+    };
     const possibles = candidates.filter((u) => libre(u) >= combien);
     possibles.sort(
       (x, y) =>
         // Le type exactement demande passe devant : « gite de 6 » n'est
         // pas « gite de 4 », et l'inventaire sait la difference.
         prefere(x) - prefere(y) ||
+        sien(x) - sien(y) ||
         (mode === "large"
           ? libre(y) - libre(x) || y.capacite - x.capacite
+          : sien(x) === 0
+          ? libre(x) - libre(y)
           : x.capacite - y.capacite || libre(y) - libre(x)) ||
         x.numero - y.numero ||
         comparer(cle(x), cle(y))
@@ -195,6 +212,9 @@ window.REPARTIR = (function () {
           // Un adulte du bloc, meme deja pose ailleurs : un enfant peut
           // rejoindre un parent qui dort deja quelque part.
           unAdulte: b.gens.some((p) => !jeune(p)),
+          // La branche de chacun, pour la regle 4. Un couple peut en
+          // toucher deux : le bloc se reconnait alors dans les deux.
+          familles: new Set(b.gens.map((p) => p.famille).filter(Boolean)),
           demande_id: memeDemande(b.gens),
           premier: b.gens.map((p) => p.prenom).sort()[0],
         };
@@ -210,11 +230,21 @@ window.REPARTIR = (function () {
           comparer(x.cle, y.cle)
       );
 
-    const restant = new Map(unites.map((u) => [cle(u), u.capacite]));
+    // Ce qui reste de place, et quelles branches dorment deja la. Les deux
+    // se tiennent a jour au fil des poses : un bloc pose change ce que
+    // voit le suivant, et c'est precisement ce qui remplit un gite avant
+    // d'en ouvrir un autre.
+    const etat = {
+      restant: new Map(unites.map((u) => [cle(u), u.capacite])),
+      familles: new Map(unites.map((u) => [cle(u), new Set()])),
+    };
+    const occuper = (u, gens) => {
+      const k = cle(u);
+      etat.restant.set(k, etat.restant.get(k) - gens.length);
+      for (const p of gens) if (p.famille) etat.familles.get(k).add(p.famille);
+    };
     for (const p of dormeurs) {
-      if (!p.logement_id) continue;
-      const k = cle(p);
-      if (restant.has(k)) restant.set(k, restant.get(k) - 1);
+      if (p.logement_id && etat.restant.has(cle(p))) occuper(p, [p]);
     }
 
     const places = [];
@@ -226,7 +256,7 @@ window.REPARTIR = (function () {
         ? [ensemble]
         : unites.filter((u) => u.categorie === b.categorie && !!u.vue_mer === b.vue_mer);
 
-      let u = meilleure(candidates, b.aPoser.length, restant, b.demande_id, "juste");
+      let u = meilleure(candidates, b.aPoser.length, etat, b, "juste");
       let poses = b.aPoser;
 
       // Le bloc entier n'entre nulle part. Les adultes prennent alors la
@@ -239,9 +269,9 @@ window.REPARTIR = (function () {
         // poser : il reste a y glisser les enfants, d'ou le minimum d'une
         // place.
         const socle = b.adultes.length;
-        u = meilleure(candidates, Math.max(socle, 1), restant, b.demande_id, "large");
+        u = meilleure(candidates, Math.max(socle, 1), etat, b, "large");
         if (u) {
-          poses = b.adultes.concat(b.petits.slice(0, restant.get(cle(u)) - socle));
+          poses = b.adultes.concat(b.petits.slice(0, etat.restant.get(cle(u)) - socle));
         }
       }
       if (!u || !poses.length) continue;
@@ -253,7 +283,7 @@ window.REPARTIR = (function () {
           numero: u.numero,
         });
       }
-      restant.set(cle(u), restant.get(cle(u)) - poses.length);
+      occuper(u, poses);
     }
 
     const deja = dormeurs.filter((p) => p.logement_id).length;

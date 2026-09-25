@@ -2708,6 +2708,41 @@ begin
   );
 end $fn$;
 
+-- Vider le plan d'une nuit.
+--
+-- Recommencer doit rester possible. Une repartition automatique qu'on
+-- n'aime pas se deferait autrement en soixante glissers -- et personne ne
+-- fait soixante glissers : on garde ce qu'on n'aime pas.
+--
+-- UNE NUIT A LA FOIS, comme tout le reste du plateau. Un bouton qui
+-- viderait la semaine entiere ferait de la sauvegarde hebdomadaire la
+-- seule ligne de defense, pour un geste qui se fait vite et sans y
+-- penser. Vider quatre nuits demande quatre fois de le vouloir.
+--
+-- Personne n'est touche : les dormeurs reviennent « a placer », et leurs
+-- declarations de presence ne bougent pas.
+create or replace function public.admin_couchages_vider(p_code text, p_jour date)
+returns jsonb
+language plpgsql security definer
+set search_path = private, pg_temp as $fn$
+declare
+  retirees integer;
+begin
+  perform private.verifier_code(p_code, 'admin');
+  -- Le premier changement de la semaine emporte une copie de l'avant.
+  -- Celui-ci en a le plus besoin de tous : il n'ajoute rien, il efface.
+  perform private.sauver_si_nouvelle_semaine();
+
+  if p_jour is null then
+    raise exception 'DEMANDE_INVALIDE' using errcode = 'P0001';
+  end if;
+
+  delete from private.couchages where jour = p_jour;
+  get diagnostics retirees = row_count;
+
+  return jsonb_build_object('retirees', retirees);
+end $fn$;
+
 -- « La meme chose les soirs suivants ». Sans ce bouton, la souplesse d'une
 -- ligne par nuit se paierait huit fois pour le cas le plus courant.
 --
@@ -2756,6 +2791,7 @@ end $fn$;
 grant execute on function public.admin_couchages(text, date)                            to anon;
 grant execute on function public.admin_couchage_placer(text, uuid, date, uuid, integer) to anon;
 grant execute on function public.admin_couchages_poser(text, date, jsonb)              to anon;
+grant execute on function public.admin_couchages_vider(text, date)                      to anon;
 grant execute on function public.admin_couchages_reporter(text, date)                   to anon;
 
 
