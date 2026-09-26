@@ -15,7 +15,13 @@
 --  PRINCIPES
 --
 --  1. La base ne stocke que des FAITS SAISIS. Aucun regime, aucun
---     tarif, aucun total : tout est derive par le Python.
+--     total, aucune derivation : tout cela est calcule par le Python.
+--
+--     Les TARIFS y sont entres depuis la section 12. Ce n'est pas une
+--     entorse : un prix negocie avec l'hotel est un fait saisi, au meme
+--     titre qu'une date ou un nombre de chambres. Ce qui reste dehors,
+--     c'est ce qui se DEDUIT -- le regime d'une nuit, le total d'une
+--     facture.
 --
 --  2. Aucune table n'est accessible directement depuis le navigateur.
 --     Tout passe par des fonctions qui verifient le code d'acces et les
@@ -54,15 +60,25 @@ create table if not exists private.reglages (
   saisie_ouverte boolean not null default true
 );
 
--- A partir de quel age on cesse d'etre un bebe, puis un enfant. Ce sont les
--- bornes de l'HOTEL, pas de la famille : chaque etablissement compte a sa
--- facon, et `config.toml` range ses tarifs sous ces trois mots. Elles
--- vivaient dans les options de `importer_ged.py`, donc nulle part une fois
--- l'amorcage passe.
+-- A partir de quel age on cesse d'etre un bebe, puis un enfant, puis un
+-- jeune. Ce sont les bornes de l'HOTEL, pas de la famille : chaque
+-- etablissement compte a sa facon, et la grille de tarifs (section 12)
+-- range ses prix sous ces quatre mots. Elles vivaient dans les options de
+-- `importer_ged.py`, donc nulle part une fois l'amorcage passe.
 alter table private.reglages
   add column if not exists age_bebe smallint not null default 3;
 alter table private.reglages
   add column if not exists age_enfant smallint not null default 12;
+alter table private.reglages
+  add column if not exists age_jeune smallint not null default 18;
+
+-- Quels jours de la semaine se facturent au tarif week-end. Lundi = 0,
+-- dimanche = 6 ; par defaut vendredi et samedi, les deux nuits que la
+-- plupart des hotels comptent a part. Ce reglage vivait dans
+-- `config.toml` : il rejoint la base avec les tarifs, pour qu'il n'y ait
+-- plus qu'un seul endroit ou les prix se decident.
+alter table private.reglages
+  add column if not exists jours_weekend smallint[] not null default '{4,5}';
 
 -- ============================================================
 --  2. Le code d'acces, partage par toute la famille
@@ -195,7 +211,8 @@ create table if not exists private.participants (
   id            uuid primary key default gen_random_uuid(),
   prenom        text not null check (length(trim(prenom)) between 1 and 40),
   famille       text not null check (length(trim(famille)) between 1 and 60),
-  categorie_age text not null check (categorie_age in ('adulte', 'enfant', 'bebe')),
+  categorie_age text not null
+    check (categorie_age in ('adulte', 'jeune', 'enfant', 'bebe')),
   parent_id     uuid references private.participants(id) on delete set null,
   conjoint_id   uuid references private.participants(id) on delete set null,
   -- Un invite n'est pas de la famille. Rattache a son hote via parent_id,
@@ -239,6 +256,16 @@ alter table private.participants
 -- `categorie_age` reste ce qui FACTURE : c'est elle que lit la vue
 -- d'export et le moteur de tarifs, et elle peut etre corrigee a la main
 -- quand l'hotel compte autrement. La date propose, l'organisateur dispose.
+-- La tranche « jeune » est arrivee apres coup. `create table if not
+-- exists` ne touche pas une table deja posee : la contrainte se refait
+-- donc a chaque recollage, sinon une base existante refuserait « jeune »
+-- pendant que le fichier, lui, l'annonce.
+alter table private.participants
+  drop constraint if exists participants_categorie_age_check;
+alter table private.participants
+  add constraint participants_categorie_age_check
+  check (categorie_age in ('adulte', 'jeune', 'enfant', 'bebe'));
+
 alter table private.participants
   add column if not exists date_naissance date;
 
@@ -264,8 +291,15 @@ $fn$;
 --
 -- Sans date, `null` -- et non « adulte ». Ne pas savoir n'est pas la meme
 -- chose que savoir que c'est un adulte, et la page doit pouvoir le dire.
+-- Une borne de plus, donc une SIGNATURE de plus. `create or replace` ne
+-- remplace que la meme : sans ce `drop`, l'ancienne fonction a quatre
+-- arguments survivrait a cote, et n'importe quel appel oublie continuerait
+-- de la trouver -- en ignorant les jeunes, sans rien dire.
+drop function if exists private.categorie_pour(date, date, integer, integer);
+
 create or replace function private.categorie_pour(
-  p_naissance date, p_jour date, p_bebe integer, p_enfant integer
+  p_naissance date, p_jour date,
+  p_bebe integer, p_enfant integer, p_jeune integer
 )
 returns text language sql immutable
 set search_path = private, pg_temp as $fn$
@@ -273,6 +307,7 @@ set search_path = private, pg_temp as $fn$
            when private.age_au(p_naissance, p_jour) is null then null
            when private.age_au(p_naissance, p_jour) < p_bebe then 'bebe'
            when private.age_au(p_naissance, p_jour) < p_enfant then 'enfant'
+           when private.age_au(p_naissance, p_jour) < p_jeune then 'jeune'
            else 'adulte'
          end
 $fn$;
@@ -847,7 +882,7 @@ begin
              -- page ne signale un ecart que lorsqu'elle sait.
              'categorie_attendue',
                private.categorie_pour(p.date_naissance, r.date_debut,
-                                      r.age_bebe, r.age_enfant),
+                                      r.age_bebe, r.age_enfant, r.age_jeune),
              'parent_id', p.parent_id,
              'conjoint_id', p.conjoint_id,
              'invite', p.invite,
@@ -1348,6 +1383,7 @@ begin
     'saisie_ouverte', r.saisie_ouverte,
     'age_bebe', r.age_bebe,
     'age_enfant', r.age_enfant,
+    'age_jeune', r.age_jeune,
     -- Combien de personnes n'ont pas de date : le panneau le dit, sinon
     -- « recalculer » paraitrait ne rien faire pour la moitie du monde.
     'sans_naissance', (select count(*) from private.participants
@@ -1506,17 +1542,17 @@ begin
     into changes
     from (
       select p.*, private.categorie_pour(p.date_naissance, r.date_debut,
-                                         r.age_bebe, r.age_enfant) as attendue
+                                         r.age_bebe, r.age_enfant, r.age_jeune) as attendue
         from private.participants p
     ) t
    where t.attendue is not null and t.attendue <> t.categorie_age;
 
   update private.participants p
      set categorie_age = private.categorie_pour(p.date_naissance, r.date_debut,
-                                                r.age_bebe, r.age_enfant)
+                                                r.age_bebe, r.age_enfant, r.age_jeune)
    where p.date_naissance is not null
      and private.categorie_pour(p.date_naissance, r.date_debut,
-                                r.age_bebe, r.age_enfant) <> p.categorie_age;
+                                r.age_bebe, r.age_enfant, r.age_jeune) <> p.categorie_age;
 
   return jsonb_build_object(
     'jour', r.date_debut,
@@ -1531,7 +1567,13 @@ end $fn$;
 --  compte a sa facon. Elles vivaient dans les options de `importer_ged.py`,
 --  donc nulle part une fois l'amorcage passe.
 --
-create or replace function public.admin_sejour_ages(p_code text, p_bebe integer, p_enfant integer)
+-- Un argument de plus, donc une signature de plus : meme raison que pour
+-- `categorie_pour`, meme `drop`.
+drop function if exists public.admin_sejour_ages(text, integer, integer);
+
+create or replace function public.admin_sejour_ages(
+  p_code text, p_bebe integer, p_enfant integer, p_jeune integer
+)
 returns jsonb
 language plpgsql security definer
 set search_path = private, pg_temp as $fn$
@@ -1539,21 +1581,28 @@ begin
   perform private.verifier_code(p_code, 'admin');
   perform private.sauver_si_nouvelle_semaine();
 
-  if p_bebe is null or p_enfant is null or p_bebe < 0 or p_enfant < 0 then
+  if p_bebe is null or p_enfant is null or p_jeune is null
+     or p_bebe < 0 or p_enfant < 0 or p_jeune < 0 then
     raise exception 'AGE_INVALIDE' using errcode = 'P0001';
   end if;
-  if p_bebe >= p_enfant then
+  -- Les bornes montent : bebe, puis enfant, puis jeune. Deux bornes
+  -- croisees videraient une tranche entiere sans le dire.
+  if p_bebe >= p_enfant or p_enfant >= p_jeune then
     raise exception 'AGES_INVERSES' using errcode = 'P0001';
   end if;
 
   -- `where id` : safeupdate refuse un UPDATE sans clause WHERE.
-  update private.reglages set age_bebe = p_bebe, age_enfant = p_enfant where id;
-  return jsonb_build_object('age_bebe', p_bebe, 'age_enfant', p_enfant);
+  update private.reglages
+     set age_bebe = p_bebe, age_enfant = p_enfant, age_jeune = p_jeune
+   where id;
+  return jsonb_build_object(
+    'age_bebe', p_bebe, 'age_enfant', p_enfant, 'age_jeune', p_jeune
+  );
 end $fn$;
 
 grant execute on function public.admin_naissances_poser(text, jsonb)     to anon;
 grant execute on function public.admin_ages_recalculer(text)             to anon;
-grant execute on function public.admin_sejour_ages(text, integer, integer) to anon;
+grant execute on function public.admin_sejour_ages(text, integer, integer, integer) to anon;
 
 grant execute on function public.admin_sejour(text)                    to anon;
 grant execute on function public.admin_sejour_dates(text, date, date)  to anon;
@@ -2861,7 +2910,279 @@ end $fn$;
 grant execute on function public.admin_presences_aligner(text, date) to anon;
 
 -- ============================================================
---  12. Revenir en arriere
+--  12. Les tarifs
+-- ============================================================
+--
+--  OU VIVENT LES PRIX
+--
+--  Ils vivaient dans `config.toml`, sur la machine qui produit l'export.
+--  C'etait tenable tant qu'on les negociait une fois pour toutes ; ca ne
+--  l'est plus des qu'on veut les regler depuis la page. Deux grilles --
+--  un fichier et un ecran -- se seraient contredites, et la
+--  contradiction se serait lue sur une facture.
+--
+--  LA BASE EST DESORMAIS LA SEULE SOURCE. `config.toml` ne garde que ce
+--  qui n'est pas un prix : le nom du sejour et la devise.
+--
+--  LA GRILLE SUIT L'INVENTAIRE
+--
+--  Une ligne de prix par type de couchage (`private.logements`) : pas de
+--  gite pose, pas de prix de gite a remplir. Retirer un type emporte ses
+--  prix -- ils ne veulent plus rien dire sans lui (`on delete cascade`).
+--
+--  CHAMBRE ET GITE NE SE FACTURENT PAS PAREIL
+--
+--  Une chambre se facture PAR PERSONNE, et le prix depend de l'age :
+--  quatre tranches, quatre prix. Un gite se loue ENTIER -- un gite de six
+--  coute son prix qu'on y dorme a quatre ou a six -- et la note se
+--  partage entre ceux qui y passent la nuit. D'ou la tranche « entier »,
+--  qui n'est pas un age : c'est le gite lui-meme.
+--
+--  LE PRIX DE BASE EST CELUI DE LA PENSION COMPLETE
+--
+--  Les autres regimes s'en deduisent par une REDUCTION EN EUROS, rangee
+--  dans `tarifs_annexes` : c'est ainsi qu'un hotel les annonce -- « la
+--  demi-pension, c'est vingt euros de moins ». Une reduction ne descend
+--  jamais sous zero : un bebe facture zero en pension complete reste a
+--  zero partout ailleurs.
+--
+
+create table if not exists private.tarifs (
+  logement_id uuid not null references private.logements(id) on delete cascade,
+  -- Une tranche d'age pour une chambre ; « entier » pour un gite, qui se
+  -- loue d'un bloc et se moque de l'age de ses occupants.
+  tranche     text not null,
+  semaine     numeric(8,2) not null default 0 check (semaine >= 0),
+  weekend     numeric(8,2) not null default 0 check (weekend >= 0),
+  -- Une remise personnalisee, en POURCENTAGE, sur les deux prix de la
+  -- ligne. Deux colonnes plutot qu'un prix deja remise : le prix negocie
+  -- reste lisible a cote de ce qu'on en retire, et l'on peut rendre la
+  -- remise sans avoir a retrouver le prix d'avant.
+  remise      numeric(5,2) not null default 0 check (remise between 0 and 100),
+  maj_le      timestamptz not null default now(),
+  primary key (logement_id, tranche)
+);
+
+-- Les nombres qui ne dependent d'aucun couchage : le supplement vue mer,
+-- les reductions de regime, les repas pris hors pension.
+--
+-- `tranche` vaut la chaine vide quand le nombre ne depend pas de l'age --
+-- la vue mer se paye pareil a tout age. Une chaine vide plutot qu'un
+-- NULL : une clef primaire ne compare pas deux NULL.
+create table if not exists private.tarifs_annexes (
+  cle     text not null,
+  tranche text not null default '',
+  montant numeric(8,2) not null default 0 check (montant >= 0),
+  maj_le  timestamptz not null default now(),
+  primary key (cle, tranche)
+);
+
+-- Ces deux tables naissent apres le `revoke all` de la section 6 : il ne
+-- les couvre pas.
+revoke all on private.tarifs         from anon, authenticated;
+revoke all on private.tarifs_annexes from anon, authenticated;
+
+-- Toute la grille en un appel : l'inventaire, les prix poses, les
+-- nombres annexes. Les trois ne se lisent qu'ensemble -- un prix sans son
+-- couchage ne se rattache a rien, et un couchage sans son prix est
+-- justement ce que la page doit montrer comme vide.
+create or replace function public.admin_tarifs(p_code text)
+returns jsonb
+language plpgsql stable security definer
+set search_path = private, pg_temp as $fn$
+declare
+  r private.reglages;
+begin
+  perform private.verifier_code(p_code, 'admin');
+  select * into r from private.reglages;
+  if r.id is null then
+    raise exception 'REGLAGES_ABSENTS' using errcode = 'P0001';
+  end if;
+
+  return jsonb_build_object(
+    'jours_weekend', to_jsonb(r.jours_weekend),
+    -- Les bornes voyagent avec la grille : les colonnes s'intitulent
+    -- « jusqu'a 3 ans », « 3 a 12 ans »... et personne n'a a se souvenir
+    -- de ce qu'« enfant » veut dire ici.
+    'age_bebe', r.age_bebe,
+    'age_enfant', r.age_enfant,
+    'age_jeune', r.age_jeune,
+
+    'logements', coalesce((
+      select jsonb_agg(jsonb_build_object(
+               'id', l.id,
+               'categorie', l.categorie,
+               'capacite', l.capacite,
+               'nombre', l.nombre,
+               'vue_mer', l.vue_mer
+             ) order by l.categorie, l.vue_mer, l.capacite)
+      from private.logements l
+    ), '[]'::jsonb),
+
+    'tarifs', coalesce((
+      select jsonb_agg(jsonb_build_object(
+               'logement_id', t.logement_id,
+               'tranche', t.tranche,
+               'semaine', t.semaine,
+               'weekend', t.weekend,
+               'remise', t.remise
+             ) order by t.logement_id, t.tranche)
+      from private.tarifs t
+    ), '[]'::jsonb),
+
+    'annexes', coalesce((
+      select jsonb_agg(jsonb_build_object(
+               'cle', a.cle,
+               'tranche', a.tranche,
+               'montant', a.montant
+             ) order by a.cle, a.tranche)
+      from private.tarifs_annexes a
+    ), '[]'::jsonb),
+
+    -- Combien de cases sont encore a zero. Sans ce compte, un prix oublie
+    -- ne se voit qu'a la facture : l'export le facture zero et le range
+    -- dans « tarifs manquants », des semaines plus tard.
+    'a_remplir', (
+      select count(*)
+        from private.logements l
+        cross join lateral unnest(
+               case when l.categorie = 'gite'
+                    then array['entier']
+                    else array['adulte', 'jeune', 'enfant', 'bebe'] end
+             ) as u(tranche)
+       where not exists (
+               select 1 from private.tarifs t
+                where t.logement_id = l.id
+                  and t.tranche = u.tranche
+                  and t.semaine > 0
+             )
+    )
+  );
+end $fn$;
+
+-- Toute la grille en une ecriture.
+--
+-- Une quarantaine de cases se remplissent d'un trait, et les envoyer une
+-- par une ferait quarante allers-retours dont la moitie pourrait echouer
+-- -- laissant une grille a moitie posee, sans rien pour dire laquelle.
+--
+-- LE VOCABULAIRE EST TENU ICI, et non par une contrainte de table : il
+-- grandit -- la quatrieme tranche d'age vient d'en faire la preuve -- et
+-- une contrainte posee sous `create table if not exists` ne se met jamais
+-- a jour sur une base deja en place. Une fonction, elle, se remplace a
+-- chaque recollage.
+create or replace function public.admin_tarifs_enregistrer(
+  p_code    text,
+  p_grille  jsonb,
+  p_annexes jsonb,
+  p_jours   jsonb default null
+)
+returns jsonb
+language plpgsql security definer
+set search_path = private, pg_temp as $fn$
+declare
+  tranches constant text[] := array['adulte', 'jeune', 'enfant', 'bebe', 'entier'];
+  cles     constant text[] := array[
+    'vue_mer',
+    'demi_pension_soir', 'demi_pension_midi', 'nuit_petit_dejeuner', 'nuit_seule',
+    'petit_dejeuner', 'dejeuner', 'diner'
+  ];
+  l         jsonb;
+  n_grille  integer := 0;
+  n_annexes integer := 0;
+begin
+  perform private.verifier_code(p_code, 'admin');
+  -- Le premier changement de la semaine emporte une copie de l'avant.
+  perform private.sauver_si_nouvelle_semaine();
+
+  if jsonb_typeof(p_grille) <> 'array' or jsonb_typeof(p_annexes) <> 'array' then
+    raise exception 'DEMANDE_INVALIDE' using errcode = 'P0001';
+  end if;
+
+  for l in select * from jsonb_array_elements(p_grille) loop
+    if not ((l->>'tranche') = any (tranches)) then
+      raise exception 'TRANCHE_INCONNUE' using errcode = 'P0001';
+    end if;
+    if coalesce((l->>'semaine')::numeric, 0) < 0
+       or coalesce((l->>'weekend')::numeric, 0) < 0
+       or coalesce((l->>'remise')::numeric, 0) not between 0 and 100 then
+      raise exception 'MONTANT_INVALIDE' using errcode = 'P0001';
+    end if;
+  end loop;
+
+  for l in select * from jsonb_array_elements(p_annexes) loop
+    if not ((l->>'cle') = any (cles)) then
+      raise exception 'TARIF_INCONNU' using errcode = 'P0001';
+    end if;
+    if coalesce((l->>'montant')::numeric, 0) < 0 then
+      raise exception 'MONTANT_INVALIDE' using errcode = 'P0001';
+    end if;
+  end loop;
+
+  insert into private.tarifs (logement_id, tranche, semaine, weekend, remise)
+  -- `distinct on` : deux lignes pour la meme case feraient echouer tout
+  -- l'envoi -- « ON CONFLICT ne peut toucher deux fois la meme ligne ».
+  select d.logement_id, d.tranche, d.semaine, d.weekend, d.remise
+    from (
+      select distinct on ((l->>'logement_id')::uuid, l->>'tranche')
+             (l->>'logement_id')::uuid            as logement_id,
+             l->>'tranche'                        as tranche,
+             coalesce((l->>'semaine')::numeric, 0) as semaine,
+             coalesce((l->>'weekend')::numeric, 0) as weekend,
+             coalesce((l->>'remise')::numeric, 0)  as remise
+        from jsonb_array_elements(p_grille) as l
+       order by (l->>'logement_id')::uuid, l->>'tranche'
+    ) d
+   -- Un type retire entre-temps : sa ligne de prix ne veut plus rien
+   -- dire, et la cle etrangere la refuserait de toute facon.
+   where exists (select 1 from private.logements g where g.id = d.logement_id)
+  on conflict (logement_id, tranche) do update
+    set semaine = excluded.semaine,
+        weekend = excluded.weekend,
+        remise  = excluded.remise,
+        maj_le  = now();
+  get diagnostics n_grille = row_count;
+
+  insert into private.tarifs_annexes (cle, tranche, montant)
+  select d.cle, d.tranche, d.montant
+    from (
+      select distinct on (l->>'cle', coalesce(l->>'tranche', ''))
+             l->>'cle'                             as cle,
+             coalesce(l->>'tranche', '')           as tranche,
+             coalesce((l->>'montant')::numeric, 0) as montant
+        from jsonb_array_elements(p_annexes) as l
+       order by l->>'cle', coalesce(l->>'tranche', '')
+    ) d
+  on conflict (cle, tranche) do update
+    set montant = excluded.montant, maj_le = now();
+  get diagnostics n_annexes = row_count;
+
+  -- Les jours de week-end, quand la page les envoie. Lundi = 0.
+  if jsonb_typeof(p_jours) = 'array' then
+    if exists (
+      select 1 from jsonb_array_elements_text(p_jours) as t(j)
+       where t.j::integer not between 0 and 6
+    ) then
+      raise exception 'JOUR_INVALIDE' using errcode = 'P0001';
+    end if;
+    -- `where id` : safeupdate refuse un UPDATE sans clause WHERE.
+    update private.reglages
+       set jours_weekend = (
+             select coalesce(array_agg(t.j::smallint order by t.j::smallint), '{}')
+               from jsonb_array_elements_text(p_jours) as t(j)
+           )
+     where id;
+  end if;
+
+  return jsonb_build_object('tarifs', n_grille, 'annexes', n_annexes);
+end $fn$;
+
+grant execute on function public.admin_tarifs(text)                                to anon;
+grant execute on function public.admin_tarifs_enregistrer(text, jsonb, jsonb, jsonb) to anon;
+
+
+-- ============================================================
+--  13. Revenir en arriere
 -- ============================================================
 --
 --  Trois gestes effacent beaucoup d'un coup, et aucun n'est reversible :
@@ -3282,7 +3603,7 @@ grant execute on function public.admin_etat(text)                        to anon
 grant execute on function public.admin_sauvegarde_restaurer(text, uuid)  to anon;
 
 -- ============================================================
---  13. Etat de la base apres execution
+--  14. Etat de la base apres execution
 -- ============================================================
 --
 --  Affiche ce qui existe reellement, plutot que de le supposer.

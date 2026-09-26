@@ -12,7 +12,7 @@
 
 const { SUPABASE_URL, SUPABASE_ANON_KEY } = window.CONFIG;
 
-const AGES = { adulte: "adulte", enfant: "enfant", bebe: "bébé" };
+const AGES = { adulte: "adulte", jeune: "jeune", enfant: "enfant", bebe: "bébé" };
 
 // Les trois seuls rattachements possibles, et ce qu'ils impliquent.
 const LIENS = {
@@ -73,7 +73,8 @@ const MESSAGES = {
   REGLAGES_ABSENTS: "Les réglages du séjour sont absents de la base.",
   AGE_INVALIDE: "Les bornes d'âge doivent être des nombres positifs.",
   NAISSANCE_INVALIDE: "Cette date de naissance est impossible : ni dans l'avenir, ni avant 1900.",
-  AGES_INVERSES: "La borne des bébés doit être inférieure à celle des enfants.",
+  AGES_INVERSES:
+    "Les bornes doivent monter : bébé, puis enfant, puis jeune.",
   CATEGORIE_INCONNUE: "Type de couchage inconnu.",
   CAPACITE_INVALIDE: "La capacité doit être un nombre entre 1 et 30.",
   NOMBRE_INVALIDE: "Le nombre de logements doit être entre 1 et 200.",
@@ -796,6 +797,12 @@ async function rechargerLogements() {
   // Le plan depend de l'inventaire : retirer un type ou baisser son nombre
   // change les rectangles sous les jetons. On garde la nuit regardee.
   await plateau.recharger(plateau.jour());
+
+  // La grille des tarifs aussi -- mais seulement si les TYPES ont change.
+  // Sans cette garde, n'importe quelle relecture de l'inventaire effacerait
+  // des prix en cours de saisie dans l'autre onglet.
+  const types = (etat.logements || []).map((l) => l.id).sort().join(",");
+  if (types !== tarifs.signature) await rechargerTarifs();
 }
 
 function dessinerLogements() {
@@ -1188,6 +1195,304 @@ async function retirerLogement(ligne) {
     messageLogements.textContent = erreur.message;
   }
 }
+
+
+// ------------------------------------------------------------- tarifs
+//
+// LA GRILLE SUIT L'INVENTAIRE : un tableau par type de couchage pose dans
+// l'onglet d'a cote, et rien pour ce qui n'existe pas. C'etait la demande,
+// et c'est aussi ce qui evite une grille dont les deux tiers ne serviraient
+// jamais.
+//
+// UNE CHAMBRE SE FACTURE PAR PERSONNE, donc par tranche d'age : quatre
+// colonnes. UN GITE SE LOUE ENTIER -- une seule colonne, et l'age n'y change
+// rien, puisque c'est le gite qu'on paye et non ceux qui y dorment.
+//
+// Tout se saisit, puis s'enregistre d'un coup : une case par appel ferait
+// quarante allers-retours pour une grille qu'on remplit d'un trait.
+
+const TRANCHES = ["adulte", "jeune", "enfant", "bebe"];
+
+const LIGNES_PRIX = [
+  { champ: "semaine", libelle: "Semaine (€)", pas: "0.5" },
+  { champ: "weekend", libelle: "Week-end (€)", pas: "0.5" },
+  { champ: "remise", libelle: "Remise (%)", pas: "1", max: "100" },
+];
+
+// Les autres regimes ne sont pas des prix : ce sont des REDUCTIONS sur la
+// pension complete. C'est ainsi qu'un hotel les annonce, et ca evite de
+// ressaisir quatre prix quand le premier bouge.
+const REDUCTIONS = [
+  ["demi_pension_soir", "Demi-pension soir"],
+  ["demi_pension_midi", "Demi-pension midi"],
+  ["nuit_petit_dejeuner", "Nuit + petit-déjeuner"],
+  ["nuit_seule", "Nuit seule"],
+];
+
+const REPAS_HORS = [
+  ["petit_dejeuner", "Petit-déjeuner"],
+  ["dejeuner", "Déjeuner"],
+  ["diner", "Dîner"],
+];
+
+// Lundi = 0, comme dans la base.
+const JOURS = ["Lundi", "Mardi", "Mercredi", "Jeudi", "Vendredi", "Samedi", "Dimanche"];
+
+let tarifs = { logements: [], tarifs: [], annexes: [], jours_weekend: [] };
+
+const zoneGrilleTarifs = document.getElementById("grille-tarifs");
+const zoneReductions = document.getElementById("grille-reductions");
+const zoneRepas = document.getElementById("grille-repas");
+const zoneJours = document.getElementById("jours-weekend");
+const compteurTarifs = document.getElementById("compteur-tarifs");
+const messageTarifs = document.getElementById("message-tarifs");
+const champVueMer = document.getElementById("tarif-vue-mer");
+
+// « Enfant » ne dit pas de quel age. Les bornes voyagent avec la grille :
+// l'en-tete les montre, et personne n'a a se souvenir de ce que le mot
+// recouvre cette annee.
+function libelleTranche(tranche) {
+  if (tranche === "bebe") return `Bébé (- de ${tarifs.age_bebe} ans)`;
+  if (tranche === "enfant") return `Enfant (${tarifs.age_bebe} à ${tarifs.age_enfant})`;
+  if (tranche === "jeune") return `Jeune (${tarifs.age_enfant} à ${tarifs.age_jeune})`;
+  return `Adulte (${tarifs.age_jeune} ans et +)`;
+}
+
+function champNombre(valeur, options) {
+  const champ = document.createElement("input");
+  champ.type = "number";
+  champ.min = "0";
+  champ.step = options.pas || "0.5";
+  if (options.max) champ.max = options.max;
+  champ.value = valeur === null || valeur === undefined ? "0" : String(Number(valeur));
+  // Un champ sans etiquette visible n'est rien pour un lecteur d'ecran :
+  // une cellule de tableau ne se lit pas toute seule.
+  champ.setAttribute("aria-label", options.aria);
+  return champ;
+}
+
+function prixPose(logementId, tranche) {
+  return (tarifs.tarifs || []).find(
+    (t) => t.logement_id === logementId && t.tranche === tranche
+  );
+}
+
+function annexePosee(cle, tranche) {
+  return (tarifs.annexes || []).find(
+    (a) => a.cle === cle && (a.tranche || "") === (tranche || "")
+  );
+}
+
+// Un tableau : des colonnes, des lignes, et une case par croisement.
+function tableauTarifs(titre, colonnes, lignes, cellule) {
+  const table = document.createElement("table");
+  table.className = "tarifs";
+
+  const legende = document.createElement("caption");
+  legende.textContent = titre;
+  table.appendChild(legende);
+
+  const tete = document.createElement("thead");
+  const rangee = document.createElement("tr");
+  rangee.appendChild(document.createElement("th"));
+  for (const colonne of colonnes) {
+    const th = document.createElement("th");
+    th.textContent = colonne.libelle;
+    rangee.appendChild(th);
+  }
+  tete.appendChild(rangee);
+  table.appendChild(tete);
+
+  const corps = document.createElement("tbody");
+  for (const ligne of lignes) {
+    const tr = document.createElement("tr");
+    const th = document.createElement("th");
+    th.scope = "row";
+    th.textContent = ligne.libelle;
+    tr.appendChild(th);
+    for (const colonne of colonnes) {
+      const td = document.createElement("td");
+      td.appendChild(cellule(ligne, colonne, titre));
+      tr.appendChild(td);
+    }
+    corps.appendChild(tr);
+  }
+  table.appendChild(corps);
+  return table;
+}
+
+function dessinerGrilleTarifs() {
+  const logements = tarifs.logements || [];
+  compteurTarifs.textContent = !logements.length
+    ? ""
+    : tarifs.a_remplir
+    ? `${tarifs.a_remplir} prix encore à zéro`
+    : "grille complète";
+
+  zoneGrilleTarifs.textContent = "";
+  if (!logements.length) {
+    const rien = document.createElement("p");
+    rien.className = "note";
+    rien.textContent =
+      "L'inventaire est vide : pose des chambres ou des gîtes dans l'onglet " +
+      "Logements, et leurs prix apparaîtront ici.";
+    zoneGrilleTarifs.appendChild(rien);
+    return;
+  }
+
+  for (const logement of logements) {
+    const colonnes =
+      logement.categorie === "gite"
+        ? [{ cle: "entier", libelle: "Le gîte entier" }]
+        : TRANCHES.map((t) => ({ cle: t, libelle: libelleTranche(t) }));
+
+    const titre =
+      nommerLogement({ ...logement, nombre: 1 }).replace(/^1 /, "") +
+      (logement.nombre > 1 ? ` — ${logement.nombre} exemplaires` : "");
+
+    zoneGrilleTarifs.appendChild(
+      tableauTarifs(titre, colonnes, LIGNES_PRIX, (ligne, colonne) => {
+        const pose = prixPose(logement.id, colonne.cle);
+        const champ = champNombre(pose ? pose[ligne.champ] : 0, {
+          pas: ligne.pas,
+          max: ligne.max,
+          aria: `${titre} — ${colonne.libelle} — ${ligne.libelle}`,
+        });
+        champ.dataset.logement = logement.id;
+        champ.dataset.tranche = colonne.cle;
+        champ.dataset.champ = ligne.champ;
+        return champ;
+      })
+    );
+  }
+}
+
+function dessinerAnnexes() {
+  const vueMer = annexePosee("vue_mer", "");
+  champVueMer.value = String(Number(vueMer ? vueMer.montant : 0));
+
+  zoneReductions.textContent = "";
+  for (const [cle, libelle] of REDUCTIONS) {
+    const bloc = document.createElement("div");
+    const etiquette = document.createElement("label");
+    etiquette.setAttribute("for", `reduction-${cle}`);
+    etiquette.textContent = libelle;
+    const pose = annexePosee(cle, "");
+    const champ = champNombre(pose ? pose.montant : 0, {
+      pas: "0.5",
+      aria: `Réduction — ${libelle}`,
+    });
+    champ.id = `reduction-${cle}`;
+    champ.dataset.cle = cle;
+    champ.dataset.tranche = "";
+    bloc.append(etiquette, champ);
+    zoneReductions.appendChild(bloc);
+  }
+
+  // Trois repas, quatre tranches : un tableau plutot que douze champs en
+  // colonne -- « le dejeuner d'un enfant » se lit alors d'un coup d'oeil.
+  zoneRepas.textContent = "";
+  zoneRepas.appendChild(
+    tableauTarifs(
+      "Hors pension",
+      TRANCHES.map((t) => ({ cle: t, libelle: libelleTranche(t) })),
+      REPAS_HORS.map(([cle, libelle]) => ({ cle, libelle })),
+      (ligne, colonne) => {
+        const pose = annexePosee(ligne.cle, colonne.cle);
+        const champ = champNombre(pose ? pose.montant : 0, {
+          pas: "0.5",
+          aria: `${ligne.libelle} — ${colonne.libelle}`,
+        });
+        champ.dataset.cle = ligne.cle;
+        champ.dataset.tranche = colonne.cle;
+        return champ;
+      }
+    )
+  );
+
+  zoneJours.textContent = "";
+  const choisis = new Set((tarifs.jours_weekend || []).map(Number));
+  JOURS.forEach((nom, i) => {
+    const bouton = document.createElement("button");
+    bouton.type = "button";
+    bouton.className = choisis.has(i) ? "pastille active" : "pastille";
+    bouton.setAttribute("aria-pressed", choisis.has(i) ? "true" : "false");
+    bouton.dataset.jour = String(i);
+    bouton.textContent = nom;
+    bouton.addEventListener("click", () => {
+      const actif = bouton.getAttribute("aria-pressed") === "true";
+      bouton.setAttribute("aria-pressed", actif ? "false" : "true");
+      bouton.classList.toggle("active", !actif);
+    });
+    zoneJours.appendChild(bouton);
+  });
+}
+
+// On relit le DOM plutot que de tenir un modele a jour a chaque frappe :
+// les champs SONT le modele, et un modele parallele finit toujours par
+// diverger de ce que l'organisateur a sous les yeux.
+function lireGrilleTarifs() {
+  const par = new Map();
+  for (const champ of zoneGrilleTarifs.querySelectorAll("input[data-logement]")) {
+    const clef = `${champ.dataset.logement}|${champ.dataset.tranche}`;
+    if (!par.has(clef)) {
+      par.set(clef, {
+        logement_id: champ.dataset.logement,
+        tranche: champ.dataset.tranche,
+        semaine: 0,
+        weekend: 0,
+        remise: 0,
+      });
+    }
+    par.get(clef)[champ.dataset.champ] = Number(champ.value) || 0;
+  }
+  return [...par.values()];
+}
+
+function lireAnnexes() {
+  const lignes = [
+    { cle: "vue_mer", tranche: "", montant: Number(champVueMer.value) || 0 },
+  ];
+  for (const champ of document.querySelectorAll(
+    "#grille-reductions input[data-cle], #grille-repas input[data-cle]"
+  )) {
+    lignes.push({
+      cle: champ.dataset.cle,
+      tranche: champ.dataset.tranche || "",
+      montant: Number(champ.value) || 0,
+    });
+  }
+  return lignes;
+}
+
+async function rechargerTarifs() {
+  tarifs = await rpc("admin_tarifs", { p_code: etat.code });
+  tarifs.signature = (tarifs.logements || []).map((l) => l.id).sort().join(",");
+  dessinerGrilleTarifs();
+  dessinerAnnexes();
+}
+
+document.getElementById("tarifs-enregistrer").addEventListener("click", async () => {
+  messageTarifs.className = "";
+  messageTarifs.textContent = "Enregistrement…";
+  try {
+    const r = await rpc("admin_tarifs_enregistrer", {
+      p_code: etat.code,
+      p_grille: lireGrilleTarifs(),
+      p_annexes: lireAnnexes(),
+      p_jours: [...zoneJours.querySelectorAll('[aria-pressed="true"]')].map((b) =>
+        Number(b.dataset.jour)
+      ),
+    });
+    await rechargerTarifs();
+    messageTarifs.className = "ok";
+    messageTarifs.textContent =
+      `${r.tarifs} prix enregistré(s), ${r.annexes} réglage(s) annexe(s).`;
+  } catch (erreur) {
+    messageTarifs.className = "erreur";
+    messageTarifs.textContent = erreur.message;
+  }
+});
 
 
 // ---------------------------------------------------- plan de couchage
@@ -1883,6 +2188,7 @@ async function rechargerSejour() {
 
 const champAgeBebe = document.getElementById("age-bebe");
 const champAgeEnfant = document.getElementById("age-enfant");
+const champAgeJeune = document.getElementById("age-jeune");
 const resumeAges = document.getElementById("resume-ages");
 const messageAges = document.getElementById("message-ages");
 const rapportAges = document.getElementById("rapport-ages");
@@ -1890,6 +2196,7 @@ const rapportAges = document.getElementById("rapport-ages");
 function remplirAges(d) {
   champAgeBebe.value = d.age_bebe;
   champAgeEnfant.value = d.age_enfant;
+  champAgeJeune.value = d.age_jeune;
   resumeAges.textContent = d.sans_naissance
     ? `${d.sans_naissance} personne(s) sans date de naissance`
     : "toutes les dates de naissance sont connues";
@@ -1903,12 +2210,13 @@ document.getElementById("ages-enregistrer").addEventListener("click", async () =
       p_code: etat.code,
       p_bebe: Number(champAgeBebe.value),
       p_enfant: Number(champAgeEnfant.value),
+      p_jeune: Number(champAgeJeune.value),
     });
     await recharger();
     messageAges.className = "ok";
     messageAges.textContent =
-      `Bébé avant ${d.age_bebe} ans, enfant avant ${d.age_enfant}. ` +
-      `Les catégories déjà posées n'ont pas bougé.`;
+      `Bébé avant ${d.age_bebe} ans, enfant avant ${d.age_enfant}, ` +
+      `jeune avant ${d.age_jeune}. Les catégories déjà posées n'ont pas bougé.`;
   } catch (erreur) {
     messageAges.className = "erreur";
     messageAges.textContent = erreur.message;

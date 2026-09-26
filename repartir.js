@@ -142,9 +142,14 @@ window.REPARTIR = (function () {
     // grand le laisse seul dans une chambre ; prendre un grand de dix ans
     // pour un petit le met avec ses parents, ce qui n'a jamais fait de mal
     // a personne. Ne pas savoir doit couter le moins cher des deux.
+    //
+    // « bebe » ou « enfant » seulement, et non « pas adulte » : depuis que
+    // la tranche « jeune » existe, un lyceen de seize ans n'est plus un
+    // adulte au sens de la facturation -- il n'a pas pour autant besoin de
+    // dormir avec ses parents.
     const jeune = (p) =>
       p.age === null || p.age === undefined
-        ? p.categorie_age !== "adulte"
+        ? p.categorie_age === "bebe" || p.categorie_age === "enfant"
         : p.age < seuil;
 
     // Le conjoint, quand il dort la aussi. Le lien peut n'etre pose que

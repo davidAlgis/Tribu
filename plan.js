@@ -40,7 +40,7 @@ window.PLAN = (function () {
     gite: { un: "gîte" },
   };
 
-  const AGES = { adulte: "adulte", enfant: "enfant", bebe: "bébé" };
+  const AGES = { adulte: "adulte", jeune: "jeune", enfant: "enfant", bebe: "bébé" };
 
   const TAS = "tas"; // l'unite qui n'en est pas une : ceux qui restent a placer
   const UNITE_TAS = { cle: TAS, nom: "À placer" };

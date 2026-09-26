@@ -194,7 +194,20 @@ class Arbre:
         return (date_naissance.toordinal(),) if date_naissance else (10**7,)
 
 
-def categorie_age(individu: Individu, jour: date, seuil_bebe: int, seuil_enfant: int) -> str:
+def categorie_age(
+    individu: Individu,
+    jour: date,
+    seuil_bebe: int,
+    seuil_enfant: int,
+    seuil_jeune: int = 18,
+) -> str:
+    """La tranche de facturation, a la date du sejour.
+
+    Quatre tranches depuis que l'hotel compte les jeunes a part. Le seuil
+    porte une valeur par defaut parce que ce script AMORCE : il pose une
+    premiere categorie que la page corrige ensuite d'un bouton, avec les
+    bornes qui font foi -- celles de `private.reglages`.
+    """
     if individu.naissance is None:
         return "adulte"  # sans date, on ne devine pas : l'humain corrigera
     ans = jour.year - individu.naissance.year
@@ -204,6 +217,8 @@ def categorie_age(individu: Individu, jour: date, seuil_bebe: int, seuil_enfant:
         return "bebe"
     if ans < seuil_enfant:
         return "enfant"
+    if ans < seuil_jeune:
+        return "jeune"
     return "adulte"
 
 
@@ -254,6 +269,7 @@ def construire(
     jour: date,
     seuil_bebe: int,
     seuil_enfant: int,
+    seuil_jeune: int = 18,
 ) -> Rapport:
     """Traduit la descendance d'une personne en participants."""
     rapport = Rapport()
@@ -295,7 +311,9 @@ def construire(
                     id=str(uuid.uuid4()),
                     prenom=individu.prenom,
                     famille="",  # pose plus bas, au niveau de la branche
-                    categorie_age=categorie_age(individu, jour, seuil_bebe, seuil_enfant),
+                    categorie_age=categorie_age(
+                        individu, jour, seuil_bebe, seuil_enfant, seuil_jeune
+                    ),
                     parent_id=parent,
                     naissance=individu.naissance,
                     generation=generation,
@@ -604,6 +622,7 @@ def main() -> int:
     parseur.add_argument("--date-sejour", default="2027-07-10", help="pour calculer les ages")
     parseur.add_argument("--age-bebe", type=int, default=3, help="moins de N ans = bebe")
     parseur.add_argument("--age-enfant", type=int, default=12, help="moins de N ans = enfant")
+    parseur.add_argument("--age-jeune", type=int, default=18, help="moins de N ans = jeune")
     parseur.add_argument(
         "--naissances",
         action="store_true",
@@ -643,6 +662,7 @@ def main() -> int:
         jour,
         args.age_bebe,
         args.age_enfant,
+        args.age_jeune,
     )
     if not rapport.participants:
         print(f"Aucun descendant retenu pour {individus[trouves[0]].complet}.", file=sys.stderr)

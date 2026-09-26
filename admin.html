@@ -65,6 +65,8 @@
               aria-controls="volet-participants" aria-selected="false" tabindex="-1">Participants</button>
       <button type="button" role="tab" id="onglet-logements"
               aria-controls="volet-logements" aria-selected="false" tabindex="-1">Logements</button>
+      <button type="button" role="tab" id="onglet-tarifs"
+              aria-controls="volet-tarifs" aria-selected="false" tabindex="-1">Tarifs</button>
       <button type="button" role="tab" id="onglet-dates"
               aria-controls="volet-dates" aria-selected="false" tabindex="-1">Week-ends</button>
       <button type="button" role="tab" id="onglet-lieu"
@@ -112,6 +114,10 @@
             <label for="age-enfant">Enfant jusqu'à… (ans)</label>
             <input type="number" id="age-enfant" min="0" max="30" step="1">
           </div>
+          <div>
+            <label for="age-jeune">Jeune jusqu'à… (ans)</label>
+            <input type="number" id="age-jeune" min="0" max="30" step="1">
+          </div>
         </div>
 
         <div class="actions" style="margin-top:14px">
@@ -126,8 +132,8 @@
 
         <p class="note">
           Ces bornes viennent de l'hôtel, pas de la famille&nbsp;: chaque
-          établissement compte à sa façon, et <code>config.toml</code> range
-          ses tarifs sous ces trois mots.
+          établissement compte à sa façon, et la grille de l'onglet
+          <strong>Tarifs</strong> range ses prix sous ces quatre mots.
           «&nbsp;Recalculer&nbsp;» refait la catégorie de chacun d'après sa
           date de naissance, <strong>à la date du séjour</strong> — et dit ce
           qu'il change avant comme après. Sans date connue, personne ne bouge.
@@ -151,6 +157,7 @@
             <label for="age">Catégorie d'âge</label>
             <select id="age">
               <option value="adulte">Adulte</option>
+              <option value="jeune">Jeune</option>
               <option value="enfant">Enfant</option>
               <option value="bebe">Bébé</option>
             </select>
@@ -336,6 +343,69 @@
           remet tout le monde «&nbsp;À placer&nbsp;» pour recommencer.
         </p>
       </fieldset>
+    </div>
+
+    <!-- ---- Tarifs ---------------------------------------------- -->
+    <div class="volet" id="volet-tarifs" role="tabpanel" aria-labelledby="onglet-tarifs" tabindex="0" hidden>
+      <fieldset>
+        <legend>Le prix d'une nuit <span id="compteur-tarifs" class="discret-inline"></span></legend>
+
+        <!--
+          La grille se dessine d'après l'inventaire : un tableau par type de
+          couchage posé dans l'onglet Logements, et rien pour ce qui n'existe
+          pas. Pas de gîte déclaré, pas de prix de gîte à remplir.
+        -->
+        <div id="grille-tarifs"></div>
+
+        <p class="note">
+          Le prix de base est celui de la <strong>pension complète</strong>,
+          par personne et par nuit&nbsp;— sauf pour un gîte, qui se loue
+          entier&nbsp;: son prix est celui de la nuit quel que soit le nombre
+          d'occupants, et il se partage entre ceux qui y dorment. La remise
+          s'applique aux deux prix de sa colonne&nbsp;; le prix négocié reste
+          lisible à côté de ce qu'on en retire.
+        </p>
+      </fieldset>
+
+      <fieldset>
+        <legend>Ce qui s'ajoute, ce qui se retire</legend>
+
+        <div class="grille">
+          <div>
+            <label for="tarif-vue-mer">Supplément vue mer (€ par nuit)</label>
+            <input type="number" id="tarif-vue-mer" min="0" step="0.5">
+          </div>
+        </div>
+
+        <label class="titre-groupe">Réductions sur la pension complète (€ par nuit)</label>
+        <div class="grille" id="grille-reductions"></div>
+
+        <label class="titre-groupe">Repas pris hors pension (€)</label>
+        <div id="grille-repas"></div>
+
+        <p class="note">
+          Le supplément vue mer <strong>s'ajoute</strong> au prix de la ligne
+          correspondante&nbsp;: laisse-le à 0 si tu as déjà saisi le prix vue
+          mer en entier. Les réductions se retranchent du prix de pension
+          complète et ne descendent jamais sous zéro&nbsp;— un bébé facturé 0
+          reste à 0. Les repas hors pension sont ceux qu'une personne prend
+          sans que son régime les comprenne&nbsp;; en gîte, ils le sont tous.
+        </p>
+      </fieldset>
+
+      <fieldset>
+        <legend>Les nuits comptées en week-end</legend>
+        <div class="pastilles" id="jours-weekend" role="group" aria-label="Jours au tarif week-end"></div>
+        <p class="note">
+          C'est le jour où l'on se couche qui décide&nbsp;: une nuit du
+          vendredi au samedi est une nuit de vendredi.
+        </p>
+      </fieldset>
+
+      <div class="actions">
+        <button type="button" id="tarifs-enregistrer">Enregistrer les tarifs</button>
+      </div>
+      <p id="message-tarifs" role="status" aria-live="polite"></p>
     </div>
 
     <!-- ---- Week-ends ------------------------------------------- -->

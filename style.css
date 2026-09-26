@@ -151,6 +151,18 @@ th, td { padding: 8px 6px; border-bottom: 1px solid var(--trait); text-align: ce
 th:first-child, td:first-child { text-align: left; white-space: nowrap; }
 thead th { color: var(--doux); font-weight: 600; }
 td select { width: auto; min-width: 104px; }
+
+/* La grille des tarifs : un tableau par type de couchage, et des nombres
+   courts alignes sous leur colonne. Le titre du tableau porte le nom du
+   couchage -- sans lui, huit tableaux de chiffres se ressemblent tous. */
+table.tarifs { margin-bottom: 18px; }
+table.tarifs caption {
+  text-align: left;
+  font-weight: 600;
+  padding: 10px 0 8px;
+}
+table.tarifs th[scope="row"] { color: var(--doux); font-weight: 500; }
+table.tarifs input[type="number"] { min-width: 4.5em; text-align: right; }
 input[type="checkbox"] { width: 18px; height: 18px; accent-color: var(--accent); }
 
 button {
