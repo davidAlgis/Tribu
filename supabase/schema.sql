@@ -3181,6 +3181,44 @@ grant execute on function public.admin_tarifs(text)                             
 grant execute on function public.admin_tarifs_enregistrer(text, jsonb, jsonb, jsonb) to anon;
 
 
+-- ---- 12b. Ce que l'export lit ----
+--
+--  Meme porte que la section 7, et meme cle : ces vues ne sont lisibles
+--  que par `service_role`, c'est-a-dire par la cle secrete, qui ne quitte
+--  jamais la machine de l'organisateur.
+--
+--  Elles vivent ICI et non en section 7 parce qu'une vue ne peut pas lire
+--  une table qui n'existe pas encore : `logements`, `couchages` et
+--  `tarifs` naissent plus bas dans le fichier.
+--
+create or replace view public.v_logements as
+  select id, categorie, capacite, nombre, vue_mer from private.logements;
+
+create or replace view public.v_tarifs as
+  select logement_id, tranche, semaine, weekend, remise from private.tarifs;
+
+create or replace view public.v_tarifs_annexes as
+  select cle, tranche, montant from private.tarifs_annexes;
+
+-- Qui dort dans quel gite : un gite se loue entier, et sans le plan il
+-- n'y a pas de part a repartir.
+create or replace view public.v_couchages as
+  select participant_id, jour, logement_id, numero from private.couchages;
+
+-- Les bornes d'age et les jours de week-end. Le reste des reglages ne
+-- regarde pas l'export.
+create or replace view public.v_reglages as
+  select date_debut, date_fin, age_bebe, age_enfant, age_jeune, jours_weekend
+    from private.reglages;
+
+revoke all on public.v_logements, public.v_tarifs, public.v_tarifs_annexes,
+              public.v_couchages, public.v_reglages
+  from anon, authenticated;
+grant select on public.v_logements, public.v_tarifs, public.v_tarifs_annexes,
+                public.v_couchages, public.v_reglages
+  to service_role;
+
+
 -- ============================================================
 --  13. Revenir en arriere
 -- ============================================================

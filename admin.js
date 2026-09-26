@@ -1323,11 +1323,13 @@ function tableauTarifs(titre, colonnes, lignes, cellule) {
 
 function dessinerGrilleTarifs() {
   const logements = tarifs.logements || [];
+  // « a zero » et non « a remplir » : un bebe gratuit est un prix a zero
+  // parfaitement voulu. Le compteur constate, il ne reclame pas.
   compteurTarifs.textContent = !logements.length
     ? ""
     : tarifs.a_remplir
-    ? `${tarifs.a_remplir} prix encore à zéro`
-    : "grille complète";
+    ? `${tarifs.a_remplir} prix à zéro`
+    : "aucun prix à zéro";
 
   zoneGrilleTarifs.textContent = "";
   if (!logements.length) {

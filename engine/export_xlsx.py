@@ -112,7 +112,11 @@ def exporter(chemin, personnes: dict, prestations, facturation, config: dict) ->
     _ajuster(feuille)
 
     # --- 5. Ce qu'il reste a demander a l'hotel ---
-    feuille = _feuille(classeur, "Tarifs manquants", ["Cle a renseigner dans config.toml"])
+    feuille = _feuille(
+        classeur,
+        "Tarifs manquants",
+        ["Prix a zero ou absent - a verifier dans l'onglet Tarifs"],
+    )
     for cle in sorted(facturation.tarifs_manquants):
         feuille.append([cle])
     if not facturation.tarifs_manquants:
@@ -125,7 +129,19 @@ def exporter(chemin, personnes: dict, prestations, facturation, config: dict) ->
     for anomalie in prestations.anomalies:
         personne = personnes[anomalie.personne_id]
         feuille.append([anomalie.jour, personne.famille, personne.prenom, anomalie.message])
-    if not prestations.anomalies:
+
+    # Un gite se loue entier : sans place attribuee, on ne sait pas avec
+    # combien la note se partage, et la nuit reste a zero. Ce n'est pas une
+    # erreur de saisie -- c'est un plan de couchage a finir -- mais ca se
+    # lit au meme endroit, sinon ca ne se lit nulle part.
+    for personne_id, jour in facturation.sans_place:
+        personne = personnes[personne_id]
+        feuille.append([
+            jour, personne.famille, personne.prenom,
+            "En gite sans place attribuee : nuit non facturee",
+        ])
+
+    if not prestations.anomalies and not facturation.sans_place:
         feuille.append(["", "", "", "Aucune anomalie detectee."])
     _formater_dates(feuille)
     _ajuster(feuille)

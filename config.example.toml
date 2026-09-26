@@ -1,78 +1,21 @@
 # ============================================================
-#  Tarifs - A RECOPIER EN `config.toml` ET A REMPLIR
+#  Ce qui n'est pas un prix - A RECOPIER EN `config.toml`
 # ============================================================
 #
-#  Les valeurs ci-dessous sont FICTIVES : l'hotel de l'an prochain
-#  n'est pas connu. Elles servent uniquement a faire tourner le POC.
+#  LES TARIFS NE SONT PLUS ICI. Ils vivent en base et se reglent depuis
+#  l'onglet « Tarifs » de la page d'administration : prix par type de
+#  couchage et par tranche d'age, semaine et week-end, remises,
+#  supplement vue mer, reductions de regime, repas hors pension, et les
+#  jours comptes en week-end.
 #
-#  `config.toml` est dans le .gitignore : les tarifs reellement
-#  negocies ne partent jamais sur GitHub.
+#  Ils s'y reglaient a la main dans ce fichier. Des lors qu'on veut les
+#  changer depuis la page, deux grilles -- un fichier et un ecran --
+#  finissent par se contredire, et la contradiction se lit sur une
+#  facture. Il n'y a donc plus qu'une seule source.
 #
-#  Tout tarif absent de ce fichier est facture 0 et apparait dans
-#  l'onglet "Tarifs manquants" de l'export : c'est la liste exacte
-#  des prix a demander a l'hotel.
+#  Ce fichier ne porte plus que l'habillage de l'export.
 # ============================================================
 
 [meta]
 nom = "Sejour Tribu - hotel a definir"
 devise = "EUR"
-# Lundi = 0 ... Dimanche = 6. Ici : nuits du vendredi et du samedi.
-jours_weekend = [4, 5]
-
-[supplements]
-vue_mer = 15.0           # par nuit
-
-# ---------- Chambres ----------
-# Prix de la NUITEE, repas du regime inclus.
-# Ajouter le suffixe `_weekend` pour un prix different le week-end.
-
-[tarifs.chambre.adulte]
-pension_complete = 95.0
-pension_complete_weekend = 105.0
-demi_pension_soir = 78.0
-demi_pension_midi = 78.0
-nuit_petit_dejeuner = 62.0
-nuit_seule = 55.0
-
-[tarifs.chambre.enfant]
-pension_complete = 58.0
-demi_pension_soir = 48.0
-demi_pension_midi = 48.0
-nuit_petit_dejeuner = 38.0
-nuit_seule = 32.0
-
-[tarifs.chambre.bebe]
-pension_complete = 0.0
-demi_pension_soir = 0.0
-demi_pension_midi = 0.0
-nuit_petit_dejeuner = 0.0
-nuit_seule = 0.0
-
-# ---------- Gites ----------
-# Aucun repas inclus : seule la nuit est facturee.
-
-[tarifs.gite.adulte]
-gite_nuit = 40.0
-
-[tarifs.gite.enfant]
-gite_nuit = 20.0
-
-[tarifs.gite.bebe]
-gite_nuit = 0.0
-
-# ---------- Repas hors pension ----------
-
-[tarifs_repas.adulte]
-petit_dejeuner = 12.0
-dejeuner = 24.0
-diner = 28.0
-
-[tarifs_repas.enfant]
-petit_dejeuner = 7.0
-dejeuner = 14.0
-diner = 16.0
-
-[tarifs_repas.bebe]
-petit_dejeuner = 0.0
-dejeuner = 0.0
-diner = 0.0

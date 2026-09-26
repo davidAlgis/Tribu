@@ -11,7 +11,7 @@ class Personne:
     id: str
     prenom: str
     famille: str
-    categorie_age: str  # adulte | enfant | bebe
+    categorie_age: str  # adulte | jeune | enfant | bebe
 
 
 @dataclass(frozen=True)
@@ -31,3 +31,7 @@ class Presence:
     dejeuner: bool = False
     diner: bool = False
     vue_mer: bool = False
+    # Le TYPE de couchage demande -- une ligne d'inventaire, « gite de 6 »
+    # et non « un gite ». C'est un souhait : la place reelle, quand elle
+    # existe, vient du plan de couchage et passe devant.
+    logement_id: str | None = None

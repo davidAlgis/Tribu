@@ -1,29 +1,353 @@
 {
-  "_commentaire": "Donnees FICTIVES pour faire tourner le POC. Aucune donnee reelle ne doit etre commitee ici.",
+  "_commentaire": "Donnees FICTIVES pour faire tourner le POC. Aucune donnee reelle ne doit etre commitee ici. Le bloc `grille` tient les prix, que la vraie base garde desormais (section 12 du schema) : ce fichier les porte pour que l'export tourne sans reseau.",
   "personnes": [
-    {"id": "p1", "prenom": "Alice", "famille": "Famille A", "categorie_age": "adulte"},
-    {"id": "p2", "prenom": "Bruno", "famille": "Famille A", "categorie_age": "adulte"},
-    {"id": "p3", "prenom": "Chloe", "famille": "Famille A", "categorie_age": "enfant"},
-    {"id": "p4", "prenom": "David", "famille": "Famille B", "categorie_age": "adulte"},
-    {"id": "p5", "prenom": "Emma", "famille": "Famille B", "categorie_age": "bebe"}
+    {
+      "id": "p1",
+      "prenom": "Alice",
+      "famille": "Famille A",
+      "categorie_age": "adulte"
+    },
+    {
+      "id": "p2",
+      "prenom": "Bruno",
+      "famille": "Famille A",
+      "categorie_age": "adulte"
+    },
+    {
+      "id": "p3",
+      "prenom": "Chloe",
+      "famille": "Famille A",
+      "categorie_age": "enfant"
+    },
+    {
+      "id": "p4",
+      "prenom": "David",
+      "famille": "Famille B",
+      "categorie_age": "adulte"
+    },
+    {
+      "id": "p5",
+      "prenom": "Emma",
+      "famille": "Famille B",
+      "categorie_age": "bebe"
+    }
   ],
   "presences": [
-    {"personne_id": "p1", "jour": "2027-07-10", "hebergement": "chambre", "diner": true, "vue_mer": true},
-    {"personne_id": "p1", "jour": "2027-07-11", "hebergement": "chambre", "petit_dejeuner": true, "dejeuner": true, "diner": true, "vue_mer": true},
-    {"personne_id": "p1", "jour": "2027-07-12", "hebergement": "exterieur", "petit_dejeuner": true},
-
-    {"personne_id": "p2", "jour": "2027-07-10", "hebergement": "chambre", "diner": true},
-    {"personne_id": "p2", "jour": "2027-07-11", "hebergement": "chambre", "petit_dejeuner": true, "diner": true},
-    {"personne_id": "p2", "jour": "2027-07-12", "hebergement": "exterieur", "petit_dejeuner": true},
-
-    {"personne_id": "p3", "jour": "2027-07-10", "hebergement": "chambre"},
-    {"personne_id": "p3", "jour": "2027-07-11", "hebergement": "chambre", "petit_dejeuner": true, "dejeuner": true},
-    {"personne_id": "p3", "jour": "2027-07-12", "hebergement": "exterieur", "petit_dejeuner": true},
-
-    {"personne_id": "p4", "jour": "2027-07-10", "hebergement": "gite", "diner": true},
-    {"personne_id": "p4", "jour": "2027-07-11", "hebergement": "gite", "petit_dejeuner": true, "diner": true},
-    {"personne_id": "p4", "jour": "2027-07-12", "hebergement": "exterieur"},
-
-    {"personne_id": "p5", "jour": "2027-07-11", "hebergement": "exterieur", "dejeuner": true}
-  ]
+    {
+      "personne_id": "p1",
+      "jour": "2027-07-10",
+      "hebergement": "chambre",
+      "diner": true,
+      "vue_mer": true,
+      "logement_id": "lm"
+    },
+    {
+      "personne_id": "p1",
+      "jour": "2027-07-11",
+      "hebergement": "chambre",
+      "petit_dejeuner": true,
+      "dejeuner": true,
+      "diner": true,
+      "vue_mer": true,
+      "logement_id": "lm"
+    },
+    {
+      "personne_id": "p1",
+      "jour": "2027-07-12",
+      "hebergement": "exterieur",
+      "petit_dejeuner": true
+    },
+    {
+      "personne_id": "p2",
+      "jour": "2027-07-10",
+      "hebergement": "chambre",
+      "diner": true,
+      "logement_id": "lc"
+    },
+    {
+      "personne_id": "p2",
+      "jour": "2027-07-11",
+      "hebergement": "chambre",
+      "petit_dejeuner": true,
+      "diner": true,
+      "logement_id": "lc"
+    },
+    {
+      "personne_id": "p2",
+      "jour": "2027-07-12",
+      "hebergement": "exterieur",
+      "petit_dejeuner": true
+    },
+    {
+      "personne_id": "p3",
+      "jour": "2027-07-10",
+      "hebergement": "chambre",
+      "logement_id": "lc"
+    },
+    {
+      "personne_id": "p3",
+      "jour": "2027-07-11",
+      "hebergement": "chambre",
+      "petit_dejeuner": true,
+      "dejeuner": true,
+      "logement_id": "lc"
+    },
+    {
+      "personne_id": "p3",
+      "jour": "2027-07-12",
+      "hebergement": "exterieur",
+      "petit_dejeuner": true
+    },
+    {
+      "personne_id": "p4",
+      "jour": "2027-07-10",
+      "hebergement": "gite",
+      "diner": true,
+      "logement_id": "lg"
+    },
+    {
+      "personne_id": "p4",
+      "jour": "2027-07-11",
+      "hebergement": "gite",
+      "petit_dejeuner": true,
+      "diner": true,
+      "logement_id": "lg"
+    },
+    {
+      "personne_id": "p4",
+      "jour": "2027-07-12",
+      "hebergement": "exterieur"
+    },
+    {
+      "personne_id": "p5",
+      "jour": "2027-07-11",
+      "hebergement": "exterieur",
+      "dejeuner": true
+    }
+  ],
+  "grille": {
+    "logements": [
+      {
+        "id": "lc",
+        "categorie": "chambre",
+        "capacite": 2,
+        "nombre": 3,
+        "vue_mer": false
+      },
+      {
+        "id": "lm",
+        "categorie": "chambre",
+        "capacite": 2,
+        "nombre": 1,
+        "vue_mer": true
+      },
+      {
+        "id": "lg",
+        "categorie": "gite",
+        "capacite": 4,
+        "nombre": 1,
+        "vue_mer": false
+      }
+    ],
+    "tarifs": [
+      {
+        "logement_id": "lc",
+        "tranche": "adulte",
+        "semaine": 95,
+        "weekend": 105,
+        "remise": 0
+      },
+      {
+        "logement_id": "lc",
+        "tranche": "jeune",
+        "semaine": 75,
+        "weekend": 85,
+        "remise": 0
+      },
+      {
+        "logement_id": "lc",
+        "tranche": "enfant",
+        "semaine": 58,
+        "weekend": 62,
+        "remise": 0
+      },
+      {
+        "logement_id": "lc",
+        "tranche": "bebe",
+        "semaine": 0,
+        "weekend": 0,
+        "remise": 0
+      },
+      {
+        "logement_id": "lm",
+        "tranche": "adulte",
+        "semaine": 95,
+        "weekend": 105,
+        "remise": 0
+      },
+      {
+        "logement_id": "lm",
+        "tranche": "jeune",
+        "semaine": 75,
+        "weekend": 85,
+        "remise": 0
+      },
+      {
+        "logement_id": "lm",
+        "tranche": "enfant",
+        "semaine": 58,
+        "weekend": 62,
+        "remise": 0
+      },
+      {
+        "logement_id": "lm",
+        "tranche": "bebe",
+        "semaine": 0,
+        "weekend": 0,
+        "remise": 0
+      },
+      {
+        "logement_id": "lg",
+        "tranche": "entier",
+        "semaine": 160,
+        "weekend": 190,
+        "remise": 10
+      }
+    ],
+    "annexes": [
+      {
+        "cle": "vue_mer",
+        "tranche": "",
+        "montant": 15
+      },
+      {
+        "cle": "demi_pension_soir",
+        "tranche": "",
+        "montant": 17
+      },
+      {
+        "cle": "demi_pension_midi",
+        "tranche": "",
+        "montant": 17
+      },
+      {
+        "cle": "nuit_petit_dejeuner",
+        "tranche": "",
+        "montant": 33
+      },
+      {
+        "cle": "nuit_seule",
+        "tranche": "",
+        "montant": 40
+      },
+      {
+        "cle": "petit_dejeuner",
+        "tranche": "adulte",
+        "montant": 12
+      },
+      {
+        "cle": "petit_dejeuner",
+        "tranche": "jeune",
+        "montant": 9
+      },
+      {
+        "cle": "petit_dejeuner",
+        "tranche": "enfant",
+        "montant": 7
+      },
+      {
+        "cle": "petit_dejeuner",
+        "tranche": "bebe",
+        "montant": 0
+      },
+      {
+        "cle": "dejeuner",
+        "tranche": "adulte",
+        "montant": 24
+      },
+      {
+        "cle": "dejeuner",
+        "tranche": "jeune",
+        "montant": 18
+      },
+      {
+        "cle": "dejeuner",
+        "tranche": "enfant",
+        "montant": 14
+      },
+      {
+        "cle": "dejeuner",
+        "tranche": "bebe",
+        "montant": 0
+      },
+      {
+        "cle": "diner",
+        "tranche": "adulte",
+        "montant": 28
+      },
+      {
+        "cle": "diner",
+        "tranche": "jeune",
+        "montant": 21
+      },
+      {
+        "cle": "diner",
+        "tranche": "enfant",
+        "montant": 16
+      },
+      {
+        "cle": "diner",
+        "tranche": "bebe",
+        "montant": 0
+      }
+    ],
+    "jours_weekend": [
+      4,
+      5
+    ],
+    "couchages": [
+      {
+        "personne_id": "p1",
+        "jour": "2027-07-10",
+        "logement_id": "lm",
+        "numero": 1
+      },
+      {
+        "personne_id": "p1",
+        "jour": "2027-07-11",
+        "logement_id": "lm",
+        "numero": 1
+      },
+      {
+        "personne_id": "p2",
+        "jour": "2027-07-10",
+        "logement_id": "lc",
+        "numero": 1
+      },
+      {
+        "personne_id": "p2",
+        "jour": "2027-07-11",
+        "logement_id": "lc",
+        "numero": 1
+      },
+      {
+        "personne_id": "p3",
+        "jour": "2027-07-10",
+        "logement_id": "lc",
+        "numero": 1
+      },
+      {
+        "personne_id": "p3",
+        "jour": "2027-07-11",
+        "logement_id": "lc",
+        "numero": 1
+      },
+      {
+        "personne_id": "p4",
+        "jour": "2027-07-10",
+        "logement_id": "lg",
+        "numero": 1
+      }
+    ]
+  }
 }

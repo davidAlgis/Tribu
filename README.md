@@ -656,8 +656,10 @@ courants des exemples et des tests sont déclarés dans
    passe sur `admin.html`.
 5. **Clés** — `Project URL` et clé publishable dans [`config.js`](config.js).
 6. **Pages** — Settings → Pages → Deploy from a branch → `main` / `(root)`.
-7. **Tarifs** — copier `config.example.toml` en `config.toml`, à remplir
-   quand l'hôtel sera connu.
+7. **Tarifs** — ils se règlent dans l'onglet **Tarifs** d'`admin.html`,
+   quand l'hôtel sera connu : un tableau par type de couchage posé dans
+   l'onglet Logements. `config.toml` (copié de `config.example.toml`) ne
+   porte plus que le nom du séjour et la devise.
 
 ```bash
 python -m venv .venv
@@ -674,7 +676,13 @@ python run_export.py --source supabase --out exports/sejour.xlsx
 ```
 
 Synthèse hôtel, repas hors pension, détail par personne, total par famille,
-**tarifs manquants** (les prix restant à négocier) et anomalies de saisie.
+**tarifs manquants** (les prix à zéro ou absents) et anomalies de saisie.
+
+Les prix viennent de la base, pas d'un fichier. Une chambre se facture par
+personne selon sa tranche d'âge ; un **gîte se facture entier**, et la note
+se partage entre ceux qui y dorment cette nuit-là — c'est le **plan de
+couchage** qui le dit, et une nuit de gîte sans place attribuée n'est
+facturée à personne, mais ressort dans les anomalies.
 
 ## Points à connaître
 

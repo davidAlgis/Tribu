@@ -26,6 +26,11 @@ personne en gite sont donc hors pension.
 
 Il n'existe que trois hebergements : `chambre`, `gite`, et
 `exterieur` (presente ce jour-la mais ne dort pas sur place).
+
+Ce module ne connait AUCUN PRIX : il produit des quantites -- des
+nuitees portant un regime, des repas hors pension. Ce que ca coute est
+l'affaire de `pricing.py`, et un gite s'y facture entier plutot que par
+personne.
 Une personne totalement absente n'a tout simplement aucune ligne
 pour ce jour. C'est volontaire : distinguer "absent" de "dort
 ailleurs" est une source d'erreurs de saisie pour un resultat
@@ -76,6 +81,9 @@ class Nuitee:
     hebergement: str
     regime: str
     vue_mer: bool
+    # Le type declare, repris tel quel : la tarification en a besoin pour
+    # savoir a quelle ligne de prix rattacher la nuit.
+    logement_id: str | None = None
 
 
 @dataclass(frozen=True)
@@ -180,6 +188,7 @@ def calculer_prestations(presences: list) -> Prestations:
                     hebergement=presence.hebergement,
                     regime=regime,
                     vue_mer=presence.vue_mer and presence.hebergement == CHAMBRE,
+                    logement_id=presence.logement_id,
                 )
             )
 

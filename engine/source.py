@@ -38,15 +38,21 @@ def _vers_presence(ligne: dict) -> Presence:
         dejeuner=bool(ligne.get("dejeuner", False)),
         diner=bool(ligne.get("diner", False)),
         vue_mer=bool(ligne.get("vue_mer", False)),
+        logement_id=ligne.get("logement_id"),
     )
 
 
-def charger_json(chemin: str | Path) -> tuple[dict, list]:
-    """Retourne ({id: Personne}, [Presence])."""
+def charger_json(chemin: str | Path) -> tuple[dict, list, dict]:
+    """Retourne ({id: Personne}, [Presence], grille des prix).
+
+    La grille est facultative : un fichier qui n'en porte pas se calcule
+    quand meme, et tout se facture zero -- l'export dit alors exactement
+    ce qui manque.
+    """
     donnees = json.loads(Path(chemin).read_text(encoding="utf-8"))
     personnes = {p["id"]: _vers_personne(p) for p in donnees["personnes"]}
     presences = [_vers_presence(p) for p in donnees["presences"]]
-    return personnes, presences
+    return personnes, presences, donnees.get("grille", {})
 
 
 # On nomme les colonnes au lieu de faire `select=*` : le code d'acces
@@ -55,7 +61,19 @@ COLONNES = {
     # `v_participants` est une vue sur private.participants, lisible par la
     # seule cle secrete : le schema `private` n'est pas expose par PostgREST.
     "v_participants": "id,prenom,famille,categorie_age",
-    "presences": "participant_id,jour,hebergement,petit_dejeuner,dejeuner,diner,vue_mer",
+    "presences": (
+        "participant_id,jour,hebergement,petit_dejeuner,dejeuner,diner,"
+        "vue_mer,logement_id"
+    ),
+    # Les prix vivent en base depuis la section 12 du schema. Meme porte,
+    # meme cle : ces vues ne sont lisibles que par `service_role`.
+    "v_logements": "id,categorie,capacite,nombre,vue_mer",
+    "v_tarifs": "logement_id,tranche,semaine,weekend,remise",
+    "v_tarifs_annexes": "cle,tranche,montant",
+    # Qui dort dans quel gite : sans ce plan, un gite -- qui se loue
+    # entier -- n'a pas de part a repartir.
+    "v_couchages": "participant_id,jour,logement_id,numero",
+    "v_reglages": "date_debut,date_fin,age_bebe,age_enfant,age_jeune,jours_weekend",
 }
 
 
@@ -73,10 +91,19 @@ def _get(url: str, cle: str, table: str) -> list[dict]:
         return json.loads(reponse.read().decode("utf-8"))
 
 
-def charger_supabase(url: str, cle_service_role: str) -> tuple[dict, list]:
+def charger_supabase(url: str, cle_service_role: str) -> tuple[dict, list, dict]:
     personnes = {
         ligne["id"]: _vers_personne(ligne)
         for ligne in _get(url, cle_service_role, "v_participants")
     }
     presences = [_vers_presence(l) for l in _get(url, cle_service_role, "presences")]
-    return personnes, presences
+
+    reglages = _get(url, cle_service_role, "v_reglages")
+    grille = {
+        "logements": _get(url, cle_service_role, "v_logements"),
+        "tarifs": _get(url, cle_service_role, "v_tarifs"),
+        "annexes": _get(url, cle_service_role, "v_tarifs_annexes"),
+        "couchages": _get(url, cle_service_role, "v_couchages"),
+        "jours_weekend": reglages[0]["jours_weekend"] if reglages else [4, 5],
+    }
+    return personnes, presences, grille
