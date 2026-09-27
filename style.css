@@ -163,6 +163,10 @@ table.tarifs caption {
 }
 table.tarifs th[scope="row"] { color: var(--doux); font-weight: 500; }
 table.tarifs input[type="number"] { min-width: 4.5em; text-align: right; }
+
+/* Un bouton pose a cote d'un champ : il s'aligne sur la ligne de
+   saisie, et non sur l'etiquette qui la surmonte. */
+.bouton-en-bas { display: flex; align-items: flex-end; }
 input[type="checkbox"] { width: 18px; height: 18px; accent-color: var(--accent); }
 
 button {

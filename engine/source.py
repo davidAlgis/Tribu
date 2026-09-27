@@ -70,6 +70,8 @@ COLONNES = {
     "v_logements": "id,categorie,capacite,nombre,vue_mer",
     "v_tarifs": "logement_id,tranche,semaine,weekend,remise",
     "v_tarifs_annexes": "cle,tranche,montant",
+    # Les jours ou un repas ne coute pas son prix ordinaire.
+    "v_tarifs_repas_jour": "jour,repas,tranche,montant",
     # Qui dort dans quel gite : sans ce plan, un gite -- qui se loue
     # entier -- n'a pas de part a repartir.
     "v_couchages": "participant_id,jour,logement_id,numero",
@@ -103,6 +105,7 @@ def charger_supabase(url: str, cle_service_role: str) -> tuple[dict, list, dict]
         "logements": _get(url, cle_service_role, "v_logements"),
         "tarifs": _get(url, cle_service_role, "v_tarifs"),
         "annexes": _get(url, cle_service_role, "v_tarifs_annexes"),
+        "repas_jour": _get(url, cle_service_role, "v_tarifs_repas_jour"),
         "couchages": _get(url, cle_service_role, "v_couchages"),
         "jours_weekend": reglages[0]["jours_weekend"] if reglages else [4, 5],
     }

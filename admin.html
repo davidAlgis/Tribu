@@ -375,6 +375,13 @@
           l'export&nbsp;: un bébé gratuit y figurera aussi, et c'est voulu —
           rien ne distingue un zéro choisi d'un zéro oublié.
         </p>
+
+        <p class="note">
+          Un repas ne coûte pas la même chose tous les jours&nbsp;— le dîner
+          du samedi n'est pas celui du mardi. Ajoute le jour concerné&nbsp;:
+          son tableau part des prix ordinaires, et tu n'as qu'à corriger ce
+          qui change. Un jour retiré revient au prix ordinaire.
+        </p>
       </fieldset>
 
       <fieldset>
@@ -392,6 +399,25 @@
 
         <label class="titre-groupe">Repas pris hors pension (€)</label>
         <div id="grille-repas"></div>
+
+        <!--
+          Le prix ordinaire est au-dessus ; ici on ne pose que les jours
+          qui s'en écartent. Personnaliser les huit jours du séjour ferait
+          quatre-vingt-seize cases pour les trois qui changent.
+        -->
+        <label class="titre-groupe">Les jours qui font exception</label>
+        <div class="grille">
+          <div>
+            <label for="repas-jour">Un jour où les repas coûtent autre chose</label>
+            <select id="repas-jour"></select>
+          </div>
+          <div class="bouton-en-bas">
+            <button type="button" id="repas-jour-ajouter" class="discret">
+              Personnaliser ce jour
+            </button>
+          </div>
+        </div>
+        <div id="grille-repas-jour"></div>
 
         <p class="note">
           Le supplément vue mer <strong>s'ajoute</strong> au prix de la ligne

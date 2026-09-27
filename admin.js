@@ -1243,6 +1243,8 @@ let tarifs = { logements: [], tarifs: [], annexes: [], jours_weekend: [] };
 const zoneGrilleTarifs = document.getElementById("grille-tarifs");
 const zoneReductions = document.getElementById("grille-reductions");
 const zoneRepas = document.getElementById("grille-repas");
+const zoneRepasJour = document.getElementById("grille-repas-jour");
+const choixJour = document.getElementById("repas-jour");
 const zoneJours = document.getElementById("jours-weekend");
 const compteurTarifs = document.getElementById("compteur-tarifs");
 const messageTarifs = document.getElementById("message-tarifs");
@@ -1430,6 +1432,141 @@ function dessinerAnnexes() {
   });
 }
 
+// ---- Les jours qui font exception ----
+//
+// Un repas ne coute pas la meme chose tous les jours : le diner du samedi
+// n'est pas celui du mardi. Le prix ORDINAIRE est au-dessus ; ici on ne
+// pose que les jours qui s'en ecartent.
+//
+// Pourquoi pas une case par jour et par repas : huit jours, trois repas et
+// quatre tranches font quatre-vingt-seize cases, pour les trois qui
+// changent vraiment. On ajoute donc le jour, et son tableau part des prix
+// ordinaires -- il n'y a qu'a corriger ce qui differe.
+
+// « samedi 24 octobre » : on choisit un jour dans une semaine, le nom du
+// jour fait autant pour s'y retrouver que le quantieme.
+function afficherJourLong(iso) {
+  return new Date(`${iso}T12:00:00`).toLocaleDateString("fr-FR", {
+    weekday: "long",
+    day: "numeric",
+    month: "long",
+  });
+}
+
+function joursExceptes() {
+  return [...zoneRepasJour.querySelectorAll("table.tarifs")].map((t) => t.dataset.jour);
+}
+
+function remplirChoixJour() {
+  const pris = new Set(joursExceptes());
+  const libres = (tarifs.jours || []).filter((jour) => !pris.has(jour));
+  choixJour.textContent = "";
+  for (const jour of libres) {
+    const option = document.createElement("option");
+    option.value = jour;
+    option.textContent = afficherJourLong(jour);
+    choixJour.appendChild(option);
+  }
+  // Tous les jours du sejour sont deja personnalises : il n'y a plus rien
+  // a ajouter, et un bouton qui ne peut rien faire doit le montrer.
+  choixJour.disabled = !libres.length;
+  document.getElementById("repas-jour-ajouter").disabled = !libres.length;
+}
+
+// Le prix ordinaire tel qu'il est A L'ECRAN, et non tel qu'il a ete
+// enregistre : on vient peut-etre de le changer, et une exception qui
+// partirait de l'ancien serait une surprise.
+function prixOrdinaire(repas, tranche) {
+  const champ = zoneRepas.querySelector(
+    `input[data-cle="${repas}"][data-tranche="${tranche}"]`
+  );
+  return champ ? Number(champ.value) || 0 : 0;
+}
+
+function blocJourExcepte(jour, montant) {
+  const bloc = document.createElement("div");
+
+  const table = tableauTarifs(
+    afficherJourLong(jour),
+    TRANCHES.map((t) => ({ cle: t, libelle: libelleTranche(t) })),
+    REPAS_HORS.map(([cle, libelle]) => ({ cle, libelle })),
+    (ligne, colonne) => {
+      const champ = champNombre(montant(ligne.cle, colonne.cle), {
+        pas: "0.5",
+        aria: `${afficherJourLong(jour)} — ${ligne.libelle} — ${colonne.libelle}`,
+      });
+      champ.dataset.repas = ligne.cle;
+      champ.dataset.tranche = colonne.cle;
+      return champ;
+    }
+  );
+  table.dataset.jour = jour;
+  bloc.appendChild(table);
+
+  const retirer = document.createElement("button");
+  retirer.type = "button";
+  retirer.className = "retirer";
+  retirer.textContent = "Retirer ce jour";
+  // Retirer ne vide pas : le jour revient simplement au prix ordinaire.
+  retirer.addEventListener("click", () => {
+    bloc.remove();
+    remplirChoixJour();
+  });
+  bloc.appendChild(retirer);
+
+  return bloc;
+}
+
+function dessinerRepasJour() {
+  zoneRepasJour.textContent = "";
+  const poses = new Map();
+  for (const ligne of tarifs.repas_jour || []) {
+    if (!poses.has(ligne.jour)) poses.set(ligne.jour, new Map());
+    poses.get(ligne.jour).set(`${ligne.repas}|${ligne.tranche}`, Number(ligne.montant));
+  }
+  for (const jour of [...poses.keys()].sort()) {
+    const valeurs = poses.get(jour);
+    zoneRepasJour.appendChild(
+      blocJourExcepte(jour, (repas, tranche) => {
+        const pose = valeurs.get(`${repas}|${tranche}`);
+        return pose === undefined ? prixOrdinaire(repas, tranche) : pose;
+      })
+    );
+  }
+  remplirChoixJour();
+}
+
+document.getElementById("repas-jour-ajouter").addEventListener("click", () => {
+  const jour = choixJour.value;
+  if (!jour || joursExceptes().includes(jour)) return;
+  zoneRepasJour.appendChild(blocJourExcepte(jour, prixOrdinaire));
+  // Les jours restent dans l'ordre du sejour, quel que soit l'ordre ou on
+  // les a ajoutes : un tableau qui saute d'octobre a juillet se relit mal.
+  const blocs = [...zoneRepasJour.children].sort((a, b) =>
+    a.querySelector("table").dataset.jour.localeCompare(
+      b.querySelector("table").dataset.jour
+    )
+  );
+  for (const bloc of blocs) zoneRepasJour.appendChild(bloc);
+  remplirChoixJour();
+});
+
+function lireRepasJour() {
+  const lignes = [];
+  for (const table of zoneRepasJour.querySelectorAll("table.tarifs")) {
+    for (const champ of table.querySelectorAll("input[data-repas]")) {
+      lignes.push({
+        jour: table.dataset.jour,
+        repas: champ.dataset.repas,
+        tranche: champ.dataset.tranche,
+        montant: Number(champ.value) || 0,
+      });
+    }
+  }
+  return lignes;
+}
+
+
 // On relit le DOM plutot que de tenir un modele a jour a chaque frappe :
 // les champs SONT le modele, et un modele parallele finit toujours par
 // diverger de ce que l'organisateur a sous les yeux.
@@ -1472,6 +1609,9 @@ async function rechargerTarifs() {
   tarifs.signature = (tarifs.logements || []).map((l) => l.id).sort().join(",");
   dessinerGrilleTarifs();
   dessinerAnnexes();
+  // Apres les annexes : les exceptions partent des prix ordinaires, qui
+  // viennent d'etre poses a l'ecran.
+  dessinerRepasJour();
 }
 
 document.getElementById("tarifs-enregistrer").addEventListener("click", async () => {
@@ -1485,11 +1625,13 @@ document.getElementById("tarifs-enregistrer").addEventListener("click", async ()
       p_jours: [...zoneJours.querySelectorAll('[aria-pressed="true"]')].map((b) =>
         Number(b.dataset.jour)
       ),
+      p_repas_jour: lireRepasJour(),
     });
     await rechargerTarifs();
     messageTarifs.className = "ok";
     messageTarifs.textContent =
-      `${r.tarifs} prix enregistré(s), ${r.annexes} réglage(s) annexe(s).`;
+      `${r.tarifs} prix enregistré(s), ${r.annexes} réglage(s) annexe(s)` +
+      (r.repas_jour ? `, ${r.repas_jour} repas personnalisé(s).` : ".");
   } catch (erreur) {
     messageTarifs.className = "erreur";
     messageTarifs.textContent = erreur.message;

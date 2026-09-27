@@ -88,6 +88,10 @@ class Grille:
     prix: dict[tuple[str, str], dict] = field(default_factory=dict)
     # (cle, tranche) -> montant
     annexes: dict[tuple[str, str], float] = field(default_factory=dict)
+    # (jour, repas, tranche) -> montant. Les jours qui font exception : le
+    # diner du samedi n'est pas celui du mardi. Ce qui n'y est pas se
+    # facture au prix ordinaire, dans `annexes`.
+    repas_jour: dict[tuple[date, str, str], float] = field(default_factory=dict)
     jours_weekend: set[int] = field(default_factory=lambda: {4, 5})
     # logement_id -> {categorie, capacite, vue_mer}
     logements: dict[str, dict] = field(default_factory=dict)
@@ -133,6 +137,11 @@ def grille_depuis(donnees: dict) -> Grille:
         grille.annexes[(ligne["cle"], ligne.get("tranche") or "")] = float(
             ligne.get("montant") or 0
         )
+
+    for ligne in donnees.get("repas_jour", []):
+        grille.repas_jour[
+            (_jour(ligne["jour"]), ligne["repas"], ligne["tranche"])
+        ] = float(ligne.get("montant") or 0)
 
     jours = donnees.get("jours_weekend")
     if jours is not None:
@@ -304,11 +313,25 @@ def _facturer_gites(prestations, personnes, grille, facturation) -> None:
 def _facturer_repas(prestations, personnes, grille, facturation) -> None:
     for repas in prestations.repas_hors_pension:
         personne = personnes[repas.personne_id]
-        prix = grille.annexes.get((repas.repas, personne.categorie_age))
 
-        if prix is None:
+        # Le prix du jour d'abord, quand ce jour-la fait exception ; le
+        # prix ordinaire sinon.
+        exception = grille.repas_jour.get(
+            (_jour(repas.jour), repas.repas, personne.categorie_age)
+        )
+        prix = (
+            exception
+            if exception is not None
+            else grille.annexes.get((repas.repas, personne.categorie_age))
+        )
+
+        # Absent ou a zero : meme signalement que pour les nuits. Rien ne
+        # distingue un repas offert d'un prix oublie, et le lire coute
+        # moins cher que le rater.
+        if not prix:
             facturation.tarifs_manquants.add(
                 f"{LIBELLES_REPAS[repas.repas]} hors pension - {personne.categorie_age}"
+                + (f" ({repas.jour})" if exception is not None else "")
             )
             prix = 0.0
 
@@ -317,7 +340,7 @@ def _facturer_repas(prestations, personnes, grille, facturation) -> None:
                 personne_id=repas.personne_id,
                 jour=repas.jour,
                 libelle=LIBELLES_REPAS[repas.repas],
-                detail="hors pension",
+                detail="hors pension" + (", tarif du jour" if exception is not None else ""),
                 prix=round(prix, 2),
             )
         )

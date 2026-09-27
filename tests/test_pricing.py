@@ -37,7 +37,7 @@ LOGEMENTS = [
 ]
 
 
-def grille(tarifs=None, annexes=None, couchages=(), jours_weekend=(4, 5)):
+def grille(tarifs=None, annexes=None, couchages=(), jours_weekend=(4, 5), repas_jour=()):
     return grille_depuis(
         {
             "logements": LOGEMENTS,
@@ -45,6 +45,7 @@ def grille(tarifs=None, annexes=None, couchages=(), jours_weekend=(4, 5)):
             "annexes": annexes if annexes is not None else ANNEXES,
             "couchages": list(couchages),
             "jours_weekend": list(jours_weekend),
+            "repas_jour": list(repas_jour),
         }
     )
 
@@ -304,3 +305,88 @@ def test_sans_grille_rien_ne_plante():
     f = facture(nuit("a1", DIMANCHE), grille_depuis({}))
     assert f.total == 0.0
     assert f.tarifs_manquants
+
+
+# --- Les jours qui font exception ---------------------------------------
+#
+# Le dîner du samedi n'est pas celui du mardi. Le prix ordinaire vaut
+# partout ; seuls les jours posés à part s'en écartent.
+
+
+def exception(jour, repas, tranche, montant):
+    return {
+        "jour": jour.isoformat(),
+        "repas": repas,
+        "tranche": tranche,
+        "montant": montant,
+    }
+
+
+def diners(f):
+    return [l for l in f.lignes if l.libelle == "Diner"]
+
+
+def test_un_repas_coute_le_prix_du_jour_quand_ce_jour_fait_exception():
+    g = grille(
+        couchages=[couchage("a1", DIMANCHE)],
+        repas_jour=[exception(DIMANCHE, "diner", "adulte", 45)],
+    )
+    f = facture(nuit("a1", DIMANCHE, "gite", GITE), g)
+    assert [l.prix for l in diners(f)] == [45.0]
+
+
+def test_et_la_facture_dit_que_c_est_un_tarif_du_jour():
+    """Sinon un dîner à 45 quand la grille en annonce 28 se lit comme une
+    erreur de calcul."""
+    g = grille(
+        couchages=[couchage("a1", DIMANCHE)],
+        repas_jour=[exception(DIMANCHE, "diner", "adulte", 45)],
+    )
+    f = facture(nuit("a1", DIMANCHE, "gite", GITE), g)
+    assert diners(f)[0].detail == "hors pension, tarif du jour"
+
+
+def test_les_autres_jours_gardent_le_prix_ordinaire():
+    g = grille(
+        couchages=[couchage("a1", SAMEDI), couchage("a1", DIMANCHE)],
+        repas_jour=[exception(DIMANCHE, "diner", "adulte", 45)],
+    )
+    f = facture(
+        nuit("a1", SAMEDI, "gite", GITE) + nuit("a1", DIMANCHE, "gite", GITE), g
+    )
+    assert sorted(l.prix for l in diners(f)) == [28.0, 45.0]
+
+
+def test_l_exception_ne_vaut_que_pour_la_tranche_posee():
+    """Un dîner de gala coûte plus cher à un adulte ; l'enfant garde son
+    prix tant qu'on ne l'a pas dit."""
+    g = grille(
+        couchages=[couchage("a1", DIMANCHE), couchage("j1", DIMANCHE)],
+        repas_jour=[exception(DIMANCHE, "diner", "adulte", 45)],
+    )
+    f = facture(
+        nuit("a1", DIMANCHE, "gite", GITE) + nuit("j1", DIMANCHE, "gite", GITE), g
+    )
+    assert sorted(l.prix for l in diners(f)) == [21.0, 45.0]
+
+
+def test_l_exception_ne_vaut_que_pour_le_repas_pose():
+    g = grille(
+        couchages=[couchage("a1", DIMANCHE)],
+        repas_jour=[exception(DIMANCHE, "diner", "adulte", 45)],
+    )
+    f = facture(nuit("a1", DIMANCHE, "gite", GITE), g)
+    pdj = [l for l in f.lignes if l.libelle == "Petit-dejeuner"]
+    # Le petit-déjeuner d'un adulte n'a pas de prix ordinaire dans cette
+    # grille : il reste à zéro et se signale, l'exception ne l'a pas touché.
+    assert [l.prix for l in pdj] == [0.0]
+
+
+def test_une_exception_a_zero_se_signale_avec_son_jour():
+    g = grille(
+        couchages=[couchage("a1", DIMANCHE)],
+        repas_jour=[exception(DIMANCHE, "diner", "adulte", 0)],
+    )
+    f = facture(nuit("a1", DIMANCHE, "gite", GITE), g)
+    assert f"Diner hors pension - adulte ({DIMANCHE})" in f.tarifs_manquants
+

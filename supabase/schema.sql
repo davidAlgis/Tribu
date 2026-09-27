@@ -2977,10 +2977,29 @@ create table if not exists private.tarifs_annexes (
   primary key (cle, tranche)
 );
 
--- Ces deux tables naissent apres le `revoke all` de la section 6 : il ne
+-- Un repas ne coute pas la meme chose tous les jours : le diner du
+-- samedi n'est pas celui du mardi. Le prix ordinaire vit au-dessus, dans
+-- `tarifs_annexes` ; ici ne sont ecrits QUE LES JOURS QUI FONT EXCEPTION.
+--
+-- Une table a part plutot qu'une colonne `jour` nullable dans l'autre :
+-- une clef primaire n'accepte pas de NULL, il aurait fallu une date
+-- sentinelle pour dire « tous les jours ». Une exception EST une autre
+-- chose qu'un prix ordinaire, et deux tables le disent mieux qu'une date
+-- inventee.
+create table if not exists private.tarifs_repas_jour (
+  jour    date not null,
+  repas   text not null,
+  tranche text not null,
+  montant numeric(8,2) not null default 0 check (montant >= 0),
+  maj_le  timestamptz not null default now(),
+  primary key (jour, repas, tranche)
+);
+
+-- Ces trois tables naissent apres le `revoke all` de la section 6 : il ne
 -- les couvre pas.
-revoke all on private.tarifs         from anon, authenticated;
-revoke all on private.tarifs_annexes from anon, authenticated;
+revoke all on private.tarifs           from anon, authenticated;
+revoke all on private.tarifs_annexes   from anon, authenticated;
+revoke all on private.tarifs_repas_jour from anon, authenticated;
 
 -- Toute la grille en un appel : l'inventaire, les prix poses, les
 -- nombres annexes. Les trois ne se lisent qu'ensemble -- un prix sans son
@@ -3030,6 +3049,25 @@ begin
       from private.tarifs t
     ), '[]'::jsonb),
 
+    -- Les jours du sejour : la page en fait la liste ou l'on choisit
+    -- celui qui fait exception.
+    'jours', coalesce((
+      select jsonb_agg(d.jour order by d.jour)
+        from (select (r.date_debut + i) as jour
+                from generate_series(0, r.date_fin - r.date_debut) as i) d
+    ), '[]'::jsonb),
+
+    -- Les repas qui ne coutent pas leur prix ordinaire ce jour-la.
+    'repas_jour', coalesce((
+      select jsonb_agg(jsonb_build_object(
+               'jour', j.jour,
+               'repas', j.repas,
+               'tranche', j.tranche,
+               'montant', j.montant
+             ) order by j.jour, j.repas, j.tranche)
+      from private.tarifs_repas_jour j
+    ), '[]'::jsonb),
+
     'annexes', coalesce((
       select jsonb_agg(jsonb_build_object(
                'cle', a.cle,
@@ -3071,11 +3109,17 @@ end $fn$;
 -- une contrainte posee sous `create table if not exists` ne se met jamais
 -- a jour sur une base deja en place. Une fonction, elle, se remplace a
 -- chaque recollage.
+-- Un argument de plus, donc une signature de plus : sans ce `drop`,
+-- l'ancienne fonction a quatre arguments survivrait a cote, et un appel
+-- qui ne nomme pas le cinquieme resterait ambigu.
+drop function if exists public.admin_tarifs_enregistrer(text, jsonb, jsonb, jsonb);
+
 create or replace function public.admin_tarifs_enregistrer(
-  p_code    text,
-  p_grille  jsonb,
-  p_annexes jsonb,
-  p_jours   jsonb default null
+  p_code       text,
+  p_grille     jsonb,
+  p_annexes    jsonb,
+  p_jours      jsonb default null,
+  p_repas_jour jsonb default null
 )
 returns jsonb
 language plpgsql security definer
@@ -3090,6 +3134,7 @@ declare
   l         jsonb;
   n_grille  integer := 0;
   n_annexes integer := 0;
+  n_repas   integer := 0;
 begin
   perform private.verifier_code(p_code, 'admin');
   -- Le premier changement de la semaine emporte une copie de l'avant.
@@ -3157,6 +3202,42 @@ begin
     set montant = excluded.montant, maj_le = now();
   get diagnostics n_annexes = row_count;
 
+  -- Les exceptions de repas, quand la page les envoie. Elle envoie la
+  -- liste COMPLETE : ce qui n'y est plus a ete retire a l'ecran et doit
+  -- l'etre en base. Un upsert seul ne saurait pas effacer.
+  if jsonb_typeof(p_repas_jour) = 'array' then
+    for l in select * from jsonb_array_elements(p_repas_jour) loop
+      if not ((l->>'repas') = any (array['petit_dejeuner', 'dejeuner', 'diner']))
+         or not ((l->>'tranche') = any (tranches))
+         or coalesce((l->>'montant')::numeric, 0) < 0 then
+        raise exception 'TARIF_INCONNU' using errcode = 'P0001';
+      end if;
+    end loop;
+
+    delete from private.tarifs_repas_jour t
+     where not exists (
+       select 1 from jsonb_array_elements(p_repas_jour) as l
+        where (l->>'jour')::date = t.jour
+          and l->>'repas' = t.repas
+          and l->>'tranche' = t.tranche
+     );
+
+    insert into private.tarifs_repas_jour (jour, repas, tranche, montant)
+    select d.jour, d.repas, d.tranche, d.montant
+      from (
+        select distinct on ((l->>'jour')::date, l->>'repas', l->>'tranche')
+               (l->>'jour')::date                    as jour,
+               l->>'repas'                           as repas,
+               l->>'tranche'                         as tranche,
+               coalesce((l->>'montant')::numeric, 0) as montant
+          from jsonb_array_elements(p_repas_jour) as l
+         order by (l->>'jour')::date, l->>'repas', l->>'tranche'
+      ) d
+    on conflict (jour, repas, tranche) do update
+      set montant = excluded.montant, maj_le = now();
+    get diagnostics n_repas = row_count;
+  end if;
+
   -- Les jours de week-end, quand la page les envoie. Lundi = 0.
   if jsonb_typeof(p_jours) = 'array' then
     if exists (
@@ -3174,11 +3255,13 @@ begin
      where id;
   end if;
 
-  return jsonb_build_object('tarifs', n_grille, 'annexes', n_annexes);
+  return jsonb_build_object(
+    'tarifs', n_grille, 'annexes', n_annexes, 'repas_jour', n_repas
+  );
 end $fn$;
 
 grant execute on function public.admin_tarifs(text)                                to anon;
-grant execute on function public.admin_tarifs_enregistrer(text, jsonb, jsonb, jsonb) to anon;
+grant execute on function public.admin_tarifs_enregistrer(text, jsonb, jsonb, jsonb, jsonb) to anon;
 
 
 -- ---- 12b. Ce que l'export lit ----
@@ -3200,6 +3283,9 @@ create or replace view public.v_tarifs as
 create or replace view public.v_tarifs_annexes as
   select cle, tranche, montant from private.tarifs_annexes;
 
+create or replace view public.v_tarifs_repas_jour as
+  select jour, repas, tranche, montant from private.tarifs_repas_jour;
+
 -- Qui dort dans quel gite : un gite se loue entier, et sans le plan il
 -- n'y a pas de part a repartir.
 create or replace view public.v_couchages as
@@ -3212,10 +3298,10 @@ create or replace view public.v_reglages as
     from private.reglages;
 
 revoke all on public.v_logements, public.v_tarifs, public.v_tarifs_annexes,
-              public.v_couchages, public.v_reglages
+              public.v_tarifs_repas_jour, public.v_couchages, public.v_reglages
   from anon, authenticated;
 grant select on public.v_logements, public.v_tarifs, public.v_tarifs_annexes,
-                public.v_couchages, public.v_reglages
+                public.v_tarifs_repas_jour, public.v_couchages, public.v_reglages
   to service_role;
 
 

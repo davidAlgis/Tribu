@@ -348,6 +348,26 @@
         "logement_id": "lg",
         "numero": 1
       }
+    ],
+    "repas_jour": [
+      {
+        "jour": "2027-07-10",
+        "repas": "diner",
+        "tranche": "adulte",
+        "montant": 40
+      },
+      {
+        "jour": "2027-07-10",
+        "repas": "diner",
+        "tranche": "jeune",
+        "montant": 30
+      },
+      {
+        "jour": "2027-07-10",
+        "repas": "diner",
+        "tranche": "enfant",
+        "montant": 22
+      }
     ]
   }
 }

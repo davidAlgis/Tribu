@@ -684,6 +684,10 @@ se partage entre ceux qui y dorment cette nuit-là — c'est le **plan de
 couchage** qui le dit, et une nuit de gîte sans place attribuée n'est
 facturée à personne, mais ressort dans les anomalies.
 
+Les **repas hors pension** ont un prix ordinaire par repas et par tranche
+d'âge, et des **jours qui font exception** — le dîner du samedi n'est pas
+celui du mardi. On n'y pose que les jours qui s'écartent du prix ordinaire.
+
 ## Points à connaître
 
 **Absent est l'état par défaut, et ça se voit dans la grille.** La colonne
