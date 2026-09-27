@@ -1216,7 +1216,10 @@ const TRANCHES = ["adulte", "jeune", "enfant", "bebe"];
 const LIGNES_PRIX = [
   { champ: "semaine", libelle: "Semaine (€)", pas: "0.5" },
   { champ: "weekend", libelle: "Week-end (€)", pas: "0.5" },
-  { champ: "remise", libelle: "Remise (%)", pas: "1", max: "100" },
+  // La remise n'est pas un prix : elle se retranche de ceux du dessus.
+  // Un trait l'en separe -- sans lui, elle se perd au milieu de douze
+  // cases et l'on croit qu'il n'y en a pas pour les chambres.
+  { champ: "remise", libelle: "Remise (%)", pas: "1", max: "100", classe: "a-part" },
 ];
 
 // Les autres regimes ne sont pas des prix : ce sont des REDUCTIONS sur la
@@ -1246,7 +1249,6 @@ const zoneRepas = document.getElementById("grille-repas");
 const zoneRepasJour = document.getElementById("grille-repas-jour");
 const choixJour = document.getElementById("repas-jour");
 const zoneJours = document.getElementById("jours-weekend");
-const compteurTarifs = document.getElementById("compteur-tarifs");
 const messageTarifs = document.getElementById("message-tarifs");
 const champVueMer = document.getElementById("tarif-vue-mer");
 
@@ -1308,9 +1310,28 @@ function tableauTarifs(titre, colonnes, lignes, cellule) {
   const corps = document.createElement("tbody");
   for (const ligne of lignes) {
     const tr = document.createElement("tr");
+    if (ligne.classe) tr.className = ligne.classe;
     const th = document.createElement("th");
     th.scope = "row";
-    th.textContent = ligne.libelle;
+    th.appendChild(span(ligne.libelle, "libelle-ligne"));
+
+    // Une ligne se remplit souvent d'une seule valeur : toutes les
+    // tranches au meme prix, ou la remise partout pareille. La fleche
+    // recopie la PREMIERE case sur les autres -- elle ne devine rien,
+    // elle repete.
+    if (colonnes.length > 1) {
+      const etendre = document.createElement("button");
+      etendre.type = "button";
+      etendre.className = "etendre";
+      etendre.textContent = "→";
+      etendre.title = `Recopier la première valeur sur toute la ligne « ${ligne.libelle} »`;
+      etendre.setAttribute("aria-label", etendre.title);
+      etendre.addEventListener("click", () => {
+        const champs = [...tr.querySelectorAll("input")];
+        for (const champ of champs.slice(1)) champ.value = champs[0].value;
+      });
+      th.appendChild(etendre);
+    }
     tr.appendChild(th);
     for (const colonne of colonnes) {
       const td = document.createElement("td");
@@ -1323,16 +1344,38 @@ function tableauTarifs(titre, colonnes, lignes, cellule) {
   return table;
 }
 
+// « chambre de 2 », « gîte de 6 ». Sans « personnes » ni nombre
+// d'exemplaires : le prix ne depend pas de la quantite, et le tableau se
+// lit mieux sans ce qui ne le concerne pas. La capacite reste, elle :
+// c'est elle qui distingue deux lignes d'inventaire.
+function nommerTarif(logement) {
+  const type = TYPES_LOGEMENT[typeDe(logement)];
+  return `${type ? type.un : logement.categorie} de ${logement.capacite}`;
+}
+
+// Recopier un tableau sur les autres du meme type : quatre tailles de
+// chambres ont souvent les memes prix, et les retaper quatre fois est le
+// meilleur moyen de se tromper une fois.
+function recopierTableau(source) {
+  const meme = zoneGrilleTarifs.querySelectorAll(
+    `table.tarifs[data-categorie="${source.dataset.categorie}"]`
+  );
+  let combien = 0;
+  for (const autre of meme) {
+    if (autre === source) continue;
+    for (const champ of source.querySelectorAll("input[data-champ]")) {
+      const cible = autre.querySelector(
+        `input[data-tranche="${champ.dataset.tranche}"][data-champ="${champ.dataset.champ}"]`
+      );
+      if (cible) cible.value = champ.value;
+    }
+    combien += 1;
+  }
+  return combien;
+}
+
 function dessinerGrilleTarifs() {
   const logements = tarifs.logements || [];
-  // « a zero » et non « a remplir » : un bebe gratuit est un prix a zero
-  // parfaitement voulu. Le compteur constate, il ne reclame pas.
-  compteurTarifs.textContent = !logements.length
-    ? ""
-    : tarifs.a_remplir
-    ? `${tarifs.a_remplir} prix à zéro`
-    : "aucun prix à zéro";
-
   zoneGrilleTarifs.textContent = "";
   if (!logements.length) {
     const rien = document.createElement("p");
@@ -1350,24 +1393,46 @@ function dessinerGrilleTarifs() {
         ? [{ cle: "entier", libelle: "Le gîte entier" }]
         : TRANCHES.map((t) => ({ cle: t, libelle: libelleTranche(t) }));
 
-    const titre =
-      nommerLogement({ ...logement, nombre: 1 }).replace(/^1 /, "") +
-      (logement.nombre > 1 ? ` — ${logement.nombre} exemplaires` : "");
+    const titre = nommerTarif(logement);
 
-    zoneGrilleTarifs.appendChild(
-      tableauTarifs(titre, colonnes, LIGNES_PRIX, (ligne, colonne) => {
-        const pose = prixPose(logement.id, colonne.cle);
-        const champ = champNombre(pose ? pose[ligne.champ] : 0, {
-          pas: ligne.pas,
-          max: ligne.max,
-          aria: `${titre} — ${colonne.libelle} — ${ligne.libelle}`,
-        });
-        champ.dataset.logement = logement.id;
-        champ.dataset.tranche = colonne.cle;
-        champ.dataset.champ = ligne.champ;
-        return champ;
-      })
-    );
+    const table = tableauTarifs(titre, colonnes, LIGNES_PRIX, (ligne, colonne) => {
+      const pose = prixPose(logement.id, colonne.cle);
+      const champ = champNombre(pose ? pose[ligne.champ] : 0, {
+        pas: ligne.pas,
+        max: ligne.max,
+        aria: `${titre} — ${colonne.libelle} — ${ligne.libelle}`,
+      });
+      champ.dataset.logement = logement.id;
+      champ.dataset.tranche = colonne.cle;
+      champ.dataset.champ = ligne.champ;
+      return champ;
+    });
+    table.dataset.categorie = logement.categorie;
+    zoneGrilleTarifs.appendChild(table);
+
+    // Le bouton ne parait que s'il a quelque chose a recopier.
+    const voisins = logements.filter(
+      (autre) => autre.categorie === logement.categorie
+    ).length;
+    if (voisins > 1) {
+      const bloc = document.createElement("div");
+      bloc.className = "actions recopier";
+      const bouton = document.createElement("button");
+      bouton.type = "button";
+      bouton.className = "discret";
+      bouton.dataset.recopier = logement.id;
+      bouton.textContent =
+        logement.categorie === "gite"
+          ? "Recopier ces prix sur les autres gîtes"
+          : "Recopier ces prix sur les autres chambres";
+      bouton.addEventListener("click", () => {
+        const combien = recopierTableau(table);
+        messageTarifs.className = "";
+        messageTarifs.textContent = `Prix recopiés sur ${combien} autre(s) couchage(s) — pense à enregistrer.`;
+      });
+      bloc.appendChild(bouton);
+      zoneGrilleTarifs.appendChild(bloc);
+    }
   }
 }
 

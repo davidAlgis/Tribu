@@ -348,7 +348,7 @@
     <!-- ---- Tarifs ---------------------------------------------- -->
     <div class="volet" id="volet-tarifs" role="tabpanel" aria-labelledby="onglet-tarifs" tabindex="0" hidden>
       <fieldset>
-        <legend>Le prix d'une nuit <span id="compteur-tarifs" class="discret-inline"></span></legend>
+        <legend>Le prix d'une nuit</legend>
 
         <!--
           La grille se dessine d'après l'inventaire : un tableau par type de
@@ -356,6 +356,13 @@
           pas. Pas de gîte déclaré, pas de prix de gîte à remplir.
         -->
         <div id="grille-tarifs"></div>
+
+        <p class="note">
+          Les flèches <kbd>→</kbd> recopient la première valeur d'une ligne
+          sur toute la ligne&nbsp;; sous un tableau, le bouton la recopie sur
+          les autres couchages du même type. Rien n'est deviné&nbsp;: ces
+          boutons ne font que répéter ce que tu viens de saisir.
+        </p>
 
         <p class="note">
           Le prix de base est celui de la <strong>pension complète</strong>,

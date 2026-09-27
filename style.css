@@ -167,6 +167,35 @@ table.tarifs input[type="number"] { min-width: 4.5em; text-align: right; }
 /* Un bouton pose a cote d'un champ : il s'aligne sur la ligne de
    saisie, et non sur l'etiquette qui la surmonte. */
 .bouton-en-bas { display: flex; align-items: flex-end; }
+
+/* Recopier la premiere valeur sur toute la ligne. Discret : c'est une
+   commodite qu'on trouve en remplissant, pas une action qu'on cherche. */
+button.etendre {
+  background: transparent;
+  border: 1px solid var(--trait);
+  color: var(--doux);
+  border-radius: 6px;
+  padding: 1px 7px;
+  margin-left: 8px;
+  font-size: 0.85rem;
+  font-weight: 600;
+}
+button.etendre:hover {
+  color: #fff;
+  background: var(--accent);
+  border-color: var(--accent);
+}
+
+/* Le bouton qui recopie un tableau sur ses voisins se range sous lui, et
+   respire moins que les boutons de tete. */
+.recopier { margin: -8px 0 20px; }
+
+/* La remise n'est pas un prix : elle se retranche de ceux du dessus. Le
+   trait dit la difference, et l'empeche de se perdre au milieu des
+   douze cases d'une chambre. */
+table.tarifs tr.a-part th, table.tarifs tr.a-part td {
+  border-top: 2px solid var(--trait);
+}
 input[type="checkbox"] { width: 18px; height: 18px; accent-color: var(--accent); }
 
 button {

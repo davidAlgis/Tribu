@@ -3075,26 +3075,7 @@ begin
                'montant', a.montant
              ) order by a.cle, a.tranche)
       from private.tarifs_annexes a
-    ), '[]'::jsonb),
-
-    -- Combien de cases sont encore a zero. Sans ce compte, un prix oublie
-    -- ne se voit qu'a la facture : l'export le facture zero et le range
-    -- dans « tarifs manquants », des semaines plus tard.
-    'a_remplir', (
-      select count(*)
-        from private.logements l
-        cross join lateral unnest(
-               case when l.categorie = 'gite'
-                    then array['entier']
-                    else array['adulte', 'jeune', 'enfant', 'bebe'] end
-             ) as u(tranche)
-       where not exists (
-               select 1 from private.tarifs t
-                where t.logement_id = l.id
-                  and t.tranche = u.tranche
-                  and t.semaine > 0
-             )
-    )
+    ), '[]'::jsonb)
   );
 end $fn$;
 
