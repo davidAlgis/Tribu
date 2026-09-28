@@ -475,18 +475,36 @@
           et le calcul se fait ici.
         -->
         <div id="alerte-facture"></div>
-        <div id="tableau-facture"></div>
-
         <p id="message-facture" role="status" aria-live="polite"></p>
+      </fieldset>
+
+      <fieldset>
+        <legend>Les nuits <span id="compteur-nuits" class="discret-inline"></span></legend>
+
+        <div id="facture-hebergement"></div>
 
         <p class="note">
-          Une ligne par personne, pour tout le séjour. L'<strong>hébergement</strong>
-          compte les nuits selon le régime déduit des repas cochés&nbsp;— pension
-          complète, demi-pension, nuit seule&nbsp;— et, pour un gîte, la part qui
-          revient à chacun&nbsp;: le gîte se loue entier et sa note se divise
-          entre ceux qui y dorment cette nuit-là. Les <strong>repas</strong> sont
-          ceux qu'aucun régime ne comprend. La <strong>taxe</strong> n'est due que
-          par les adultes, une fois par nuit.
+          Une colonne par nuit, une ligne par personne, et chaque famille se
+          ferme sur sa somme. Le prix d'une nuit suit le régime déduit des
+          repas cochés&nbsp;— pension complète, demi-pension, nuit seule&nbsp;—
+          et, pour un gîte, c'est la <strong>part</strong> qui revient à
+          chacun&nbsp;: le gîte se loue entier et sa note se divise entre ceux
+          qui y dorment cette nuit-là. La <strong>taxe</strong> n'est due que
+          par les adultes, une fois par nuit&nbsp;; elle a sa colonne, et le
+          total est donné avec et sans elle.
+        </p>
+      </fieldset>
+
+      <fieldset>
+        <legend>Les repas hors pension <span id="compteur-repas" class="discret-inline"></span></legend>
+
+        <div id="facture-repas"></div>
+
+        <p class="note">
+          Seuls les repas qu'<strong>aucun régime ne comprend</strong> paraissent
+          ici&nbsp;: un dîner compris dans une pension complète est déjà payé
+          avec la nuit. En gîte, aucun repas n'est compris&nbsp;— ils sont donc
+          tous là. Une colonne n'apparaît que si quelqu'un prend ce repas-là.
         </p>
 
         <p class="note">

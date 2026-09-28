@@ -201,6 +201,25 @@ table.tarifs tr.a-part th, table.tarifs tr.a-part td {
    lit avant les autres. */
 td.total-personne { font-weight: 700; }
 tfoot th, tfoot td { border-top: 2px solid var(--trait); font-weight: 700; }
+
+/* Cinq nuits font huit colonnes, quinze repas en font seize : au-dela
+   d'une certaine largeur, un tableau se fait defiler plutot que de se
+   tasser jusqu'a l'illisible. */
+.tableau-large { overflow-x: auto; }
+.tableau-large table { min-width: 100%; width: auto; }
+.tableau-large th, .tableau-large td { white-space: nowrap; }
+
+/* Chaque famille ferme sur sa somme : c'est la ligne qu'on cherche quand
+   on prepare un virement. */
+tr.sous-total th, tr.sous-total td {
+  background: var(--carte);
+  font-weight: 700;
+  border-bottom: 2px solid var(--trait);
+}
+
+/* Une case a zero se marque d'un tiret : dans un tableau de seize
+   colonnes, « 0,00 € » repete partout noie les vrais montants. */
+td.rien { color: var(--doux); }
 input[type="checkbox"] { width: 18px; height: 18px; accent-color: var(--accent); }
 
 button {

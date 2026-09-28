@@ -161,9 +161,14 @@ def colonnes_js(chemin: Path) -> dict:
       for (const l of resultat.lignes) {{
         par[l.personne_id] = {{
           hebergement: l.hebergement, repas: l.repas, taxe: l.taxe, nuits: l.nuits,
+          parNuit: l.parNuit, parRepas: l.parRepas,
         }};
       }}
-      process.stdout.write(JSON.stringify({{ par, total: resultat.total }}));
+      process.stdout.write(JSON.stringify({{
+        par, total: resultat.total,
+        colonnesNuits: resultat.nuits,
+        colonnesRepas: resultat.repasColonnes.map((c) => c.cle),
+      }}));
     """
     sortie = subprocess.run(
         ["node", "-e", script], capture_output=True, text=True, check=True
@@ -252,3 +257,31 @@ def charger_json_dict(donnees: dict):
         for p in donnees["presences"]
     ]
     return personnes, presences, donnees["grille"]
+
+@JEUX
+def test_le_detail_fait_la_somme(jeux):
+    """La page montre une colonne par nuit et une par repas ; le total de
+    la même ligne en est la somme. Deux façons de compter la même chose,
+    et celle qu'on lit en diagonale doit valoir l'autre."""
+    _, js = jeux
+    for qui, valeurs in js["par"].items():
+        nuits = round(sum(valeurs["parNuit"].values()), 2)
+        repas = round(sum(valeurs["parRepas"].values()), 2)
+        assert nuits == round(valeurs["hebergement"], 2), f"{qui} : nuits"
+        assert repas == round(valeurs["repas"], 2), f"{qui} : repas"
+
+
+@JEUX
+def test_chaque_colonne_sert_a_quelqu_un(jeux):
+    """Une colonne n'a de raison d'être que si quelqu'un a quelque chose
+    dedans : cinq nuits et trois repas par jour font vite un tableau de
+    seize colonnes qu'on ne lit plus."""
+    _, js = jeux
+    vues_nuits = set()
+    vues_repas = set()
+    for valeurs in js["par"].values():
+        vues_nuits |= set(valeurs["parNuit"])
+        vues_repas |= set(valeurs["parRepas"])
+    assert sorted(js["colonnesNuits"]) == sorted(vues_nuits)
+    assert sorted(js["colonnesRepas"]) == sorted(vues_repas)
+

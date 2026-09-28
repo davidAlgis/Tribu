@@ -1722,61 +1722,71 @@ document.getElementById("tarifs-enregistrer").addEventListener("click", async ()
 // viennent de la grille deja chargee pour l'onglet Tarifs -- celle qui
 // est ENREGISTREE, pas celle qu'on est en train de taper a cote.
 
-const zoneFacture = document.getElementById("tableau-facture");
+const zoneNuits = document.getElementById("facture-hebergement");
+const zoneRepasFacture = document.getElementById("facture-repas");
 const alerteFacture = document.getElementById("alerte-facture");
 const compteurFacture = document.getElementById("compteur-facture");
+const compteurNuits = document.getElementById("compteur-nuits");
+const compteurRepas = document.getElementById("compteur-repas");
 const messageFacture = document.getElementById("message-facture");
+
+const NOMS_REPAS = {
+  petit_dejeuner: "Petit-déj.",
+  dejeuner: "Déjeuner",
+  diner: "Dîner",
+};
 
 function euros(valeur) {
   return `${valeur.toFixed(2).replace(".", ",")} €`;
 }
 
-function cellule(texte, classe) {
+// Une case a zero se marque d'un tiret : dans un tableau de seize
+// colonnes, « 0,00 € » repete partout noie les vrais montants.
+function celluleEuros(valeur, classe) {
   const td = document.createElement("td");
-  td.textContent = texte;
-  if (classe) td.className = classe;
+  td.textContent = valeur ? euros(valeur) : "—";
+  td.className = [valeur ? "" : "rien", classe || ""].filter(Boolean).join(" ");
   return td;
 }
 
-function dessinerFacture(calcul) {
-  const gens = new Map((etat.participants || []).map((p) => [p.id, p]));
+const quantieme = (iso) => new Date(`${iso}T12:00:00`).getDate();
 
-  compteurFacture.textContent = calcul.lignes.length
-    ? `${calcul.lignes.length} personne(s) — ${euros(calcul.total)}`
-    : "";
+// « Nuit du 24-25 » : une nuit porte deux dates, et la nommer d'une seule
+// laisse toujours un doute sur celle qu'on designe.
+function libelleNuit(jour) {
+  const suivant = new Date(`${jour}T12:00:00`);
+  suivant.setDate(suivant.getDate() + 1);
+  return `Nuit du ${quantieme(jour)}-${suivant.getDate()}`;
+}
 
-  // Ce qui rend le total faux se dit AVANT le total, pas en note de bas
-  // de page : une somme qu'on lit sans savoir qu'elle est incomplete est
-  // pire qu'une somme absente.
-  alerteFacture.textContent = "";
-  for (const [quoi, combien] of [
-    ["prix manquant(s) ou à zéro", calcul.manquants.length],
-    ["nuit(s) en gîte sans place attribuée", calcul.sansPlace.length],
-  ]) {
-    if (!combien) continue;
-    const p = document.createElement("p");
-    p.className = "erreur";
-    p.textContent =
-      combien === calcul.manquants.length && calcul.manquants.length
-        ? `${combien} ${quoi} : ${calcul.manquants.join(", ")}. Le total est incomplet.`
-        : `${combien} ${quoi} : ces nuits ne sont facturées à personne tant que le plan de couchage n'est pas fini.`;
-    alerteFacture.appendChild(p);
+function libelleRepas(colonne) {
+  return `${NOMS_REPAS[colonne.repas]} ${quantieme(colonne.jour)}`;
+}
+
+function nomDe(personne) {
+  const bloc = document.createElement("th");
+  bloc.scope = "row";
+  bloc.append(personne.prenom || "?");
+  // La branche distingue deux homonymes, et ne vaut d'etre dite que
+  // lorsqu'elle differe du prenom.
+  if (personne.famille && personne.famille !== personne.prenom) {
+    bloc.append(span(` (${personne.famille})`, "precision"));
   }
+  return bloc;
+}
 
-  zoneFacture.textContent = "";
-  if (!calcul.lignes.length) {
-    const rien = document.createElement("p");
-    rien.className = "note";
-    rien.textContent =
-      "Personne n'a encore déclaré de nuit ni de repas : il n'y a rien à facturer.";
-    zoneFacture.appendChild(rien);
-    return;
-  }
-
+// Un tableau par personne : une colonne par case du sejour, puis les
+// totaux. CHAQUE FAMILLE FERME SUR SA SOMME -- c'est la ligne qu'on
+// cherche au moment de demander l'argent, et une colonne qui repeterait
+// le meme nombre sur chaque ligne de la famille ne dirait rien de plus.
+function tableauFacture(colonnes, lignes, gens) {
+  const cadre = document.createElement("div");
+  cadre.className = "tableau-large";
   const table = document.createElement("table");
+
   const tete = document.createElement("thead");
   const rangee = document.createElement("tr");
-  for (const titre of ["Personne", "Nuits", "Hébergement", "Repas", "Taxe", "Total"]) {
+  for (const titre of ["Nom Prénom", ...colonnes.map((c) => c.libelle)]) {
     const th = document.createElement("th");
     th.textContent = titre;
     rangee.appendChild(th);
@@ -1784,45 +1794,161 @@ function dessinerFacture(calcul) {
   tete.appendChild(rangee);
   table.appendChild(tete);
 
+  const sommes = colonnes.map(() => 0);
   const corps = document.createElement("tbody");
-  for (const ligne of calcul.lignes) {
-    const qui = gens.get(ligne.personne_id) || {};
+
+  // Une famille d'une seule personne n'a pas de sous-total a montrer :
+  // la ligne repeterait celle du dessus.
+  const fermerFamille = (nom, cumul, combien) => {
+    if (combien < 2) return;
     const tr = document.createElement("tr");
-    const nom = document.createElement("th");
-    nom.scope = "row";
-    nom.append(qui.prenom || "?");
-    // La branche distingue deux homonymes, et elle ne vaut d'etre dite
-    // que lorsqu'elle differe du prenom.
-    if (qui.famille && qui.famille !== qui.prenom) {
-      nom.append(span(` (${qui.famille})`, "precision"));
+    tr.className = "sous-total";
+    const th = document.createElement("th");
+    th.scope = "row";
+    th.textContent = `Total ${nom}`;
+    tr.appendChild(th);
+    // Toutes les colonnes, y compris le detail : ce que la famille a
+    // depense cette nuit-la se lit aussi bien que ce qu'elle doit en tout.
+    for (const somme of cumul) {
+      tr.appendChild(celluleEuros(Math.round(somme * 100) / 100));
     }
-    tr.appendChild(nom);
-    tr.appendChild(cellule(String(ligne.nuits)));
-    tr.appendChild(cellule(euros(ligne.hebergement)));
-    tr.appendChild(cellule(euros(ligne.repas)));
-    tr.appendChild(cellule(euros(ligne.taxe)));
-    tr.appendChild(cellule(euros(ligne.total), "total-personne"));
+    corps.appendChild(tr);
+  };
+
+  let familleEnCours = null;
+  let cumul = colonnes.map(() => 0);
+  let combien = 0;
+
+  for (const ligne of lignes) {
+    const personne = gens.get(ligne.personne_id) || {};
+    if (familleEnCours !== null && personne.famille !== familleEnCours) {
+      fermerFamille(familleEnCours, cumul, combien);
+      cumul = colonnes.map(() => 0);
+      combien = 0;
+    }
+    familleEnCours = personne.famille;
+    combien += 1;
+
+    const tr = document.createElement("tr");
+    tr.appendChild(nomDe(personne));
+    colonnes.forEach((colonne, rang) => {
+      const valeur = colonne.valeur(ligne);
+      cumul[rang] += valeur;
+      sommes[rang] += valeur;
+      tr.appendChild(celluleEuros(valeur, colonne.total ? "total-personne" : ""));
+    });
     corps.appendChild(tr);
   }
+  if (familleEnCours !== null) fermerFamille(familleEnCours, cumul, combien);
   table.appendChild(corps);
 
   const pied = document.createElement("tfoot");
-  const somme = document.createElement("tr");
+  const totaux = document.createElement("tr");
   const titre = document.createElement("th");
   titre.scope = "row";
   titre.textContent = "TOTAL";
-  somme.appendChild(titre);
-  somme.appendChild(cellule(""));
-  for (const champ of ["hebergement", "repas", "taxe"]) {
-    somme.appendChild(
-      cellule(euros(calcul.lignes.reduce((t, l) => t + l[champ], 0)))
-    );
-  }
-  somme.appendChild(cellule(euros(calcul.total), "total-personne"));
-  pied.appendChild(somme);
+  totaux.appendChild(titre);
+  for (const somme of sommes) totaux.appendChild(celluleEuros(Math.round(somme * 100) / 100));
+  pied.appendChild(totaux);
   table.appendChild(pied);
 
-  zoneFacture.appendChild(table);
+  cadre.appendChild(table);
+  return cadre;
+}
+
+function rienDire(zone, texte) {
+  const rien = document.createElement("p");
+  rien.className = "note";
+  rien.textContent = texte;
+  zone.textContent = "";
+  zone.appendChild(rien);
+}
+
+function dessinerFacture(calcul) {
+  const gens = new Map((etat.participants || []).map((p) => [p.id, p]));
+  const arrondi = (v) => Math.round(v * 100) / 100;
+
+  compteurFacture.textContent = calcul.lignes.length
+    ? `${calcul.lignes.length} personne(s) — ${euros(calcul.total)} en tout`
+    : "";
+
+  // Ce qui rend le total faux se dit AVANT le total, et non en note de
+  // bas de page : une somme qu'on lit sans savoir qu'elle est incomplete
+  // est pire qu'une somme absente.
+  alerteFacture.textContent = "";
+  if (calcul.manquants.length) {
+    const p = document.createElement("p");
+    p.className = "erreur";
+    p.textContent =
+      `${calcul.manquants.length} prix manquant(s) ou à zéro : ` +
+      `${calcul.manquants.join(", ")}. Le total est incomplet.`;
+    alerteFacture.appendChild(p);
+  }
+  if (calcul.sansPlace.length) {
+    const p = document.createElement("p");
+    p.className = "erreur";
+    p.textContent =
+      `${calcul.sansPlace.length} nuit(s) en gîte sans place attribuée : ces ` +
+      "nuits ne sont facturées à personne tant que le plan de couchage n'est pas fini.";
+    alerteFacture.appendChild(p);
+  }
+
+  // --- les nuits
+  const dormeurs = calcul.lignes.filter((l) => l.nuits > 0);
+  compteurNuits.textContent = dormeurs.length
+    ? `${calcul.nuits.length} nuit(s) — ${euros(
+        arrondi(dormeurs.reduce((t, l) => t + l.hebergement + l.taxe, 0))
+      )}`
+    : "";
+  if (!dormeurs.length) {
+    rienDire(zoneNuits, "Personne n'a déclaré dormir sur place : rien à facturer ici.");
+  } else {
+    zoneNuits.textContent = "";
+    zoneNuits.appendChild(
+      tableauFacture(
+        [
+          ...calcul.nuits.map((jour) => ({
+            libelle: libelleNuit(jour),
+            valeur: (l) => l.parNuit[jour] || 0,
+          })),
+          { libelle: "Taxe", valeur: (l) => l.taxe, total: true },
+          { libelle: "Total sans taxe", valeur: (l) => l.hebergement, total: true },
+          { libelle: "Total", valeur: (l) => arrondi(l.hebergement + l.taxe), total: true },
+        ],
+        dormeurs,
+        gens
+      )
+    );
+  }
+
+  // --- les repas
+  const mangeurs = calcul.lignes.filter((l) => Object.keys(l.parRepas).length);
+  compteurRepas.textContent = mangeurs.length
+    ? `${calcul.repasColonnes.length} repas — ${euros(
+        arrondi(mangeurs.reduce((t, l) => t + l.repas, 0))
+      )}`
+    : "";
+  if (!mangeurs.length) {
+    rienDire(
+      zoneRepasFacture,
+      "Aucun repas hors pension : tout ce qui a été coché est compris dans une nuit."
+    );
+  } else {
+    zoneRepasFacture.textContent = "";
+    zoneRepasFacture.appendChild(
+      tableauFacture(
+        [
+          ...calcul.repasColonnes.map((colonne) => ({
+            libelle: libelleRepas(colonne),
+            valeur: (l) => l.parRepas[colonne.cle] || 0,
+          })),
+          { libelle: "Total", valeur: (l) => l.repas, total: true },
+        ],
+        mangeurs,
+        gens
+      )
+    );
+  }
 }
 
 async function rechargerFacture() {

@@ -694,8 +694,10 @@ d'âge, et des **jours qui font exception** — le dîner du samedi n'est pas
 celui du mardi. On n'y pose que les jours qui s'écartent du prix ordinaire.
 
 L'onglet **Facture** montre la même chose dans le navigateur, sans lancer
-de script : une ligne par personne, l'hébergement d'un côté, les repas de
-l'autre, la taxe à part. Le calcul y est écrit deux fois — en Python pour
+de script. Deux tableaux, une ligne par personne : **les nuits**, une
+colonne par nuit du séjour, puis la taxe et le total avec et sans elle ;
+**les repas hors pension**, une colonne par repas réellement servi. Chaque
+famille ferme sur sa somme. Le calcul y est écrit deux fois — en Python pour
 l'export, en JavaScript pour la page, qui ne peut pas appeler le premier —
 et [`tests/test_facture.py`](tests/test_facture.py) les compare au centime
 sur deux jeux de données à chaque exécution de la suite.

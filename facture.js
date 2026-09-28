@@ -201,10 +201,27 @@ window.FACTURE = (function () {
     const compte = new Map();
     const pour = (id) => {
       if (!compte.has(id)) {
-        compte.set(id, { personne_id: id, nuits: 0, hebergement: 0, repas: 0, taxe: 0 });
+        compte.set(id, {
+          personne_id: id,
+          nuits: 0,
+          hebergement: 0,
+          repas: 0,
+          taxe: 0,
+          // Le DETAIL, case par case : ce que la page montre en colonnes.
+          // Les sommes ci-dessus s'en deduisent, mais on les tient au fil
+          // de l'eau -- refaire la somme d'un objet a l'affichage, c'est
+          // une deuxieme occasion de se tromper.
+          parNuit: {},
+          parRepas: {},
+        });
       }
       return compte.get(id);
     };
+    // Les colonnes : une nuit ou quelqu'un dort, un repas que quelqu'un
+    // prend hors pension. Une colonne vide partout n'apprend rien et
+    // coute une colonne.
+    const nuitsVues = new Set();
+    const repasVus = new Set();
     const manquants = new Set();
     const sansPlace = [];
 
@@ -236,9 +253,11 @@ window.FACTURE = (function () {
       }
       if (nuitee.vue_mer) prix += grille.annexes.get("vue_mer|") || 0;
 
-      pour(nuitee.personne_id).hebergement = arrondir(
-        pour(nuitee.personne_id).hebergement + remiser(prix, remise)
-      );
+      const du = remiser(prix, remise);
+      const ligne = pour(nuitee.personne_id);
+      ligne.hebergement = arrondir(ligne.hebergement + du);
+      ligne.parNuit[nuitee.jour] = arrondir((ligne.parNuit[nuitee.jour] || 0) + du);
+      nuitsVues.add(nuitee.jour);
     }
 
     // --- les gites : le gite entier, partage entre ceux qui y dorment
@@ -268,9 +287,12 @@ window.FACTURE = (function () {
       occupants.sort((a, b) => (a.personne_id < b.personne_id ? -1 : 1));
       const morceaux = parts(total, occupants.length);
       occupants.forEach((nuitee, rang) => {
-        pour(nuitee.personne_id).hebergement = arrondir(
-          pour(nuitee.personne_id).hebergement + morceaux[rang]
+        const ligne = pour(nuitee.personne_id);
+        ligne.hebergement = arrondir(ligne.hebergement + morceaux[rang]);
+        ligne.parNuit[nuitee.jour] = arrondir(
+          (ligne.parNuit[nuitee.jour] || 0) + morceaux[rang]
         );
+        nuitsVues.add(nuitee.jour);
       });
     }
 
@@ -297,9 +319,11 @@ window.FACTURE = (function () {
       if (!prix) {
         manquants.add(`${repas.repas} hors pension — ${personne.categorie_age}`);
       }
-      pour(repas.personne_id).repas = arrondir(
-        pour(repas.personne_id).repas + (prix || 0)
-      );
+      const ligne = pour(repas.personne_id);
+      const cle = `${repas.jour}|${repas.repas}`;
+      ligne.repas = arrondir(ligne.repas + (prix || 0));
+      ligne.parRepas[cle] = arrondir((ligne.parRepas[cle] || 0) + (prix || 0));
+      repasVus.add(cle);
     }
 
     const lignes = [...compte.values()].map((l) => ({
@@ -315,8 +339,19 @@ window.FACTURE = (function () {
       );
     });
 
+    // Chronologique, et pour un meme jour dans l'ordre ou l'on mange.
+    const RANG = { petit_dejeuner: 0, dejeuner: 1, diner: 2 };
+    const repasColonnes = [...repasVus]
+      .map((cle) => {
+        const [jour, repas] = cle.split("|");
+        return { cle, jour, repas };
+      })
+      .sort((a, b) => a.jour.localeCompare(b.jour) || RANG[a.repas] - RANG[b.repas]);
+
     return {
       lignes,
+      nuits: [...nuitsVues].sort(),
+      repasColonnes,
       total: arrondir(lignes.reduce((somme, l) => somme + l.total, 0)),
       manquants: [...manquants].sort(),
       sansPlace,
