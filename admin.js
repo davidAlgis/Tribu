@@ -594,6 +594,10 @@ function ouvrirOnglet(onglet) {
     o.tabIndex = actif ? 0 : -1;
     document.getElementById(o.getAttribute("aria-controls")).hidden = !actif;
   }
+  // La facture se refait a chaque ouverture : elle ne garde rien, et les
+  // faits changent sans arret pendant qu'on organise. Rien a perdre non
+  // plus, ce volet ne se saisit pas.
+  if (onglet.id === "onglet-facture") rechargerFacture();
 }
 
 onglets.forEach((onglet, i) => {
@@ -1706,6 +1710,133 @@ document.getElementById("tarifs-enregistrer").addEventListener("click", async ()
     messageTarifs.textContent = erreur.message;
   }
 });
+
+
+// ------------------------------------------------------------ facture
+//
+// Ce que chacun paie, une ligne par personne. Le calcul vit dans
+// `facture.js` -- hors de la page, donc eprouvable sans navigateur, et
+// compare au moteur Python par un test qui les veut d'accord au centime.
+//
+// La base ne rend que des FAITS : qui dort ou, qui mange quoi. Les prix
+// viennent de la grille deja chargee pour l'onglet Tarifs -- celle qui
+// est ENREGISTREE, pas celle qu'on est en train de taper a cote.
+
+const zoneFacture = document.getElementById("tableau-facture");
+const alerteFacture = document.getElementById("alerte-facture");
+const compteurFacture = document.getElementById("compteur-facture");
+const messageFacture = document.getElementById("message-facture");
+
+function euros(valeur) {
+  return `${valeur.toFixed(2).replace(".", ",")} €`;
+}
+
+function cellule(texte, classe) {
+  const td = document.createElement("td");
+  td.textContent = texte;
+  if (classe) td.className = classe;
+  return td;
+}
+
+function dessinerFacture(calcul) {
+  const gens = new Map((etat.participants || []).map((p) => [p.id, p]));
+
+  compteurFacture.textContent = calcul.lignes.length
+    ? `${calcul.lignes.length} personne(s) — ${euros(calcul.total)}`
+    : "";
+
+  // Ce qui rend le total faux se dit AVANT le total, pas en note de bas
+  // de page : une somme qu'on lit sans savoir qu'elle est incomplete est
+  // pire qu'une somme absente.
+  alerteFacture.textContent = "";
+  for (const [quoi, combien] of [
+    ["prix manquant(s) ou à zéro", calcul.manquants.length],
+    ["nuit(s) en gîte sans place attribuée", calcul.sansPlace.length],
+  ]) {
+    if (!combien) continue;
+    const p = document.createElement("p");
+    p.className = "erreur";
+    p.textContent =
+      combien === calcul.manquants.length && calcul.manquants.length
+        ? `${combien} ${quoi} : ${calcul.manquants.join(", ")}. Le total est incomplet.`
+        : `${combien} ${quoi} : ces nuits ne sont facturées à personne tant que le plan de couchage n'est pas fini.`;
+    alerteFacture.appendChild(p);
+  }
+
+  zoneFacture.textContent = "";
+  if (!calcul.lignes.length) {
+    const rien = document.createElement("p");
+    rien.className = "note";
+    rien.textContent =
+      "Personne n'a encore déclaré de nuit ni de repas : il n'y a rien à facturer.";
+    zoneFacture.appendChild(rien);
+    return;
+  }
+
+  const table = document.createElement("table");
+  const tete = document.createElement("thead");
+  const rangee = document.createElement("tr");
+  for (const titre of ["Personne", "Nuits", "Hébergement", "Repas", "Taxe", "Total"]) {
+    const th = document.createElement("th");
+    th.textContent = titre;
+    rangee.appendChild(th);
+  }
+  tete.appendChild(rangee);
+  table.appendChild(tete);
+
+  const corps = document.createElement("tbody");
+  for (const ligne of calcul.lignes) {
+    const qui = gens.get(ligne.personne_id) || {};
+    const tr = document.createElement("tr");
+    const nom = document.createElement("th");
+    nom.scope = "row";
+    nom.append(qui.prenom || "?");
+    // La branche distingue deux homonymes, et elle ne vaut d'etre dite
+    // que lorsqu'elle differe du prenom.
+    if (qui.famille && qui.famille !== qui.prenom) {
+      nom.append(span(` (${qui.famille})`, "precision"));
+    }
+    tr.appendChild(nom);
+    tr.appendChild(cellule(String(ligne.nuits)));
+    tr.appendChild(cellule(euros(ligne.hebergement)));
+    tr.appendChild(cellule(euros(ligne.repas)));
+    tr.appendChild(cellule(euros(ligne.taxe)));
+    tr.appendChild(cellule(euros(ligne.total), "total-personne"));
+    corps.appendChild(tr);
+  }
+  table.appendChild(corps);
+
+  const pied = document.createElement("tfoot");
+  const somme = document.createElement("tr");
+  const titre = document.createElement("th");
+  titre.scope = "row";
+  titre.textContent = "TOTAL";
+  somme.appendChild(titre);
+  somme.appendChild(cellule(""));
+  for (const champ of ["hebergement", "repas", "taxe"]) {
+    somme.appendChild(
+      cellule(euros(calcul.lignes.reduce((t, l) => t + l[champ], 0)))
+    );
+  }
+  somme.appendChild(cellule(euros(calcul.total), "total-personne"));
+  pied.appendChild(somme);
+  table.appendChild(pied);
+
+  zoneFacture.appendChild(table);
+}
+
+async function rechargerFacture() {
+  messageFacture.className = "";
+  messageFacture.textContent = "Calcul…";
+  try {
+    const faits = await rpc("admin_faits", { p_code: etat.code });
+    dessinerFacture(FACTURE.calculer(faits, tarifs));
+    messageFacture.textContent = "";
+  } catch (erreur) {
+    messageFacture.className = "erreur";
+    messageFacture.textContent = erreur.message;
+  }
+}
 
 
 // ---------------------------------------------------- plan de couchage

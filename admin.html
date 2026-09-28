@@ -67,6 +67,8 @@
               aria-controls="volet-logements" aria-selected="false" tabindex="-1">Logements</button>
       <button type="button" role="tab" id="onglet-tarifs"
               aria-controls="volet-tarifs" aria-selected="false" tabindex="-1">Tarifs</button>
+      <button type="button" role="tab" id="onglet-facture"
+              aria-controls="volet-facture" aria-selected="false" tabindex="-1">Facture</button>
       <button type="button" role="tab" id="onglet-dates"
               aria-controls="volet-dates" aria-selected="false" tabindex="-1">Week-ends</button>
       <button type="button" role="tab" id="onglet-lieu"
@@ -462,6 +464,40 @@
       <p id="message-tarifs" role="status" aria-live="polite"></p>
     </div>
 
+    <!-- ---- Facture --------------------------------------------- -->
+    <div class="volet" id="volet-facture" role="tabpanel" aria-labelledby="onglet-facture" tabindex="0" hidden>
+      <fieldset>
+        <legend>Ce que chacun paie <span id="compteur-facture" class="discret-inline"></span></legend>
+
+        <!--
+          Le tableau se recalcule à chaque ouverture de l'onglet : il ne
+          garde rien. La base ne stocke aucun total — elle rend les faits,
+          et le calcul se fait ici.
+        -->
+        <div id="alerte-facture"></div>
+        <div id="tableau-facture"></div>
+
+        <p id="message-facture" role="status" aria-live="polite"></p>
+
+        <p class="note">
+          Une ligne par personne, pour tout le séjour. L'<strong>hébergement</strong>
+          compte les nuits selon le régime déduit des repas cochés&nbsp;— pension
+          complète, demi-pension, nuit seule&nbsp;— et, pour un gîte, la part qui
+          revient à chacun&nbsp;: le gîte se loue entier et sa note se divise
+          entre ceux qui y dorment cette nuit-là. Les <strong>repas</strong> sont
+          ceux qu'aucun régime ne comprend. La <strong>taxe</strong> n'est due que
+          par les adultes, une fois par nuit.
+        </p>
+
+        <p class="note">
+          Ce tableau refait le calcul de l'export Excel, dans le navigateur.
+          Les deux sont tenus d'accord par un test qui les compare au centime.
+          Un prix manquant est facturé 0&nbsp;: la ligne rouge au-dessus du
+          tableau dit lesquels, et le total est faux tant qu'elle est là.
+        </p>
+      </fieldset>
+    </div>
+
     <!-- ---- Week-ends ------------------------------------------- -->
     <div class="volet" id="volet-dates" role="tabpanel" aria-labelledby="onglet-dates" tabindex="0" hidden>
       <fieldset>
@@ -540,6 +576,7 @@
 <script src="./carte.js"></script>
 <script src="./plan.js"></script>
 <script src="./repartir.js"></script>
+<script src="./facture.js"></script>
 <script src="./admin.js"></script>
 </body>
 </html>

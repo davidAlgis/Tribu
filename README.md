@@ -693,6 +693,13 @@ Les **repas hors pension** ont un prix ordinaire par repas et par tranche
 d'âge, et des **jours qui font exception** — le dîner du samedi n'est pas
 celui du mardi. On n'y pose que les jours qui s'écartent du prix ordinaire.
 
+L'onglet **Facture** montre la même chose dans le navigateur, sans lancer
+de script : une ligne par personne, l'hébergement d'un côté, les repas de
+l'autre, la taxe à part. Le calcul y est écrit deux fois — en Python pour
+l'export, en JavaScript pour la page, qui ne peut pas appeler le premier —
+et [`tests/test_facture.py`](tests/test_facture.py) les compare au centime
+sur deux jeux de données à chaque exécution de la suite.
+
 ## Points à connaître
 
 **Absent est l'état par défaut, et ça se voit dans la grille.** La colonne

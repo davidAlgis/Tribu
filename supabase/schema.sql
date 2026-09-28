@@ -3294,6 +3294,80 @@ grant select on public.v_logements, public.v_tarifs, public.v_tarifs_annexes,
   to service_role;
 
 
+-- ---- 12c. Les faits, pour qui veut recalculer ----
+--
+--  La page montre ce que chacun doit. Pour cela il lui faut savoir qui
+--  dort ou et qui mange quoi -- des FAITS, rien d'autre : la base ne
+--  derive toujours aucun total, et le calcul se fait a la lecture.
+--
+--  Il se fait DEUX FOIS : par `engine/rules.py` pour l'export, par
+--  `facture.js` pour la page. La page ne peut pas appeler le Python, qui
+--  tourne sur la machine de l'organisateur avec la cle secrete, et
+--  regarder ce que chacun doit ne devrait pas demander de lancer un
+--  script. Un test compare les deux au centime pres.
+--
+--  Les presences hors des bornes du sejour sont ecartees : elles ne se
+--  facturent pas, et le panneau du sejour les compte deja a part.
+create or replace function public.admin_faits(p_code text)
+returns jsonb
+language plpgsql stable security definer
+set search_path = private, pg_temp as $fn$
+declare
+  r private.reglages;
+begin
+  perform private.verifier_code(p_code, 'admin');
+  select * into r from private.reglages;
+  if r.id is null then
+    raise exception 'REGLAGES_ABSENTS' using errcode = 'P0001';
+  end if;
+
+  return jsonb_build_object(
+    'personnes', coalesce((
+      select jsonb_agg(jsonb_build_object(
+               'id', p.id,
+               'prenom', p.prenom,
+               'famille', p.famille,
+               'categorie_age', p.categorie_age,
+               'invite', p.invite
+             ) order by p.famille, p.prenom)
+      from private.participants p
+    ), '[]'::jsonb),
+
+    'presences', coalesce((
+      select jsonb_agg(jsonb_build_object(
+               'participant_id', pr.participant_id,
+               'jour', pr.jour,
+               'hebergement', pr.hebergement,
+               'vue_mer', pr.vue_mer,
+               'logement_id', pr.logement_id,
+               'petit_dejeuner', pr.petit_dejeuner,
+               'dejeuner', pr.dejeuner,
+               'diner', pr.diner
+             ) order by pr.participant_id, pr.jour)
+      from public.presences pr
+      where pr.jour between r.date_debut and r.date_fin
+    ), '[]'::jsonb),
+
+    -- Qui dort dans quel gite : un gite se loue entier, et sa note se
+    -- partage entre ses occupants. La jointure ecarte les affectations
+    -- tombees au-dela du rang, comme le plan lui-meme.
+    'couchages', coalesce((
+      select jsonb_agg(jsonb_build_object(
+               'participant_id', c.participant_id,
+               'jour', c.jour,
+               'logement_id', c.logement_id,
+               'numero', c.numero
+             ) order by c.participant_id, c.jour)
+      from private.couchages c
+      join private.logements g
+        on g.id = c.logement_id and c.numero <= g.nombre
+    ), '[]'::jsonb)
+  );
+end $fn$;
+
+grant execute on function public.admin_faits(text) to anon;
+
+
 -- ============================================================
 --  13. Revenir en arriere
 -- ============================================================

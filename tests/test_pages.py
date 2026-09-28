@@ -241,6 +241,7 @@ MODULES = {
     "CARTE": "carte.js",
     "PLAN": "plan.js",
     "REPARTIR": "repartir.js",
+    "FACTURE": "facture.js",
 }
 
 
@@ -264,16 +265,19 @@ def test_chaque_module_utilise_est_charge_par_la_page(page, pages):
     assert manquants == [], f"{page} : {manquants} utilisé(s), script absent de la page"
 
 
-def test_la_repartition_se_lit_sans_navigateur():
-    """`repartir.js` ne décide que d'une chose : qui dort où. Il ne touche
-    ni au DOM ni au réseau, et c'est ce qui permet de l'éprouver sur vingt
-    nuits inventées sans ouvrir une page.
+@pytest.mark.parametrize("module", ["repartir.js", "facture.js"])
+def test_les_calculs_se_lisent_sans_navigateur(module):
+    """`repartir.js` ne décide que d'une chose : qui dort où.
+    `facture.js` ne décide que de ce que chacun paie. Ni l'un ni l'autre
+    ne touche au DOM ou au réseau, et c'est ce qui permet de les éprouver
+    sur des données inventées sans ouvrir une page — pour le second, de
+    le comparer au moteur Python à chaque exécution de la suite.
 
     La commodité d'y bricoler l'affichage se paierait la première fois
-    qu'une répartition séparerait une famille : il faudrait un navigateur
-    pour s'en apercevoir.
+    qu'une répartition séparerait une famille, ou qu'un total se
+    tromperait : il faudrait un navigateur pour s'en apercevoir.
     """
-    js = (RACINE / "repartir.js").read_text(encoding="utf-8")
+    js = (RACINE / module).read_text(encoding="utf-8")
     code = "\n".join(l for l in js.splitlines() if not l.lstrip().startswith("//"))
     dehors = sorted(set(re.findall(r"\b(document|fetch|localStorage|XMLHttpRequest)\b", code)))
-    assert dehors == [], "l'algorithme est sorti de son bocal"
+    assert dehors == [], f"{module} est sorti de son bocal"

@@ -196,6 +196,11 @@ button.etendre:hover {
 table.tarifs tr.a-part th, table.tarifs tr.a-part td {
   border-top: 2px solid var(--trait);
 }
+
+/* La colonne des totaux porte le chiffre qu'on vient chercher : elle se
+   lit avant les autres. */
+td.total-personne { font-weight: 700; }
+tfoot th, tfoot td { border-top: 2px solid var(--trait); font-weight: 700; }
 input[type="checkbox"] { width: 18px; height: 18px; accent-color: var(--accent); }
 
 button {
