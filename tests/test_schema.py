@@ -149,3 +149,59 @@ def test_chaque_table_de_donnees_se_cree_sans_ecraser():
         if pose and not pose.group(1):
             manquantes.append(table)
     assert manquantes == [], "`create table` sans `if not exists`"
+
+# --- Une variable ne doit pas porter le nom d'un alias -------------------
+
+MOTS_SQL = {
+    "select", "from", "where", "group", "order", "having", "limit", "offset",
+    "union", "join", "left", "right", "inner", "outer", "full", "cross",
+    "lateral", "natural", "on", "using", "as", "set", "values", "returning",
+    "into", "loop", "and", "or", "not", "for", "when", "then", "else", "end",
+    "case", "with", "exists", "distinct",
+}
+
+# `from jsonb_array_elements(x) as l`, `join private.logements g`, …
+ALIAS = re.compile(r"\b(?:from|join)\s+[\w.]+(?:\s*\([^()]*\))?\s+(?:as\s+)?([a-z_]\w*)", re.I)
+
+
+def variables_declarees(corps: str) -> set[str]:
+    """Les noms déclarés entre `declare` et `begin`."""
+    bloc = re.search(r"\bdeclare\b(.*?)\bbegin\b", corps, re.S | re.I)
+    if not bloc:
+        return set()
+    noms = set()
+    for ligne in bloc.group(1).splitlines():
+        ligne = ligne.split("--")[0].strip()
+        trouve = re.match(r"([a-z_]\w*)\s+\S", ligne, re.I)
+        if trouve:
+            noms.add(trouve.group(1).lower())
+    return noms
+
+
+def test_aucune_variable_ne_porte_le_nom_d_un_alias_de_table():
+    """Une variable PL/pgSQL et un alias de table qui partagent un nom
+    rendent toute référence ambiguë :
+
+        column reference "l" is ambiguous
+        It could refer to either a PL/pgSQL variable or a table column.
+
+    La fonction se pose sans broncher — l'analyseur ne résout pas les
+    noms — et n'échoue qu'au premier appel, chez l'organisateur, des
+    semaines plus tard. C'est arrivé : `admin_tarifs_enregistrer`
+    déclarait `l` pour ses boucles de contrôle et nommait `l` les tables
+    dérivées de ses `insert`.
+
+    Le remède tient en un mot : une variable s'appelle `ligne`, un alias
+    s'appelle `l`.
+    """
+    fautives = []
+    for fonction in CORPS.finditer(SCHEMA):
+        nom, corps = fonction.group(1), fonction.group(2)
+        alias = {a.lower() for a in ALIAS.findall(corps)} - MOTS_SQL
+        partages = sorted(variables_declarees(corps) & alias)
+        if partages:
+            fautives.append(f"{nom} : {', '.join(partages)}")
+    assert fautives == [], (
+        "variable PL/pgSQL et alias de table de même nom — Postgres refusera "
+        "l'appel : " + " | ".join(fautives)
+    )

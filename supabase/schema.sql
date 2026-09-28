@@ -3112,7 +3112,7 @@ declare
     'demi_pension_soir', 'demi_pension_midi', 'nuit_petit_dejeuner', 'nuit_seule',
     'petit_dejeuner', 'dejeuner', 'diner'
   ];
-  l         jsonb;
+  ligne     jsonb;
   n_grille  integer := 0;
   n_annexes integer := 0;
   n_repas   integer := 0;
@@ -3125,22 +3125,22 @@ begin
     raise exception 'DEMANDE_INVALIDE' using errcode = 'P0001';
   end if;
 
-  for l in select * from jsonb_array_elements(p_grille) loop
-    if not ((l->>'tranche') = any (tranches)) then
+  for ligne in select * from jsonb_array_elements(p_grille) loop
+    if not ((ligne->>'tranche') = any (tranches)) then
       raise exception 'TRANCHE_INCONNUE' using errcode = 'P0001';
     end if;
-    if coalesce((l->>'semaine')::numeric, 0) < 0
-       or coalesce((l->>'weekend')::numeric, 0) < 0
-       or coalesce((l->>'remise')::numeric, 0) not between 0 and 100 then
+    if coalesce((ligne->>'semaine')::numeric, 0) < 0
+       or coalesce((ligne->>'weekend')::numeric, 0) < 0
+       or coalesce((ligne->>'remise')::numeric, 0) not between 0 and 100 then
       raise exception 'MONTANT_INVALIDE' using errcode = 'P0001';
     end if;
   end loop;
 
-  for l in select * from jsonb_array_elements(p_annexes) loop
-    if not ((l->>'cle') = any (cles)) then
+  for ligne in select * from jsonb_array_elements(p_annexes) loop
+    if not ((ligne->>'cle') = any (cles)) then
       raise exception 'TARIF_INCONNU' using errcode = 'P0001';
     end if;
-    if coalesce((l->>'montant')::numeric, 0) < 0 then
+    if coalesce((ligne->>'montant')::numeric, 0) < 0 then
       raise exception 'MONTANT_INVALIDE' using errcode = 'P0001';
     end if;
   end loop;
@@ -3187,10 +3187,10 @@ begin
   -- liste COMPLETE : ce qui n'y est plus a ete retire a l'ecran et doit
   -- l'etre en base. Un upsert seul ne saurait pas effacer.
   if jsonb_typeof(p_repas_jour) = 'array' then
-    for l in select * from jsonb_array_elements(p_repas_jour) loop
-      if not ((l->>'repas') = any (array['petit_dejeuner', 'dejeuner', 'diner']))
-         or not ((l->>'tranche') = any (tranches))
-         or coalesce((l->>'montant')::numeric, 0) < 0 then
+    for ligne in select * from jsonb_array_elements(p_repas_jour) loop
+      if not ((ligne->>'repas') = any (array['petit_dejeuner', 'dejeuner', 'diner']))
+         or not ((ligne->>'tranche') = any (tranches))
+         or coalesce((ligne->>'montant')::numeric, 0) < 0 then
         raise exception 'TARIF_INCONNU' using errcode = 'P0001';
       end if;
     end loop;
