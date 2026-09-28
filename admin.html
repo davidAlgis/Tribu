@@ -63,6 +63,8 @@
               aria-controls="volet-sejour" aria-selected="true">Séjour</button>
       <button type="button" role="tab" id="onglet-participants"
               aria-controls="volet-participants" aria-selected="false" tabindex="-1">Participants</button>
+      <button type="button" role="tab" id="onglet-regimes"
+              aria-controls="volet-regimes" aria-selected="false" tabindex="-1">À table</button>
       <button type="button" role="tab" id="onglet-logements"
               aria-controls="volet-logements" aria-selected="false" tabindex="-1">Logements</button>
       <button type="button" role="tab" id="onglet-tarifs"
@@ -196,6 +198,33 @@
           Retirer quelqu'un supprime aussi sa saisie de présences. Ses enfants
           sont repris par son conjoint s'il reste, sinon par son propre parent —
           la branche n'est jamais coupée.
+        </p>
+      </fieldset>
+    </div>
+
+    <!-- ---- À table --------------------------------------------- -->
+    <div class="volet" id="volet-regimes" role="tabpanel" aria-labelledby="onglet-regimes" tabindex="0" hidden>
+      <fieldset>
+        <legend>Ce que chacun mange <span id="compteur-regimes" class="discret-inline"></span></legend>
+
+        <!--
+          Chaque case part toute seule : pas de bouton « Enregistrer »,
+          qui ferait croire cochée une case qui ne l'est pas encore.
+        -->
+        <div id="tableau-regimes"></div>
+
+        <p id="message-regimes" role="status" aria-live="polite"></p>
+
+        <p class="note">
+          La famille remplit ces cases elle-même depuis la page
+          <strong>À table</strong>&nbsp;; ici tu remplis pour ceux qui ne
+          l'ouvriront pas, et tu corriges. <strong>Non buveur</strong> sert
+          à commander les bouteilles&nbsp;: les mineurs y sont d'office, et
+          la case ne se décoche pas — la base le refuse, pas seulement la
+          page. Les quatre cases sont indépendantes&nbsp;: cocher
+          «&nbsp;vegan&nbsp;» ne coche pas «&nbsp;végétarien&nbsp;», parce
+          que deviner ce que quelqu'un n'a pas coché, sur ce qu'il mange,
+          n'est pas notre affaire.
         </p>
       </fieldset>
     </div>

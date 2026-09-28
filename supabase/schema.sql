@@ -269,6 +269,23 @@ alter table private.participants
 alter table private.participants
   add column if not exists date_naissance date;
 
+-- Ce que chacun mange et boit. QUATRE FAITS, et non un texte libre : le
+-- traiteur compte des parts, il ne lit pas des phrases. Ce qui ne rentre
+-- dans aucune des quatre cases -- une allergie, un regime particulier --
+-- se dit a l'organisateur, qui le porte a l'hotel.
+--
+-- Ces cases sont INDEPENDANTES. « Vegan » n'allume pas « vegetarien » :
+-- deviner ce que quelqu'un n'a pas coche, sur ce qu'il mange, n'est pas
+-- notre affaire.
+alter table private.participants
+  add column if not exists non_buveur  boolean not null default false;
+alter table private.participants
+  add column if not exists vegetarien  boolean not null default false;
+alter table private.participants
+  add column if not exists vegan       boolean not null default false;
+alter table private.participants
+  add column if not exists sans_gluten boolean not null default false;
+
 alter table private.participants drop constraint if exists participants_portee_valide;
 alter table private.participants add constraint participants_portee_valide
   check (portee in ('descendance', 'foyer', 'soi'));
@@ -823,6 +840,100 @@ grant execute on function public.couchage_charger(text, uuid, date)             
 grant execute on function public.couchage_placer(text, uuid, uuid, date, uuid, integer) to anon;
 
 -- ============================================================
+--  6c. Les regimes alimentaires
+-- ============================================================
+--
+--  Quatre cases par personne, et CHACUN NE REMPLIT QUE LES SIENNES :
+--  soi, son conjoint, ses descendants et leurs conjoints -- la meme
+--  regle que les presences et que le plan de couchage
+--  (`private.personnes_modifiables`, section 5).
+--
+--  ON NE VOIT QUE LES SIENS, contrairement au plan de couchage. Le plan
+--  repond a « avec qui », question qui n'a pas de sens ampute des
+--  autres ; ici la question est « qu'est-ce que je mange », et la
+--  reponse du cousin ne la regarde pas.
+--
+--  UN MINEUR NE BOIT PAS. La case est cochee d'office et ne se decoche
+--  pas -- ni ici, ni depuis la page d'administration. Ce n'est pas une
+--  preference, et c'est la borne « jeune » des reglages qui dit ou
+--  s'arrete la minorite.
+--
+create or replace function public.regimes_charger(p_code text, p_acteur uuid)
+returns jsonb
+language plpgsql stable security definer
+set search_path = private, pg_temp as $fn$
+begin
+  perform private.verifier_code(p_code);
+
+  return jsonb_build_object(
+    'saisie_ouverte', (select saisie_ouverte from private.reglages),
+    'gens', coalesce((
+      select jsonb_agg(jsonb_build_object(
+               'id', p.id,
+               'prenom', p.prenom,
+               'famille', p.famille,
+               -- Ce que la page grise : un mineur ne decoche pas
+               -- « non buveur ».
+               'mineur', p.categorie_age <> 'adulte',
+               'non_buveur', p.non_buveur,
+               'vegetarien', p.vegetarien,
+               'vegan', p.vegan,
+               'sans_gluten', p.sans_gluten
+             ) order by p.prenom)
+      from private.participants p
+      join private.personnes_modifiables(p_acteur) m on m.id = p.id
+    ), '[]'::jsonb)
+  );
+end $fn$;
+
+-- Poser les quatre cases d'une personne. Les quatre ensemble : elles se
+-- decident d'un coup a l'ecran, et les envoyer une par une ferait quatre
+-- occasions d'en perdre une.
+create or replace function public.regimes_enregistrer(
+  p_code    text,
+  p_acteur  uuid,
+  p_cible   uuid,
+  p_regimes jsonb
+)
+returns jsonb
+language plpgsql security definer
+set search_path = private, pg_temp as $fn$
+declare
+  quiconque private.participants;
+begin
+  perform private.verifier_code(p_code);
+
+  if not (select saisie_ouverte from private.reglages) then
+    raise exception 'SAISIE_CLOSE' using errcode = 'P0001';
+  end if;
+
+  -- La regle des presences, mot pour mot.
+  if not exists (
+    select 1 from private.personnes_modifiables(p_acteur) m where m.id = p_cible
+  ) then
+    raise exception 'PAS_A_TOI' using errcode = 'P0001';
+  end if;
+
+  perform private.sauver_si_nouvelle_semaine();
+
+  select * into quiconque from private.participants where id = p_cible;
+
+  update private.participants p
+     set non_buveur = coalesce((p_regimes->>'non_buveur')::boolean, false)
+                      -- Un mineur ne boit pas, quoi que la page envoie.
+                      or quiconque.categorie_age <> 'adulte',
+         vegetarien  = coalesce((p_regimes->>'vegetarien')::boolean, false),
+         vegan       = coalesce((p_regimes->>'vegan')::boolean, false),
+         sans_gluten = coalesce((p_regimes->>'sans_gluten')::boolean, false)
+   where p.id = p_cible;
+
+  return jsonb_build_object('pose', true);
+end $fn$;
+
+grant execute on function public.regimes_charger(text, uuid)                  to anon;
+grant execute on function public.regimes_enregistrer(text, uuid, uuid, jsonb) to anon;
+
+-- ============================================================
 --  7. La porte de sortie : l'export Python
 -- ============================================================
 --
@@ -883,6 +994,10 @@ begin
              'categorie_attendue',
                private.categorie_pour(p.date_naissance, r.date_debut,
                                       r.age_bebe, r.age_enfant, r.age_jeune),
+             'non_buveur', p.non_buveur,
+             'vegetarien', p.vegetarien,
+             'vegan', p.vegan,
+             'sans_gluten', p.sans_gluten,
              'parent_id', p.parent_id,
              'conjoint_id', p.conjoint_id,
              'invite', p.invite,
@@ -1560,6 +1675,42 @@ begin
     'sans_date', (select count(*) from private.participants where date_naissance is null)
   );
 end $fn$;
+
+-- ---- 8k. Les regimes, cote organisateur ----
+--
+--  La meme chose que `regimes_enregistrer`, sans la condition de droit :
+--  l'organisateur remplit pour tout le monde, y compris pour qui n'a
+--  jamais ouvert la page. La regle du mineur, elle, tient des deux cotes.
+create or replace function public.admin_regime(p_code text, p_id uuid, p_regimes jsonb)
+returns jsonb
+language plpgsql security definer
+set search_path = private, pg_temp as $fn$
+declare
+  quiconque private.participants;
+begin
+  perform private.verifier_code(p_code, 'admin');
+  perform private.sauver_si_nouvelle_semaine();
+
+  select * into quiconque from private.participants where id = p_id;
+  if quiconque.id is null then
+    raise exception 'INCONNU' using errcode = 'P0001';
+  end if;
+
+  update private.participants p
+     set non_buveur = coalesce((p_regimes->>'non_buveur')::boolean, false)
+                      or quiconque.categorie_age <> 'adulte',
+         vegetarien  = coalesce((p_regimes->>'vegetarien')::boolean, false),
+         vegan       = coalesce((p_regimes->>'vegan')::boolean, false),
+         sans_gluten = coalesce((p_regimes->>'sans_gluten')::boolean, false)
+   where p.id = p_id;
+
+  return jsonb_build_object(
+    'non_buveur', coalesce((p_regimes->>'non_buveur')::boolean, false)
+                  or quiconque.categorie_age <> 'adulte'
+  );
+end $fn$;
+
+grant execute on function public.admin_regime(text, uuid, jsonb) to anon;
 
 -- ---- 8j. Les bornes d'age ----
 --

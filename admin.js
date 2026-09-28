@@ -148,6 +148,7 @@ const message = document.getElementById("message");
 async function recharger() {
   etat.participants = await rpc("admin_lister", { p_code: etat.code });
   dessinerListe();
+  dessinerRegimes();
   remplirSelecteurs();
   await rechargerSejour();
   await rechargerLogements();
@@ -729,6 +730,129 @@ interrupteur.addEventListener("change", async () => {
     messageDates.textContent = erreur.message;
   }
 });
+
+
+// ----------------------------------------------------------- a table
+//
+// Quatre cases par personne. La famille les remplit elle-meme sur
+// `regimes.html` ; ici l'organisateur remplit pour ceux qui n'ouvriront
+// pas la page, et corrige.
+//
+// CHAQUE CASE PART TOUTE SEULE, comme cote famille : une case a cocher
+// qui attend un bouton est une case qu'on croit cochee.
+
+const CASES_REGIME = [
+  ["non_buveur", "Non buveur"],
+  ["vegetarien", "Végétarien"],
+  ["vegan", "Vegan"],
+  ["sans_gluten", "Sans gluten"],
+];
+
+const zoneRegimes = document.getElementById("tableau-regimes");
+const compteurRegimes = document.getElementById("compteur-regimes");
+const messageRegimes = document.getElementById("message-regimes");
+
+function dessinerRegimes() {
+  const gens = etat.participants || [];
+
+  // Ce que le traiteur demandera : des nombres, pas des noms.
+  const comptes = CASES_REGIME.map(
+    ([champ, libelle]) => `${gens.filter((p) => p[champ]).length} ${libelle.toLowerCase()}`
+  );
+  compteurRegimes.textContent = gens.length ? comptes.join(", ") : "";
+
+  zoneRegimes.textContent = "";
+  if (!gens.length) {
+    const rien = document.createElement("p");
+    rien.className = "note";
+    rien.textContent = "Aucun participant : rien à remplir ici.";
+    zoneRegimes.appendChild(rien);
+    return;
+  }
+
+  const cadre = document.createElement("div");
+  cadre.className = "tableau-large";
+  const table = document.createElement("table");
+
+  const tete = document.createElement("thead");
+  const rangee = document.createElement("tr");
+  for (const titre of ["Personne", ...CASES_REGIME.map(([, l]) => l)]) {
+    const th = document.createElement("th");
+    th.textContent = titre;
+    rangee.appendChild(th);
+  }
+  tete.appendChild(rangee);
+  table.appendChild(tete);
+
+  const corps = document.createElement("tbody");
+  for (const personne of gens) {
+    const mineur = personne.categorie_age !== "adulte";
+    const tr = document.createElement("tr");
+    tr.dataset.personne = personne.id;
+
+    const nom = document.createElement("th");
+    nom.scope = "row";
+    nom.append(personne.prenom);
+    if (personne.famille && personne.famille !== personne.prenom) {
+      nom.append(span(` (${personne.famille})`, "precision"));
+    }
+    if (mineur) nom.append(span("mineur", "etiquette"));
+    tr.appendChild(nom);
+
+    for (const [champ, libelle] of CASES_REGIME) {
+      const td = document.createElement("td");
+      const etiquette = document.createElement("label");
+      etiquette.className = "interrupteur";
+      const boite = document.createElement("input");
+      boite.type = "checkbox";
+      boite.dataset.champ = champ;
+      boite.checked = !!personne[champ];
+      boite.setAttribute("aria-label", `${personne.prenom} — ${libelle}`);
+      // Un mineur ne boit pas : la case est cochee et ne se decoche pas.
+      // La base le refuse aussi -- une page ne fait pas foi -- mais un
+      // refus qu'on voit venir vaut mieux qu'un refus recu.
+      if (champ === "non_buveur" && mineur) {
+        boite.checked = true;
+        boite.disabled = true;
+        etiquette.title = "Un mineur ne boit pas : la case ne se décoche pas.";
+      }
+      boite.addEventListener("change", () => enregistrerRegime(personne, tr));
+      etiquette.appendChild(boite);
+      td.appendChild(etiquette);
+      tr.appendChild(td);
+    }
+    corps.appendChild(tr);
+  }
+  table.appendChild(corps);
+  cadre.appendChild(table);
+  zoneRegimes.appendChild(cadre);
+}
+
+async function enregistrerRegime(personne, rangee) {
+  const regimes = {};
+  for (const boite of rangee.querySelectorAll("input[data-champ]")) {
+    regimes[boite.dataset.champ] = boite.checked;
+  }
+
+  messageRegimes.className = "";
+  messageRegimes.textContent = "Enregistrement…";
+  try {
+    const r = await rpc("admin_regime", {
+      p_code: etat.code,
+      p_id: personne.id,
+      p_regimes: regimes,
+    });
+    // La base tranche sur « non buveur » : on reprend ce qu'elle rend.
+    Object.assign(personne, regimes, { non_buveur: r.non_buveur });
+    dessinerRegimes();
+    messageRegimes.className = "ok";
+    messageRegimes.textContent = `C'est noté pour ${personne.prenom}.`;
+  } catch (erreur) {
+    messageRegimes.className = "erreur";
+    messageRegimes.textContent = erreur.message;
+    await recharger();
+  }
+}
 
 
 // ------------------------------------------------------ les logements

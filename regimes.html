@@ -1,0 +1,102 @@
+<!doctype html>
+<html lang="fr">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="robots" content="noindex">
+  <title>Tribu — à table</title>
+  <link rel="stylesheet" href="./style.css">
+</head>
+<body>
+<main>
+  <nav class="menu" aria-label="Les étapes du séjour">
+    <a href="./lieux.html">Le lieu</a>
+    <a href="./dates.html">La date</a>
+    <a href="./index.html">Les présences</a>
+    <a href="./regimes.html" aria-current="page">À table</a>
+  </nav>
+
+  <h1>Qu'est-ce qu'on te sert&nbsp;?</h1>
+  <p class="sous-titre" id="sous-titre">
+    Quatre cases, pour que le traiteur compte juste. Rien à dire si rien ne
+    change.
+  </p>
+
+  <!-- Reste affiché une fois le code accepté : c'est le signe que la page
+       a bougé, là où deux champs de texte au même endroit ne le disent
+       pas. -->
+  <p id="fil" class="fil" role="status" hidden>
+    <strong>✓ Code accepté.</strong>
+    <span id="fil-suite">Reste à dire qui tu es.</span>
+  </p>
+
+  <!-- ---- Étape 1 : le code ----------------------------------- -->
+  <section id="etape-code">
+    <fieldset>
+      <legend>Le code de la famille</legend>
+      <form id="form-code">
+        <div>
+          <label for="code">Code</label>
+          <input type="text" id="code" required maxlength="40" autocomplete="off"
+                 spellcheck="false">
+        </div>
+        <button type="submit">Entrer</button>
+        <p id="message-code" role="status" aria-live="polite"></p>
+      </form>
+    </fieldset>
+  </section>
+
+  <!-- ---- Étape 2 : qui es-tu ? -------------------------------- -->
+  <section id="etape-prenom" hidden>
+    <fieldset class="panneau-saisie surgit">
+      <legend>Ton prénom</legend>
+      <div>
+        <label for="prenom">Prénom</label>
+        <input type="text" id="prenom" autocomplete="off" spellcheck="false"
+               role="combobox" aria-expanded="false" aria-controls="suggestions"
+               aria-autocomplete="list">
+        <ul id="suggestions" role="listbox"></ul>
+      </div>
+      <p id="message-prenom" role="status" aria-live="polite"></p>
+    </fieldset>
+  </section>
+
+  <!-- ---- Étape 3 : les quatre cases --------------------------- -->
+  <section id="etape-regimes" hidden>
+    <fieldset class="panneau-saisie">
+      <legend>À table <span id="compteur-regimes" class="discret-inline"></span></legend>
+
+      <!--
+        Tout le monde d'un coup, et non une personne à la fois comme sur
+        les autres pages : quatre cases tiennent sur une ligne, et un
+        foyer se remplit sans changer d'écran.
+      -->
+      <div id="regimes"></div>
+
+      <div class="actions">
+        <button type="button" id="changer" class="discret">Changer de personne</button>
+      </div>
+      <p id="message" role="status" aria-live="polite"></p>
+
+      <p class="note">
+        Chaque case part toute seule&nbsp;: il n'y a rien à enregistrer.
+        Tu ne vois que les personnes dont tu as la charge&nbsp;— ce que
+        mange ton cousin ne te regarde pas plus que l'inverse.
+      </p>
+
+      <p class="note">
+        <strong>Non buveur</strong> sert à commander les bouteilles, pas à
+        juger&nbsp;: c'est le nombre de parts de vin. Les mineurs y sont
+        d'office, et la case ne se décoche pas. Une allergie ou un régime
+        qui n'entre dans aucune des quatre cases se dit directement à
+        l'organisateur&nbsp;: mieux vaut une phrase à un humain qu'une case
+        qui ment.
+      </p>
+    </fieldset>
+  </section>
+</main>
+
+<script src="./config.js"></script>
+<script src="./regimes.js"></script>
+</body>
+</html>

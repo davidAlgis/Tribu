@@ -26,12 +26,13 @@ PAGES = {
     "index.html": "app.js",
     "dates.html": "dates.js",
     "lieux.html": "lieux.js",
+    "regimes.html": "regimes.js",
     "admin.html": "admin.js",
 }
 
 # Les pages qui portent le menu commun. Une page ajoutée sans lui serait un
 # cul-de-sac, et les pages déjà là n'y mèneraient pas.
-FAMILIALES = ("index.html", "dates.html", "lieux.html")
+FAMILIALES = ("index.html", "dates.html", "lieux.html", "regimes.html")
 
 
 def identifiants(html: str) -> set[str]:

@@ -220,6 +220,24 @@ tr.sous-total th, tr.sous-total td {
 /* Une case a zero se marque d'un tiret : dans un tableau de seize
    colonnes, « 0,00 € » repete partout noie les vrais montants. */
 td.rien { color: var(--doux); }
+
+/* ---------- A table ---------- */
+/* Une personne, quatre cases. Le nom au-dessus, les cases en dessous :
+   sur un telephone elles tiennent sur deux lignes, sur un ecran sur
+   une seule, et dans les deux cas on voit a qui elles appartiennent. */
+.personne-regime {
+  border: 1px solid var(--trait);
+  border-radius: 10px;
+  padding: 12px 14px;
+  margin-bottom: 10px;
+}
+.nom-regime { display: flex; align-items: center; gap: 8px; }
+.cases-regime { display: flex; flex-wrap: wrap; gap: 4px 22px; }
+.cases-regime .interrupteur { margin: 6px 0 0; }
+
+/* Dans le tableau de l'organisateur, la case se centre sous sa colonne
+   comme un chiffre le ferait. */
+td .interrupteur { margin: 0; justify-content: center; }
 input[type="checkbox"] { width: 18px; height: 18px; accent-color: var(--accent); }
 
 button {
