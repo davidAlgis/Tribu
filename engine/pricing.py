@@ -7,6 +7,13 @@ ecran -- auraient fini par se contredire. La contradiction se serait lue
 sur une facture. `config.toml` ne garde que ce qui n'est pas un prix :
 le nom du sejour et la devise.
 
+LA TAXE DE SEJOUR EST A PART
+
+Par adulte et par nuit, quel que soit le couchage. Elle ne se remise
+pas, ne depend pas du regime, et ne se partage pas entre les occupants
+d'un gite : c'est la personne qui la doit. Elle sort donc en ligne
+distincte, comme sur une note d'hotel.
+
 COMMENT SE CALCULE UNE NUIT EN CHAMBRE
 
     prix de la ligne (semaine ou week-end, selon le jour ou l'on se couche)
@@ -53,6 +60,7 @@ from engine.rules import (
 # Les nombres qui ne dependent d'aucun couchage, tels que la page les
 # range. `''` en tranche : le montant ne depend pas de l'age.
 VUE_MER = "vue_mer"
+TAXE_SEJOUR = "taxe_sejour"
 
 
 @dataclass(frozen=True)
@@ -310,6 +318,43 @@ def _facturer_gites(prestations, personnes, grille, facturation) -> None:
             )
 
 
+def _facturer_taxe(prestations, personnes, grille, facturation) -> None:
+    """La taxe de sejour : par adulte et par nuit, quel que soit le lit.
+
+    UNE LIGNE A PART, et non un ajout au prix de la nuit. Elle ne suit
+    aucune des regles qui valent pour les prix :
+
+      - elle ne se remise pas -- une taxe ne se negocie pas ;
+      - elle ne depend pas du regime -- on la doit en demi-pension comme
+        en pension complete ;
+      - elle NE SE PARTAGE PAS entre les occupants d'un gite : c'est la
+        personne qui la doit, pas le couchage.
+
+    Les mineurs en sont exoneres, ce que traduit ici la seule tranche
+    « adulte » -- la borne « jeune » des reglages dit ou s'arrete la
+    minorite, et elle se regle par commune.
+
+    Une taxe a zero n'est pas un oubli : beaucoup de communes n'en levent
+    aucune. Elle ne remonte donc pas dans les tarifs manquants.
+    """
+    montant = grille.annexes.get((TAXE_SEJOUR, ""), 0.0)
+    if not montant:
+        return
+
+    for nuitee in prestations.nuitees:
+        if personnes[nuitee.personne_id].categorie_age != "adulte":
+            continue
+        facturation.lignes.append(
+            LigneFacture(
+                personne_id=nuitee.personne_id,
+                jour=nuitee.jour,
+                libelle="Taxe de sejour",
+                detail="par adulte et par nuit",
+                prix=round(montant, 2),
+            )
+        )
+
+
 def _facturer_repas(prestations, personnes, grille, facturation) -> None:
     for repas in prestations.repas_hors_pension:
         personne = personnes[repas.personne_id]
@@ -350,6 +395,7 @@ def facturer(prestations: Prestations, personnes: dict, grille: Grille) -> Factu
     facturation = Facturation()
     _facturer_chambres(prestations, personnes, grille, facturation)
     _facturer_gites(prestations, personnes, grille, facturation)
+    _facturer_taxe(prestations, personnes, grille, facturation)
     _facturer_repas(prestations, personnes, grille, facturation)
     facturation.lignes.sort(key=lambda l: (l.jour, l.personne_id, l.libelle))
     facturation.sans_place.sort(key=lambda x: (x[1], x[0]))

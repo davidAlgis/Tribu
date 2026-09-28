@@ -221,6 +221,11 @@
         "montant": 15
       },
       {
+        "cle": "taxe_sejour",
+        "tranche": "",
+        "montant": 0.9
+      },
+      {
         "cle": "demi_pension_soir",
         "tranche": "",
         "montant": 17

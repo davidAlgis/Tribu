@@ -684,6 +684,11 @@ se partage entre ceux qui y dorment cette nuit-là — c'est le **plan de
 couchage** qui le dit, et une nuit de gîte sans place attribuée n'est
 facturée à personne, mais ressort dans les anomalies.
 
+La **taxe de séjour** se règle en une case, par adulte et par nuit. Elle
+ne suit aucune des règles des prix : pas de remise, pas de régime, pas de
+partage entre les occupants d'un gîte — c'est la personne qui la doit. Elle
+paraît en ligne à part sur la facture, et les mineurs en sont exonérés.
+
 Les **repas hors pension** ont un prix ordinaire par repas et par tranche
 d'âge, et des **jours qui font exception** — le dîner du samedi n'est pas
 celui du mardi. On n'y pose que les jours qui s'écartent du prix ordinaire.

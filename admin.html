@@ -399,6 +399,12 @@
             <label for="tarif-vue-mer">Supplément vue mer (€ par nuit)</label>
             <input type="number" id="tarif-vue-mer" min="0" step="0.5">
           </div>
+          <div>
+            <label for="tarif-taxe-sejour">
+              Taxe de séjour (€ par adulte et par nuit)
+            </label>
+            <input type="number" id="tarif-taxe-sejour" min="0" step="0.01">
+          </div>
         </div>
 
         <label class="titre-groupe">Réductions sur la pension complète (€ par nuit)</label>
@@ -433,6 +439,11 @@
           complète et ne descendent jamais sous zéro&nbsp;— un bébé facturé 0
           reste à 0. Les repas hors pension sont ceux qu'une personne prend
           sans que son régime les comprenne&nbsp;; en gîte, ils le sont tous.
+          La <strong>taxe de séjour</strong>, elle, ne suit aucune de ces
+          règles&nbsp;: elle s'ajoute par adulte et par nuit, gîte compris,
+          sans remise, et paraît en ligne à part sur la facture. Les mineurs
+          en sont exonérés&nbsp;— c'est la borne «&nbsp;jeune&nbsp;» de
+          l'onglet Séjour qui dit où s'arrête la minorité.
         </p>
       </fieldset>
 

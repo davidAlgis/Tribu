@@ -1251,6 +1251,7 @@ const choixJour = document.getElementById("repas-jour");
 const zoneJours = document.getElementById("jours-weekend");
 const messageTarifs = document.getElementById("message-tarifs");
 const champVueMer = document.getElementById("tarif-vue-mer");
+const champTaxe = document.getElementById("tarif-taxe-sejour");
 
 // « Enfant » ne dit pas de quel age. Les bornes voyagent avec la grille :
 // l'en-tete les montre, et personne n'a a se souvenir de ce que le mot
@@ -1439,6 +1440,8 @@ function dessinerGrilleTarifs() {
 function dessinerAnnexes() {
   const vueMer = annexePosee("vue_mer", "");
   champVueMer.value = String(Number(vueMer ? vueMer.montant : 0));
+  const taxe = annexePosee("taxe_sejour", "");
+  champTaxe.value = String(Number(taxe ? taxe.montant : 0));
 
   zoneReductions.textContent = "";
   for (const [cle, libelle] of REDUCTIONS) {
@@ -1656,6 +1659,7 @@ function lireGrilleTarifs() {
 function lireAnnexes() {
   const lignes = [
     { cle: "vue_mer", tranche: "", montant: Number(champVueMer.value) || 0 },
+    { cle: "taxe_sejour", tranche: "", montant: Number(champTaxe.value) || 0 },
   ];
   for (const champ of document.querySelectorAll(
     "#grille-reductions input[data-cle], #grille-repas input[data-cle]"

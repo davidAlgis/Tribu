@@ -2938,6 +2938,14 @@ grant execute on function public.admin_presences_aligner(text, date) to anon;
 --  partage entre ceux qui y passent la nuit. D'ou la tranche « entier »,
 --  qui n'est pas un age : c'est le gite lui-meme.
 --
+--  LA TAXE DE SEJOUR N'EST PAS UN PRIX
+--
+--  Elle se paye par adulte et par nuit, quel que soit le couchage, et
+--  elle ne se negocie pas : aucune remise ne s'y applique, et elle ne se
+--  partage pas entre les occupants d'un gite -- c'est la personne qui la
+--  doit, pas le lit. Elle vit donc dans `tarifs_annexes` et ressort en
+--  LIGNE A PART sur la facture, comme sur une note d'hotel.
+--
 --  LE PRIX DE BASE EST CELUI DE LA PENSION COMPLETE
 --
 --  Les autres regimes s'en deduisent par une REDUCTION EN EUROS, rangee
@@ -3108,7 +3116,7 @@ set search_path = private, pg_temp as $fn$
 declare
   tranches constant text[] := array['adulte', 'jeune', 'enfant', 'bebe', 'entier'];
   cles     constant text[] := array[
-    'vue_mer',
+    'vue_mer', 'taxe_sejour',
     'demi_pension_soir', 'demi_pension_midi', 'nuit_petit_dejeuner', 'nuit_seule',
     'petit_dejeuner', 'dejeuner', 'diner'
   ];

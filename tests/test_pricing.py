@@ -390,3 +390,86 @@ def test_une_exception_a_zero_se_signale_avec_son_jour():
     f = facture(nuit("a1", DIMANCHE, "gite", GITE), g)
     assert f"Diner hors pension - adulte ({DIMANCHE})" in f.tarifs_manquants
 
+# --- La taxe de séjour ---------------------------------------------------
+#
+# Par adulte et par nuit, quel que soit le lit. Elle ne suit aucune des
+# règles qui valent pour les prix, et c'est tout l'intérêt de la sortir
+# en ligne à part.
+
+
+def taxe(montant):
+    return ANNEXES + [{"cle": "taxe_sejour", "tranche": "", "montant": montant}]
+
+
+def taxes(f, qui=None):
+    return [
+        l.prix
+        for l in f.lignes
+        if l.libelle == "Taxe de sejour" and (qui is None or l.personne_id == qui)
+    ]
+
+
+def test_un_adulte_la_paye_a_chaque_nuit():
+    f = facture(
+        nuit("a1", SAMEDI) + nuit("a1", DIMANCHE), grille(annexes=taxe(0.88))
+    )
+    assert taxes(f, "a1") == [0.88, 0.88]
+
+
+def test_un_mineur_en_est_exonere():
+    """« jeune », « enfant », « bébé » : aucun ne la doit."""
+    f = facture(
+        nuit("j1", DIMANCHE) + nuit("b1", DIMANCHE), grille(annexes=taxe(0.88))
+    )
+    assert taxes(f) == []
+
+
+def test_elle_se_paye_aussi_en_gite():
+    """C'est la personne qui la doit, pas le couchage."""
+    g = grille(annexes=taxe(0.88), couchages=[couchage("a1", DIMANCHE)])
+    f = facture(nuit("a1", DIMANCHE, "gite", GITE), g)
+    assert taxes(f, "a1") == [0.88]
+
+
+def test_elle_ne_se_partage_pas_entre_les_occupants_d_un_gite():
+    """Le gîte se partage ; la taxe non — chacun paye la sienne, entière."""
+    presences = nuit("a1", DIMANCHE, "gite", GITE) + nuit("a2", DIMANCHE, "gite", GITE)
+    g = grille(
+        annexes=taxe(0.88),
+        couchages=[couchage("a1", DIMANCHE), couchage("a2", DIMANCHE)],
+    )
+    f = facture(presences, g)
+    assert taxes(f, "a1") == [0.88]
+    assert taxes(f, "a2") == [0.88]
+
+
+def test_elle_echappe_a_la_remise():
+    """Une taxe ne se négocie pas : les 10 % du couchage ne l'entament
+    pas."""
+    tarifs = [dict(t) for t in TARIFS]
+    tarifs[0]["remise"] = 50
+    f = facture(nuit("a1", DIMANCHE), grille(tarifs=tarifs, annexes=taxe(0.88)))
+    assert taxes(f, "a1") == [0.88]
+
+
+def test_elle_ne_depend_pas_du_regime():
+    """On la doit en demi-pension comme en pension complète."""
+    f = facture(
+        nuit("a1", DIMANCHE, dej_lendemain=False), grille(annexes=taxe(0.88))
+    )
+    assert taxes(f, "a1") == [0.88]
+
+
+def test_une_taxe_a_zero_ne_se_signale_pas():
+    """Beaucoup de communes n'en lèvent aucune : zéro est une réponse,
+    pas un oubli."""
+    f = facture(nuit("a1", DIMANCHE), grille(annexes=taxe(0)))
+    assert taxes(f) == []
+    assert not any("taxe" in m for m in f.tarifs_manquants)
+
+
+def test_elle_s_ajoute_au_total():
+    sans = facture(nuit("a1", DIMANCHE), grille())
+    avec = facture(nuit("a1", DIMANCHE), grille(annexes=taxe(0.88)))
+    assert round(avec.total - sans.total, 2) == 0.88
+
