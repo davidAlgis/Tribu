@@ -762,3 +762,10 @@ async function montrerCouchage() {
     blocCouchage.hidden = true;
   }
 }
+
+// Le panneau est PLIE au depart, et on le relit a chaque ouverture : entre
+// deux, la grille du dessus a pu changer, et un plan qui montrerait encore
+// la nuit d'avant serait pire que pas de plan du tout.
+blocCouchage.addEventListener("toggle", () => {
+  if (blocCouchage.open) montrerCouchage();
+});

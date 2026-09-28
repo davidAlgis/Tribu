@@ -101,8 +101,19 @@
          on dort sur place, et seulement ensuite OU. L'ordre n'est pas un
          gout de mise en page -- une personne ne parait dans le plan d'une
          nuit que si elle a declare y dormir. -->
-    <fieldset id="bloc-couchage" hidden>
-      <legend>Qui dort où <span id="compteur-couchages" class="discret-inline"></span></legend>
+    <!--
+      PLIÉ PAR DÉFAUT. Ce qu'on vient faire ici, c'est dire quelles nuits
+      on dort sur place ; savoir avec qui vient après, et pas pour tout le
+      monde. Un panneau de rectangles déplié sous la grille donnait à la
+      page un air de tableau de bord alors qu'elle pose une question
+      simple.
+
+      `<details>` plutôt qu'un bouton et une classe : le pli est natif, il
+      marche sans script, et le lecteur d'écran l'annonce sans qu'on ait à
+      le lui dire.
+    -->
+    <details id="bloc-couchage" class="panneau-pliable" hidden>
+      <summary>Qui dort où <span id="compteur-couchages" class="discret-inline"></span></summary>
 
       <div class="nuits" id="choix-nuit" role="group" aria-label="Nuit à organiser"></div>
 
@@ -124,7 +135,7 @@
         est saisi, <kbd>Suppr</kbd> le ressort de sa chambre et
         <kbd>Échap</kbd> le repose où il était.
       </p>
-    </fieldset>
+    </details>
 
     <div class="actions">
       <button type="button" id="enregistrer">Enregistrer</button>

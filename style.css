@@ -132,6 +132,27 @@ fieldset {
 }
 legend { font-weight: 600; padding: 0 8px; }
 
+/* Un panneau qui se plie. Meme boite que `fieldset`, et son resume tient
+   lieu de legende -- a ceci pres qu'il se clique, ce que le curseur et le
+   triangle natif disent tous les deux. */
+details.panneau-pliable {
+  background: var(--carte);
+  border: 1px solid var(--trait);
+  border-radius: 10px;
+  padding: 14px 20px;
+  margin: 0 0 20px;
+}
+details.panneau-pliable > summary {
+  font-weight: 600;
+  cursor: pointer;
+  /* Le pointille du focus suit le resume, pas la boite entiere. */
+  border-radius: 6px;
+}
+details.panneau-pliable > summary:hover { color: var(--accent); }
+/* Une fois ouvert, le resume respire comme une legende : sans cela le
+   premier element du panneau lui colle dessous. */
+details.panneau-pliable[open] > summary { margin-bottom: 14px; }
+
 label { display: block; font-size: 0.9rem; color: var(--doux); margin-bottom: 4px; }
 
 input[type="text"], input[type="date"], input[type="number"], select {
