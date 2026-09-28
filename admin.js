@@ -732,7 +732,7 @@ interrupteur.addEventListener("change", async () => {
 });
 
 
-// ----------------------------------------------------------- a table
+// ------------------------------------------ preferences alimentaires
 //
 // Quatre cases par personne. La famille les remplit elle-meme sur
 // `regimes.html` ; ici l'organisateur remplit pour ceux qui n'ouvriront

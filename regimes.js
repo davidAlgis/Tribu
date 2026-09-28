@@ -1,6 +1,6 @@
 "use strict";
 
-// Ce que chacun mange et boit.
+// Les preferences alimentaires : ce que chacun mange et boit.
 //
 // Meme modele d'identite et de droits que les autres pages familiales :
 // code famille, prenom, et l'on repond pour les personnes qu'on gere.

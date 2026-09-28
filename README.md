@@ -24,7 +24,8 @@ Quatre pages pour la famille, une pour toi :
 | [`admin.html`](admin.html) | toi | dates du séjour, participants, régimes alimentaires, logements et plan de couchage, tarifs, facture, week-ends, résultat de la carte, retour en arrière |
 
 Les pages familiales portent le même menu en tête — **Le lieu**, **La
-date**, **Les présences**, **À table** — dans l'ordre où les décisions se
+date**, **Les présences**, **Préférences alimentaires** — dans l'ordre où
+les décisions se
 prennent. Celle qu'on regarde y est remplie.
 
 `admin.html` n'y figure pas : elle ne s'ouvre pas avec le code famille, et
