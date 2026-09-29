@@ -1938,7 +1938,6 @@ grant execute on function public.admin_sejour_ages(text, integer, integer, integ
 
 grant execute on function public.admin_sejour(text)                    to anon;
 grant execute on function public.admin_sejour_dates(text, date, date)  to anon;
-grant execute on function public.admin_saisie_ouvrir(text, boolean)    to anon;
 
 grant execute on function public.admin_lister(text)                                         to anon;
 grant execute on function public.admin_ajouter(text, text, text, uuid, uuid, boolean, text, date) to anon;

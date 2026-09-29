@@ -107,6 +107,30 @@ def test_chaque_fonction_publique_est_appelable():
     assert sorted(posees - ouvertes) == [], "fonctions publiques sans `grant execute`"
 
 
+def test_aucun_grant_ne_vise_une_fonction_absente():
+    """Le miroir du test precedent, et il a coute un collage.
+
+    `grant execute on function f(...)` sur une fonction qui n'existe plus
+    ne s'ignore pas : Postgres refuse, et le script s'arrete LA -- a
+    moitie pose, avec tout ce qui suit non applique. Trois fonctions
+    avaient ete remplacees par une seule ; deux `grant` avaient suivi, le
+    troisieme etait reste.
+
+    Le test precedent ne pouvait pas l'attraper : il cherche les
+    fonctions sans grant, pas les grants sans fonction.
+    """
+    posees = set(
+        re.findall(r"^create (?:or replace )?function\s+public\.(\w+)\(", SCHEMA, re.I | re.M)
+    )
+    ouvertes = set(
+        re.findall(r"^grant execute on function\s+public\.(\w+)\(", SCHEMA, re.I | re.M)
+    )
+    assert sorted(ouvertes - posees) == [], (
+        "`grant execute` sur des fonctions que le script ne pose pas — "
+        "Postgres refusera et s'arretera la"
+    )
+
+
 # --- Recoller le script ne doit rien effacer -----------------------------
 #
 # Le fichier se recolle EN ENTIER a chaque changement : c'est la seule
