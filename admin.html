@@ -582,6 +582,35 @@
       <div id="alerte-hotel"></div>
       <p id="message-hotel" role="status" aria-live="polite"></p>
 
+      <!-- Les trois lignes qu'un contrat d'hôtel porte en tête. -->
+      <p id="hotel-entete" class="fil"></p>
+
+      <details class="panneau-pliable" id="panneau-detail" open>
+        <summary>Le détail du séjour <span id="compteur-hotel-detail" class="discret-inline"></span></summary>
+
+        <div id="hotel-detail"></div>
+
+        <p class="note">
+          Le même argent que l'onglet Facture, regroupé
+          <strong>par prestation</strong> au lieu de par personne&nbsp;: une
+          ligne par régime, par couchage, par période et par tranche
+          d'âge&nbsp;— «&nbsp;Pension complète — chambre de 2 — week-end —
+          adultes&nbsp;». C'est la forme d'un contrat d'hôtel, et les deux
+          documents se posent côte à côte. Un test exige que les deux façons
+          de compter tombent sur le même total&nbsp;: si elles divergent,
+          c'est celle qu'on envoie à l'hôtel qui ferait foi.
+        </p>
+
+        <p class="note">
+          Le <strong>prix unitaire</strong> est le prix brut&nbsp;; la remise
+          se lit à côté, comme sur le contrat, pour qu'une ligne se vérifie
+          sans refaire le calcul. Une nuit de gîte compte pour une, quel que
+          soit le nombre d'occupants&nbsp;: c'est le gîte qu'on loue. Un
+          repas dont le prix change un jour donné fait sa propre ligne, avec
+          la date.
+        </p>
+      </details>
+
       <details class="panneau-pliable" id="panneau-couchages" open>
         <summary>Les couchages, nuit par nuit <span id="compteur-hotel-nuits" class="discret-inline"></span></summary>
 

@@ -1869,6 +1869,15 @@ function euros(valeur) {
 
 // Une case a zero se marque d'un tiret : dans un tableau de seize
 // colonnes, « 0,00 € » repete partout noie les vrais montants.
+// Une cellule de texte. `celluleEuros` en est la variante qui met les
+// zeros en tiret ; celle-ci sert aux quantites et aux mentions.
+function cellule(texte, classe) {
+  const td = document.createElement("td");
+  td.textContent = texte;
+  if (classe) td.className = classe;
+  return td;
+}
+
 function celluleEuros(valeur, classe) {
   const td = document.createElement("td");
   td.textContent = valeur ? euros(valeur) : "—";
@@ -2167,6 +2176,9 @@ const PREFERENCES_HOTEL = [
   ["non_buveur", "Non buveurs"],
 ];
 
+const zoneHotelDetail = document.getElementById("hotel-detail");
+const enteteHotel = document.getElementById("hotel-entete");
+const compteurHotelDetail = document.getElementById("compteur-hotel-detail");
 const zoneHotelCouchages = document.getElementById("hotel-couchages");
 const zoneHotelCouverts = document.getElementById("hotel-couverts");
 const alerteHotel = document.getElementById("alerte-hotel");
@@ -2287,6 +2299,94 @@ function tableauHotel(colonnes, lignes) {
   return cadre;
 }
 
+// « 51 personnes du 24/10/2026 au 28/10/2026. Première prestation :
+// déjeuner du 24. Dernière : déjeuner du 28. » Les trois lignes qu'un
+// contrat porte en tete, et qu'on recopie sinon a la main.
+function enteteDuSejour(faits, couverts) {
+  const gens = new Set();
+  let debut = null;
+  let fin = null;
+  for (const presence of faits.presences || []) {
+    gens.add(presence.participant_id);
+    if (!debut || presence.jour < debut) debut = presence.jour;
+    if (!fin || presence.jour > fin) fin = presence.jour;
+  }
+  if (!gens.size) return "";
+
+  const jour = (iso) => new Date(`${iso}T12:00:00`).toLocaleDateString("fr-FR");
+  const dire = (l) => `${NOMS_REPAS[l.repas].toLowerCase()} du ${quantieme(l.jour)}`;
+  const bornes = couverts.length
+    ? ` Première prestation : ${dire(couverts[0])}. ` +
+      `Dernière : ${dire(couverts[couverts.length - 1])}.`
+    : "";
+  return `${gens.size} personnes, du ${jour(debut)} au ${jour(fin)}.${bornes}`;
+}
+
+function dessinerDetail(prestations) {
+  compteurHotelDetail.textContent = prestations.length
+    ? `${prestations.length} ligne(s) — ${euros(
+        Math.round(prestations.reduce((t, l) => t + l.montant, 0) * 100) / 100
+      )}`
+    : "";
+
+  if (!prestations.length) {
+    rienDire(zoneHotelDetail, "Rien à facturer : ni nuit, ni repas déclarés.");
+    return;
+  }
+
+  const cadre = document.createElement("div");
+  cadre.className = "tableau-large";
+  const table = document.createElement("table");
+
+  const tete = document.createElement("thead");
+  const rangee = document.createElement("tr");
+  for (const titre of ["Prestation", "Quantité", "Prix unitaire", "Remise", "Montant"]) {
+    const th = document.createElement("th");
+    th.textContent = titre;
+    rangee.appendChild(th);
+  }
+  tete.appendChild(rangee);
+  table.appendChild(tete);
+
+  const corps = document.createElement("tbody");
+  for (const ligne of prestations) {
+    const tr = document.createElement("tr");
+    const nom = document.createElement("th");
+    nom.scope = "row";
+    nom.textContent = ligne.libelle;
+    tr.appendChild(nom);
+    tr.appendChild(cellule(String(ligne.quantite)));
+    tr.appendChild(celluleEuros(ligne.unitaire));
+    tr.appendChild(cellule(ligne.remise ? `−${ligne.remise}\u00a0%` : "—",
+                           ligne.remise ? "" : "rien"));
+    tr.appendChild(celluleEuros(ligne.montant, "total-personne"));
+    corps.appendChild(tr);
+  }
+  table.appendChild(corps);
+
+  const pied = document.createElement("tfoot");
+  const totaux = document.createElement("tr");
+  const titre = document.createElement("th");
+  titre.scope = "row";
+  titre.textContent = "TOTAL";
+  totaux.appendChild(titre);
+  totaux.appendChild(cellule(""));
+  totaux.appendChild(cellule(""));
+  totaux.appendChild(cellule(""));
+  totaux.appendChild(
+    celluleEuros(
+      Math.round(prestations.reduce((t, l) => t + l.montant, 0) * 100) / 100,
+      "total-personne"
+    )
+  );
+  pied.appendChild(totaux);
+  table.appendChild(pied);
+
+  cadre.appendChild(table);
+  zoneHotelDetail.textContent = "";
+  zoneHotelDetail.appendChild(cadre);
+}
+
 function dessinerHotel(faits) {
   const gens = new Map((etat.participants || []).map((p) => [p.id, p]));
   const logements = (tarifs.logements || []).slice();
@@ -2343,11 +2443,17 @@ function dessinerHotel(faits) {
     );
   }
 
+  // --- le detail du sejour, et l'en-tete
+  const calcul = FACTURE.calculer(faits, tarifs);
+  dessinerDetail(calcul.prestations || []);
+
   // --- les couverts
   const couverts = couvertsParRepas(faits, gens);
   compteurHotelRepas.textContent = couverts.length
     ? `${couverts.reduce((t, l) => t + l.total, 0)} couvert(s)`
     : "";
+  enteteHotel.textContent = enteteDuSejour(faits, couverts);
+
   if (!couverts.length) {
     rienDire(zoneHotelCouverts, "Aucun repas déclaré.");
   } else {

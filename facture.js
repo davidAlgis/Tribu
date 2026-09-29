@@ -32,6 +32,27 @@ window.FACTURE = (function () {
 
   const REPAS = ["petit_dejeuner", "dejeuner", "diner"];
 
+  // Ce que l'hotel ecrit sur son contrat. Les memes mots que lui, pour
+  // qu'une ligne se retrouve d'un document a l'autre sans traduction.
+  const NOMS_REGIME = {
+    [PENSION_COMPLETE]: "Pension complète",
+    [DEMI_PENSION_SOIR]: "Demi-pension soir",
+    [DEMI_PENSION_MIDI]: "Demi-pension déjeuner",
+    [NUIT_PETIT_DEJEUNER]: "Nuit + petit-déjeuner",
+    [NUIT_SEULE]: "Nuit seule",
+  };
+  const NOMS_REPAS = {
+    petit_dejeuner: "Petit-déjeuner",
+    dejeuner: "Déjeuner",
+    diner: "Dîner",
+  };
+  const NOMS_TRANCHE = {
+    bebe: "bébés",
+    enfant: "enfants",
+    jeune: "jeunes",
+    adulte: "adultes",
+  };
+
   // Les repas qu'un regime comprend, en (decalage de jour, repas). Le
   // meme tableau que `_repas_absorbes` dans `engine/rules.py`.
   const ABSORBES = {
@@ -161,10 +182,16 @@ window.FACTURE = (function () {
     return grille;
   }
 
+  // La base ecrit « gite » sans accent -- c'est une clef, pas un mot. Ces
+  // libelles-la partent sur un document qu'on envoie a l'hotel : ils
+  // s'ecrivent en francais.
+  const NOMS_COUCHAGE = { chambre: "chambre", gite: "gîte" };
+
   function nommer(grille, logementId) {
     const l = grille.logements.get(logementId);
     if (!l) return String(logementId);
-    return `${l.categorie}${l.vue_mer ? " vue mer" : ""} de ${l.capacite}`;
+    const quoi = NOMS_COUCHAGE[l.categorie] || l.categorie;
+    return `${quoi}${l.vue_mer ? " vue mer" : ""} de ${l.capacite}`;
   }
 
   // Un prix de week-end a zero veut dire « comme la semaine » : beaucoup
@@ -177,6 +204,18 @@ window.FACTURE = (function () {
       montant: weekend && ligne.weekend > 0 ? ligne.weekend : ligne.semaine,
       remise: ligne.remise,
     };
+  }
+
+  function enWeekend(grille, jour) {
+    return grille.joursWeekend.has(jourDeSemaine(jour));
+  }
+
+  // « 24 oct. » : de quoi nommer un jour dans un libelle sans l'allonger.
+  function afficherJourCourt(iso) {
+    return new Date(`${iso}T12:00:00`).toLocaleDateString("fr-FR", {
+      day: "numeric",
+      month: "short",
+    });
   }
 
   function remiser(prix, remise) {
@@ -225,6 +264,24 @@ window.FACTURE = (function () {
     const manquants = new Set();
     const sansPlace = [];
 
+    // LE MEME ARGENT, REGROUPE PAR PRESTATION. C'est ce qu'un hotel met
+    // sur son contrat : une ligne par produit, sa quantite, son prix
+    // unitaire, sa remise. La facture par personne et ce detail-ci
+    // comptent exactement la meme chose de deux facons -- un test exige
+    // qu'ils tombent sur le meme total.
+    const parPrestation = new Map();
+    const prester = (cle, modele) => {
+      if (!parPrestation.has(cle)) {
+        parPrestation.set(cle, {
+          ...modele,
+          quantite: 0,
+          montant: 0,
+          jours: new Set(),
+        });
+      }
+      return parPrestation.get(cle);
+    };
+
     // --- les chambres : par personne, selon l'age
     for (const nuitee of nuitees) {
       pour(nuitee.personne_id).nuits += 1;
@@ -258,6 +315,29 @@ window.FACTURE = (function () {
       ligne.hebergement = arrondir(ligne.hebergement + du);
       ligne.parNuit[nuitee.jour] = arrondir((ligne.parNuit[nuitee.jour] || 0) + du);
       nuitsVues.add(nuitee.jour);
+
+      // Une ligne de contrat par regime, par couchage, par periode et par
+      // tranche : « Pension complète — chambre de 2 — week-end — adultes ».
+      // Le prix unitaire est le prix BRUT, et la remise se dit a cote --
+      // c'est ainsi que l'hotel l'ecrit, et cela permet de verifier la
+      // ligne sans refaire le calcul.
+      const periode = enWeekend(grille, nuitee.jour) ? "week-end" : "semaine";
+      const p = prester(
+        `1nuit|${nuitee.regime}|${logementId}|${periode}|${personne.categorie_age}|${nuitee.vue_mer}`,
+        {
+          ordre: 1,
+          libelle:
+            `${NOMS_REGIME[nuitee.regime]} — ` +
+            `${logementId ? nommer(grille, logementId) : "chambre"} — ` +
+            `${periode} — ${NOMS_TRANCHE[personne.categorie_age] || "?"}` +
+            (nuitee.vue_mer ? " — vue mer" : ""),
+          unitaire: arrondir(prix),
+          remise,
+        }
+      );
+      p.quantite += 1;
+      p.montant = arrondir(p.montant + du);
+      p.jours.add(nuitee.jour);
     }
 
     // --- les gites : le gite entier, partage entre ceux qui y dorment
@@ -284,6 +364,21 @@ window.FACTURE = (function () {
         manquants.add(`${nommer(grille, logementId)} — le gîte entier`);
       }
       const total = trouve ? remiser(trouve.montant, trouve.remise) : 0;
+
+      // Le gite se loue entier : la ligne du contrat compte des NUITS DE
+      // GITE, pas des personnes. Les parts qu'on repartit ensuite sont
+      // une affaire interne a la famille.
+      const periode = enWeekend(grille, jour) ? "week-end" : "semaine";
+      const g = prester(`2gite|${logementId}|${periode}`, {
+        ordre: 2,
+        libelle: `Nuitée ${nommer(grille, logementId)} — ${periode}`,
+        unitaire: trouve ? arrondir(trouve.montant) : 0,
+        remise: trouve ? trouve.remise : 0,
+      });
+      g.quantite += 1;
+      g.montant = arrondir(g.montant + total);
+      g.jours.add(jour);
+
       occupants.sort((a, b) => (a.personne_id < b.personne_id ? -1 : 1));
       const morceaux = parts(total, occupants.length);
       occupants.forEach((nuitee, rang) => {
@@ -303,6 +398,15 @@ window.FACTURE = (function () {
         const personne = personnes.get(nuitee.personne_id) || {};
         if (personne.categorie_age !== "adulte") continue;
         pour(nuitee.personne_id).taxe = arrondir(pour(nuitee.personne_id).taxe + taxe);
+        const t = prester("3taxe", {
+          ordre: 3,
+          libelle: "Taxe de séjour — adultes",
+          unitaire: taxe,
+          remise: 0,
+        });
+        t.quantite += 1;
+        t.montant = arrondir(t.montant + taxe);
+        t.jours.add(nuitee.jour);
       }
     }
 
@@ -324,6 +428,24 @@ window.FACTURE = (function () {
       ligne.repas = arrondir(ligne.repas + (prix || 0));
       ligne.parRepas[cle] = arrondir((ligne.parRepas[cle] || 0) + (prix || 0));
       repasVus.add(cle);
+
+      // Un couvert est un couvert : on groupe par repas, par tranche et
+      // PAR PRIX -- le diner de gala du samedi fait ainsi sa propre ligne,
+      // comme sur le contrat de l'hotel.
+      const r = prester(
+        `4repas|${repas.repas}|${personne.categorie_age}|${prix || 0}`,
+        {
+          ordre: 4,
+          libelle:
+            `${NOMS_REPAS[repas.repas]} — ` +
+            `${NOMS_TRANCHE[personne.categorie_age] || "?"}`,
+          unitaire: arrondir(prix || 0),
+          remise: 0,
+        }
+      );
+      r.quantite += 1;
+      r.montant = arrondir(r.montant + (prix || 0));
+      r.jours.add(repas.jour);
     }
 
     const lignes = [...compte.values()].map((l) => ({
@@ -350,8 +472,31 @@ window.FACTURE = (function () {
       })
       .sort((a, b) => a.jour.localeCompare(b.jour) || RANG[a.repas] - RANG[b.repas]);
 
+    // Deux lignes de meme nature et de prix differents ne se distinguent
+    // que par leurs jours : on les nomme alors. Sinon le libelle reste
+    // court -- « Dîner — adultes » se lit mieux que la meme chose suivie
+    // de cinq dates.
+    const parNature = new Map();
+    for (const p of parPrestation.values()) {
+      parNature.set(p.libelle, (parNature.get(p.libelle) || 0) + 1);
+    }
+    const detail = [...parPrestation.values()]
+      .map((p) => ({
+        libelle:
+          parNature.get(p.libelle) > 1
+            ? `${p.libelle} — ${[...p.jours].sort().map(afficherJourCourt).join(", ")}`
+            : p.libelle,
+        quantite: p.quantite,
+        unitaire: p.unitaire,
+        remise: p.remise,
+        montant: p.montant,
+        ordre: p.ordre,
+      }))
+      .sort((a, b) => a.ordre - b.ordre || a.libelle.localeCompare(b.libelle, "fr"));
+
     return {
       lignes,
+      prestations: detail,
       nuits: [...nuitsVues].sort(),
       repasColonnes,
       total: arrondir(lignes.reduce((somme, l) => somme + l.total, 0)),

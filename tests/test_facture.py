@@ -168,10 +168,18 @@ def colonnes_js(chemin: Path) -> dict:
         par, total: resultat.total,
         colonnesNuits: resultat.nuits,
         colonnesRepas: resultat.repasColonnes.map((c) => c.cle),
+        prestations: resultat.prestations,
       }}));
     """
+    # `encoding` explicite : sans lui, Python decode la sortie de node avec
+    # l'encodage de la console -- cp1252 sous Windows -- et les accents des
+    # libelles reviennent en mojibake. Les nombres passaient, les mots non.
     sortie = subprocess.run(
-        ["node", "-e", script], capture_output=True, text=True, check=True
+        ["node", "-e", script],
+        capture_output=True,
+        text=True,
+        encoding="utf-8",
+        check=True,
     )
     return json.loads(sortie.stdout)
 
@@ -284,4 +292,49 @@ def test_chaque_colonne_sert_a_quelqu_un(jeux):
         vues_repas |= set(valeurs["parRepas"])
     assert sorted(js["colonnesNuits"]) == sorted(vues_nuits)
     assert sorted(js["colonnesRepas"]) == sorted(vues_repas)
+
+@JEUX
+def test_le_detail_du_sejour_totalise_la_facture(jeux):
+    """L'onglet Hôtel regroupe le même argent par prestation — une ligne
+    par régime, par couchage, par repas — pour qu'on puisse le poser à
+    côté du contrat de l'hôtel.
+
+    Deux façons de compter la même chose : par personne, par prestation.
+    Si elles ne tombent pas sur le même total, l'une des deux oublie
+    quelque chose — et c'est celle qu'on envoie à l'hôtel qui ferait foi.
+    """
+    _, js = jeux
+    detail = round(sum(l["montant"] for l in js["prestations"]), 2)
+    assert detail == round(js["total"], 2)
+
+
+@JEUX
+def test_chaque_prestation_se_verifie_a_la_main(jeux):
+    """Un hôtel relit une ligne : quantité fois prix unitaire, moins la
+    remise. Si le montant ne s'en déduit pas, la ligne est indéfendable."""
+    _, js = jeux
+    for ligne in js["prestations"]:
+        attendu = ligne["quantite"] * ligne["unitaire"] * (1 - ligne["remise"] / 100)
+        # Chaque nuitée est arrondie au centime avant d'être additionnée :
+        # l'écart ne peut dépasser un centime par unité.
+        assert abs(attendu - ligne["montant"]) <= 0.01 * ligne["quantite"], ligne
+
+
+@JEUX
+def test_les_regimes_sont_nommes_comme_l_hotel_les_nomme(jeux):
+    """« Pension complète », « Demi-pension soir », « Demi-pension
+    déjeuner » : les mots du contrat, pour qu'une ligne se retrouve d'un
+    document à l'autre sans traduction."""
+    _, js = jeux
+    nuits = [l for l in js["prestations"] if l["ordre"] == 1]
+    assert nuits, "aucune nuit en chambre dans ce jeu"
+    connus = (
+        "Pension complète",
+        "Demi-pension soir",
+        "Demi-pension déjeuner",
+        "Nuit + petit-déjeuner",
+        "Nuit seule",
+    )
+    for ligne in nuits:
+        assert ligne["libelle"].startswith(connus), ligne["libelle"]
 

@@ -717,7 +717,12 @@ l'organisateur, les pastilles « pour qui remplis-tu », le plateau de
 couchage, la facture. Sans date de naissance, on passe en fin de fratrie :
 ne pas savoir n'est pas être jeune.
 
-L'onglet **Hôtel** met en forme ce qu'on lui envoie : combien d'exemplaires
+L'onglet **Hôtel** met en forme ce qu'on lui envoie. Un **détail du séjour**
+d'abord, sur le modèle d'un contrat de réservation : une ligne par
+prestation — « Pension complète — chambre de 2 — week-end — adultes » —
+avec sa quantité, son prix unitaire, sa remise et son montant. C'est le même
+argent que l'onglet Facture, regroupé autrement ; un test exige que les deux
+façons de compter tombent sur le même total. Puis combien d'exemplaires
 de chaque type de couchage sont occupés nuit par nuit, et combien de
 couverts à chaque repas — par tranche d'âge, avec le compte des végétariens,
 vegans, sans gluten et non buveurs attablés. **Aucun nom n'y figure** :
