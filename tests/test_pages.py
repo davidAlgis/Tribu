@@ -61,7 +61,11 @@ def test_chaque_getElementById_trouve_sa_cible(page, pages):
     première ligne qui touche l'élément, donc après une saisie."""
     html, js = pages[page]
     presents = identifiants(html)
-    demandes = set(re.findall(r'getElementById\("([^"]+)"\)', js))
+    # Un identifiant que le script POSE lui-même n'a pas à être dans la
+    # page : la bannière « cette page n'est pas à jour » est justement
+    # celle qu'une page périmée ne contient pas.
+    poses = set(re.findall(r'\.id = "([^"]+)"', js))
+    demandes = set(re.findall(r'getElementById\("([^"]+)"\)', js)) - poses
     assert demandes, f"{page} : aucun getElementById trouvé, le test ne sert à rien"
     assert sorted(demandes - presents) == [], f"{page} ne contient pas ces identifiants"
 

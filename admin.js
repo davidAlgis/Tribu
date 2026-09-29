@@ -12,6 +12,36 @@
 
 const { SUPABASE_URL, SUPABASE_ANON_KEY } = window.CONFIG;
 
+// LA PAGE ET CE SCRIPT SE METTENT EN CACHE SEPAREMENT.
+//
+// Un navigateur peut donc servir l'admin.html d'hier avec l'admin.js
+// d'aujourd'hui. Le script meurt alors a la premiere ligne qui touche un
+// element que l'ancienne page n'a pas -- « Cannot read properties of null
+// (reading 'addEventListener') » -- et il meurt EN SILENCE, au milieu,
+// laissant la moitie des boutons sans gestionnaire.
+//
+// Ce qu'on voit ensuite parle d'autre chose : la premiere fonction
+// appelee se plaint d'une constante que le fichier n'a jamais atteinte
+// (« can't access lexical declaration ... before initialization »). Le
+// message est vrai et n'aide personne.
+//
+// On attrape donc ce qui casse AVANT la fin du cablage -- apres, c'est un
+// vrai defaut, pas une histoire de cache -- et on dit quoi faire.
+let cablageTermine = false;
+
+window.addEventListener("error", () => {
+  if (cablageTermine || document.getElementById("page-perimee")) return;
+  const banniere = document.createElement("p");
+  banniere.id = "page-perimee";
+  banniere.className = "erreur";
+  banniere.textContent =
+    "Cette page n'est pas à jour : recharge-la en forçant le cache " +
+    "(Ctrl+Shift+R, ou Cmd+Shift+R). Sans cela, une partie des boutons " +
+    "ne répondra pas.";
+  const ou = document.querySelector("main");
+  if (ou) ou.prepend(banniere);
+});
+
 const AGES = { adulte: "adulte", jeune: "jeune", enfant: "enfant", bebe: "bébé" };
 
 // Les trois seuls rattachements possibles, et ce qu'ils impliquent.
@@ -3357,3 +3387,8 @@ document.getElementById("sejour-enregistrer").addEventListener("click", async ()
 
 // Les quatre verrous se tournent dans le panneau « Ce qui est ouvert a
 // la famille », plus haut dans cet onglet.
+
+// Derniere ligne du fichier : tout ce qui precede s'est cable sans
+// broncher. Ce qui cassera desormais est un vrai defaut, et la
+// banniere du cache n'a plus lieu d'etre.
+cablageTermine = true;
