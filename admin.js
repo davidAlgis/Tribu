@@ -1847,6 +1847,7 @@ document.getElementById("tarifs-enregistrer").addEventListener("click", async ()
 // viennent de la grille deja chargee pour l'onglet Tarifs -- celle qui
 // est ENREGISTREE, pas celle qu'on est en train de taper a cote.
 
+const zoneResume = document.getElementById("facture-resume");
 const zoneNuits = document.getElementById("facture-hebergement");
 const zoneRepasFacture = document.getElementById("facture-repas");
 const alerteFacture = document.getElementById("alerte-facture");
@@ -2016,6 +2017,32 @@ function dessinerFacture(calcul) {
       `${calcul.sansPlace.length} nuit(s) en gîte sans place attribuée : ces ` +
       "nuits ne sont facturées à personne tant que le plan de couchage n'est pas fini.";
     alerteFacture.appendChild(p);
+  }
+
+  // --- le recapitulatif, en tete : ce que chacun doit, en trois nombres
+  //
+  // LA TAXE EST DANS L'HEBERGEMENT. Quatre colonnes, et le total doit
+  // etre la somme des deux qui le precedent -- une ligne dont les
+  // nombres ne s'additionnent pas se relit trois fois. Le detail, lui,
+  // la montre a part, juste en dessous.
+  if (!calcul.lignes.length) {
+    rienDire(zoneResume, "Personne n'a encore déclaré de nuit ni de repas.");
+  } else {
+    zoneResume.textContent = "";
+    zoneResume.appendChild(
+      tableauFacture(
+        [
+          {
+            libelle: "Hébergement (taxe comprise)",
+            valeur: (l) => arrondi(l.hebergement + l.taxe),
+          },
+          { libelle: "Repas", valeur: (l) => l.repas },
+          { libelle: "Total", valeur: (l) => l.total, total: true },
+        ],
+        calcul.lignes,
+        gens
+      )
+    );
   }
 
   // --- les nuits
