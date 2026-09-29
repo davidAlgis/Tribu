@@ -951,6 +951,25 @@ kbd {
   border-color: var(--erreur);
 }
 
+/* ---------- La porte d'entree ---------- */
+/* Quatre choix, en cartes plutot qu'en liste de liens : on vient ici pour
+   choisir, et une carte se vise du pouce. Le titre dit ou l'on va, la
+   ligne du dessous ce qu'on y fera -- sans quoi « Le lieu » et « La date »
+   se ressemblent trop pour qu'on sache lequel ouvrir. */
+.choix { display: grid; gap: 12px; margin: 0 0 20px; }
+.carte-choix {
+  display: block;
+  background: var(--carte);
+  border: 1px solid var(--trait);
+  border-radius: 10px;
+  padding: 16px 18px;
+  text-decoration: none;
+  color: var(--texte);
+}
+.carte-choix:hover, .carte-choix:focus-visible { border-color: var(--accent); }
+.carte-choix strong { display: block; margin-bottom: 4px; }
+.carte-choix span { color: var(--doux); font-size: 0.93rem; }
+
 /* ---------- Carte des départements ---------- */
 .carte-cadre {
   background: var(--carte);

@@ -23,10 +23,15 @@ Quatre pages pour la famille, une pour toi :
 | [`regimes.html`](regimes.html) | la famille | ce que chacun mange et boit |
 | [`admin.html`](admin.html) | toi | dates du séjour, participants, régimes alimentaires, logements et plan de couchage, tarifs, facture, week-ends, résultat de la carte, retour en arrière |
 
-Les pages familiales portent le même menu en tête — **Le lieu**, **La
-date**, **Les présences**, **Préférences alimentaires** — dans l'ordre où
-les décisions se
-prennent. Celle qu'on regarde y est remplie.
+Le code se donne **une fois**, sur la page d'accueil : il est retenu sur
+l'appareil, et les quatre étapes le reprennent toutes seules — elles ne
+redemandent que le prénom, qui leur sert à savoir pour qui l'on répond.
+Entrer directement sur l'une d'elles marche aussi : elle demandera le code.
+
+Les pages familiales portent le même menu en tête — **Accueil**, **Le
+lieu**, **La date**, **Les présences**, **Préférences alimentaires** — dans
+l'ordre où les décisions se prennent. Celle qu'on regarde y est remplie.
+L'accueil, lui, ne porte pas ce menu : il **est** le menu.
 
 `admin.html` n'y figure pas : elle ne s'ouvre pas avec le code famille, et
 l'annoncer à toute la famille ne ferait qu'inviter à la pousser.

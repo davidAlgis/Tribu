@@ -1,0 +1,148 @@
+<!doctype html>
+<html lang="fr">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="robots" content="noindex">
+  <title>Tribu — les présences</title>
+  <link rel="stylesheet" href="./style.css">
+</head>
+<body>
+<main>
+  <nav class="menu" aria-label="Les étapes du séjour">
+    <a href="./index.html">Accueil</a>
+    <a href="./lieux.html">Le lieu</a>
+    <a href="./dates.html">La date</a>
+    <a href="./presences.html" aria-current="page">Les présences</a>
+    <a href="./regimes.html">Préférences alimentaires</a>
+  </nav>
+
+  <h1>Qui vient, et quelles nuits&nbsp;?</h1>
+
+  <!-- Reste affiché une fois le code accepté : c'est le signe que la page
+       a bougé, là où deux champs de texte au même endroit ne le disent
+       pas. -->
+  <p id="fil" class="fil" role="status" hidden>
+    <strong>✓ Code accepté.</strong>
+    <span id="fil-suite">Reste à dire qui tu es.</span>
+  </p>
+
+  <!-- ÉTAPE 1 — le code famille ------------------------------------ -->
+  <section id="etape-code">
+    <fieldset>
+      <legend>Étape 1 — code famille</legend>
+      <form id="form-code">
+        <label for="code">Code communiqué par l'organisateur</label>
+        <div class="ligne-champ">
+          <input type="text" id="code" required maxlength="40" autocomplete="off"
+                 autocapitalize="off" spellcheck="false" placeholder="ex. les abricots">
+          <button type="submit">Entrer</button>
+        </div>
+        <p class="note">
+          Majuscules, accents, espaces et tirets n'ont pas d'importance.
+          Le code est retenu sur cet appareil.
+        </p>
+        <p id="message-code" role="status" aria-live="polite"></p>
+      </form>
+    </fieldset>
+  </section>
+
+  <!-- ÉTAPE 2 — qui es-tu ? ---------------------------------------- -->
+  <section id="etape-prenom" hidden>
+    <fieldset class="panneau-saisie surgit">
+      <legend>Étape 2 — qui es-tu&nbsp;?</legend>
+      <label for="prenom">Commence à taper ton prénom</label>
+      <div class="auto">
+        <input type="text" id="prenom" autocomplete="off" spellcheck="false"
+               placeholder="Ton prénom..."
+               role="combobox" aria-expanded="false" aria-controls="suggestions">
+        <ul id="suggestions" role="listbox"></ul>
+      </div>
+      <p id="message-prenom" role="status" aria-live="polite"></p>
+    </fieldset>
+  </section>
+
+  <!-- ÉTAPE 3 — la saisie ------------------------------------------ -->
+  <section id="etape-saisie" hidden>
+    <fieldset>
+      <legend>Pour qui remplis-tu&nbsp;?</legend>
+      <div id="personnes" class="pastilles"></div>
+    </fieldset>
+
+    <fieldset>
+      <legend id="legende-jours">Séjour</legend>
+      <div class="defilement">
+        <table>
+          <thead>
+            <tr>
+              <th>Jour</th>
+              <th>La nuit…</th>
+              <th>Déjeuner</th>
+              <th>Dîner</th>
+            </tr>
+          </thead>
+          <tbody id="jours"></tbody>
+        </table>
+      </div>
+<!--       <p class="note">
+        La colonne «&nbsp;la nuit…&nbsp;» concerne <strong>la nuit qui suit</strong>
+        le jour indiqué. Les repas sont ceux pris <strong>ce jour-là</strong>.
+        Le petit-déjeuner ne se coche pas&nbsp;: il vient avec la nuit en
+        chambre, jamais avec le gîte. Une journée sans rien de coché veut
+        dire que tu n'es pas là.
+      </p> -->
+    </fieldset>
+
+    <!-- Le plan de couchage, sous la grille : on dit d'abord QUELLES NUITS
+         on dort sur place, et seulement ensuite OU. L'ordre n'est pas un
+         gout de mise en page -- une personne ne parait dans le plan d'une
+         nuit que si elle a declare y dormir. -->
+    <!--
+      PLIÉ PAR DÉFAUT. Ce qu'on vient faire ici, c'est dire quelles nuits
+      on dort sur place ; savoir avec qui vient après, et pas pour tout le
+      monde. Un panneau de rectangles déplié sous la grille donnait à la
+      page un air de tableau de bord alors qu'elle pose une question
+      simple.
+
+      `<details>` plutôt qu'un bouton et une classe : le pli est natif, il
+      marche sans script, et le lecteur d'écran l'annonce sans qu'on ait à
+      le lui dire.
+    -->
+    <details id="bloc-couchage" class="panneau-pliable" hidden>
+      <summary>Qui dort où <span id="compteur-couchages" class="discret-inline"></span></summary>
+
+      <div class="nuits" id="choix-nuit" role="group" aria-label="Nuit à organiser"></div>
+
+      <div id="plan"></div>
+
+      <p id="message-couchages" role="status" aria-live="polite"></p>
+
+      <p class="note">
+        Les noms <strong class="exemple-mien">cerclés de vert</strong> sont
+        ceux que tu peux déplacer.
+      </p>
+
+      <p class="note">
+        Glisse un nom d'un rectangle à l'autre. Sans souris&nbsp;: un clic sur
+        le nom le saisit, un clic sur le rectangle d'arrivée le pose.
+        <kbd>Ctrl</kbd>+clic en saisit plusieurs à la fois&nbsp;; sur ce qui
+        est saisi, <kbd>Suppr</kbd> le ressort de sa chambre et
+        <kbd>Échap</kbd> le repose où il était.
+      </p>
+    </details>
+
+    <div class="actions">
+      <button type="button" id="enregistrer">Enregistrer</button>
+      <button type="button" id="appliquer-tous" class="discret" hidden></button>
+      <button type="button" id="changer" class="discret">Changer de personne</button>
+    </div>
+    <p class="note" id="portee-saisie"></p>
+    <p id="message" role="status" aria-live="polite"></p>
+  </section>
+</main>
+
+<script src="./config.js"></script>
+<script src="./plan.js"></script>
+<script src="./app.js"></script>
+</body>
+</html>

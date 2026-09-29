@@ -23,16 +23,21 @@ RACINE = Path(__file__).resolve().parent.parent
 # Chaque page et le script qui la pilote. `config.js` et `carte.js` ne
 # touchent pas au DOM.
 PAGES = {
-    "index.html": "app.js",
+    "index.html": "accueil.js",
+    "presences.html": "app.js",
     "dates.html": "dates.js",
     "lieux.html": "lieux.js",
     "regimes.html": "regimes.js",
     "admin.html": "admin.js",
 }
 
+# La porte d'entrée : le code s'y donne, et l'on y choisit. Elle ne porte
+# pas le menu des autres — elle EST le menu.
+ACCUEIL = "index.html"
+
 # Les pages qui portent le menu commun. Une page ajoutée sans lui serait un
 # cul-de-sac, et les pages déjà là n'y mèneraient pas.
-FAMILIALES = ("index.html", "dates.html", "lieux.html", "regimes.html")
+FAMILIALES = ("dates.html", "lieux.html", "presences.html", "regimes.html")
 
 
 def identifiants(html: str) -> set[str]:
@@ -101,6 +106,22 @@ def test_les_pages_familiales_portent_le_menu(pages):
         assert 'class="menu"' in html, f"{page} n'a pas le menu principal"
         for cible in FAMILIALES:
             assert f"./{cible}" in html, f"{page} ne renvoie pas vers {cible}"
+        assert f"./{ACCUEIL}" in html, f"{page} ne revient pas à l'accueil"
+
+
+def test_l_accueil_mene_partout(pages):
+    """La porte d'entrée est le seul endroit où l'on donne le code : une
+    étape qu'elle n'annonce pas est une étape que personne n'ouvrira."""
+    html, _ = pages[ACCUEIL]
+    for cible in FAMILIALES:
+        assert f"./{cible}" in html, f"l'accueil ne mène pas à {cible}"
+
+
+def test_l_accueil_ne_porte_pas_le_menu_des_autres(pages):
+    """Un bandeau de liens au-dessus d'une liste des mêmes liens dirait
+    deux fois la même chose."""
+    html, _ = pages[ACCUEIL]
+    assert 'class="menu"' not in html
 
 
 def test_une_seule_page_est_marquee_courante(pages):

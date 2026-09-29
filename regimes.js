@@ -304,3 +304,10 @@ function montrer(id) {
       id === "etape-prenom" ? "Reste à dire qui tu es." : "";
   }
 }
+
+// Le code est deja connu de cet appareil -- il vient de la page
+// d'accueil, ou d'une autre etape : on saute la premiere etape, comme
+// partout ailleurs.
+if (champCode.value) {
+  document.getElementById("form-code").requestSubmit();
+}
