@@ -330,14 +330,16 @@ window.FACTURE = (function () {
       ...l,
       total: arrondir(l.hebergement + l.repas + l.taxe),
     }));
-    lignes.sort((a, b) => {
-      const x = personnes.get(a.personne_id) || {};
-      const y = personnes.get(b.personne_id) || {};
-      return (
-        String(x.famille).localeCompare(String(y.famille)) ||
-        String(x.prenom).localeCompare(String(y.prenom))
-      );
-    });
+    // L'ORDRE VIENT DE LA BASE : couples de la premiere generation, leurs
+    // enfants dessous, du plus age au plus jeune. Retrier ici par prenom
+    // defferait ce rangement -- et la facture se lit a cote de la liste
+    // des participants, qui suit le meme.
+    const rang = new Map((faits.personnes || []).map((p, i) => [p.id, i]));
+    lignes.sort(
+      (a, b) =>
+        (rang.has(a.personne_id) ? rang.get(a.personne_id) : 1e9) -
+        (rang.has(b.personne_id) ? rang.get(b.personne_id) : 1e9)
+    );
 
     // Chronologique, et pour un meme jour dans l'ordre ou l'on mange.
     const RANG = { petit_dejeuner: 0, dejeuner: 1, diner: 2 };

@@ -329,6 +329,110 @@ set search_path = private, pg_temp as $fn$
          end
 $fn$;
 
+-- ---- L'ordre dans lequel les noms se lisent ----
+--
+--  UNE SEULE DEFINITION, pour toutes les listes : la liste de
+--  l'organisateur, les pastilles « pour qui remplis-tu », le plateau de
+--  couchage, la facture. Trier chacune a sa facon reviendrait a demander
+--  a la famille d'apprendre quatre ordres.
+--
+--  L'ordre est celui de l'ARBRE, et non de l'alphabet :
+--
+--      le couple de premiere generation le plus age
+--        son enfant aine, et son conjoint
+--          l'aine des petits-enfants
+--          le suivant
+--        le cadet du couple
+--      le couple de premiere generation suivant
+--
+--  Autrement dit : un parcours en profondeur, du plus age au plus jeune
+--  a chaque etage, et les conjoints cote a cote. C'est ainsi qu'une
+--  famille se raconte, et c'est donc ainsi qu'elle se lit.
+--
+--  UN COUPLE EST UNE UNITE. On le designe par le plus petit des deux
+--  identifiants : les deux membres tombent ainsi sur la meme clef sans
+--  avoir a se concerter. Son age est celui de l'aine des deux, et ses
+--  enfants sont ceux de l'un ou de l'autre -- un conjoint entre par
+--  alliance porte le meme `parent_id` que son partenaire (section 8), ce
+--  qui range le foyer sous les bons parents.
+--
+--  SANS DATE DE NAISSANCE, on passe en dernier de son etage, par ordre
+--  de prenom. Ne pas savoir n'est pas etre jeune : c'est ne pas savoir,
+--  et il vaut mieux le voir a la fin d'une fratrie qu'au milieu.
+--
+--  PERSONNE NE SE PERD. Un `left join` et un `coalesce` mettent en queue
+--  de liste qui n'est rattache a rien -- et la profondeur est bornee :
+--  une boucle de parente ferait tourner la recursion sans fin, et une
+--  liste qui ne rend jamais la main est pire qu'une liste mal triee.
+--
+create or replace function private.ordre_familial()
+returns table (id uuid, rang integer)
+language sql stable
+set search_path = private, pg_temp as $fn$
+  with recursive
+  membres as (
+    select p.id,
+           p.prenom,
+           p.parent_id,
+           p.date_naissance,
+           -- Le conjoint, cherche des DEUX cotes : le lien peut n'etre
+           -- pose que d'un seul.
+           coalesce(
+             (select q.id from private.participants q
+               where (q.id = p.conjoint_id or q.conjoint_id = p.id)
+                 and q.id <> p.id
+               order by q.id
+               limit 1),
+             p.id) as conjoint
+      from private.participants p
+  ),
+  foyers_membres as (
+    select m.id, m.prenom, m.parent_id, m.date_naissance,
+           case when m.conjoint < m.id then m.conjoint else m.id end as foyer
+      from membres m
+  ),
+  foyers as (
+    select f.foyer,
+           -- L'age du couple est celui de son aine.
+           min(coalesce(f.date_naissance::text, '9999-99-99')) as naissance,
+           -- `min` sur le texte : Postgres n'agrege pas les uuid.
+           min(f.parent_id::text) as parent_membre
+      from foyers_membres f
+     group by f.foyer
+  ),
+  lies as (
+    select f.foyer, f.naissance,
+           (select g.foyer from foyers_membres g
+             where g.id::text = f.parent_membre) as parent
+      from foyers f
+  ),
+  arbre as (
+    select l.foyer,
+           l.naissance || '#' || l.foyer::text as chemin,
+           1 as profondeur
+      from lies l
+     where l.parent is null
+    union all
+    select l.foyer,
+           a.chemin || '/' || l.naissance || '#' || l.foyer::text,
+           a.profondeur + 1
+      from lies l
+      join arbre a on l.parent = a.foyer
+     -- Vingt generations : la famille n'en a pas cinq, et une boucle de
+     -- parente s'arrete la plutot que de tourner sans fin.
+     where a.profondeur < 20
+  )
+  select f.id,
+         row_number() over (
+           order by coalesce(a.chemin, 'zzzz'),
+                    coalesce(f.date_naissance::text, '9999-99-99'),
+                    f.prenom,
+                    f.id::text
+         )::integer
+    from foyers_membres f
+    left join arbre a on a.foyer = f.foyer
+$fn$;
+
 -- ============================================================
 --  4. Les presences
 -- ============================================================
@@ -471,7 +575,8 @@ begin
   return query
     select p.id, p.prenom, p.famille
     from private.participants p
-    order by p.prenom;
+    join private.ordre_familial() o on o.id = p.id
+    order by o.rang;
 end $fn$;
 
 -- ---- 6b. Charger son sejour et celui des siens ----
@@ -512,8 +617,9 @@ begin
                'famille', p.famille,
                'categorie_age', p.categorie_age,
                'saisi', exists (select 1 from public.presences x where x.participant_id = p.id)
-             ) order by (p.id <> p_acteur), p.prenom)
+             ) order by (p.id <> p_acteur), o.rang)
       from private.participants p
+      join private.ordre_familial() o on o.id = p.id
       where p.id in (select m.id from private.personnes_modifiables(p_acteur) m)
     ), '[]'::jsonb),
     'presences', coalesce((
@@ -756,9 +862,10 @@ begin
                  select 1 from private.personnes_modifiables(p_acteur) m
                   where m.id = p.id
                )
-             ) order by p.famille, p.prenom)
+             ) order by o.rang)
       from public.presences pr
       join private.participants p on p.id = pr.participant_id
+      join private.ordre_familial() o on o.id = p.id
       -- La jointure ecarte les affectations tombees au-dela du rang apres
       -- une baisse du nombre : la personne revient simplement a placer.
       left join private.couchages c
@@ -879,9 +986,10 @@ begin
                'vegetarien', p.vegetarien,
                'vegan', p.vegan,
                'sans_gluten', p.sans_gluten
-             ) order by p.prenom)
+             ) order by o.rang)
       from private.participants p
       join private.personnes_modifiables(p_acteur) m on m.id = p.id
+      join private.ordre_familial() o on o.id = p.id
     ), '[]'::jsonb)
   );
 end $fn$;
@@ -1006,8 +1114,9 @@ begin
              -- la ou « portee : foyer » ne dit rien de ce qu'on a change.
              'nb_geres', (select count(*) from private.personnes_modifiables(p.id)),
              'a_saisi', exists (select 1 from public.presences x where x.participant_id = p.id)
-           ) order by p.famille, p.prenom)
+           ) order by o.rang)
     from private.participants p
+    join private.ordre_familial() o on o.id = p.id
   ), '[]'::jsonb);
 end $fn$;
 
@@ -1653,13 +1762,14 @@ begin
            'avant', t.categorie_age,
            'apres', t.attendue,
            'age', private.age_au(t.date_naissance, r.date_debut)
-         ) order by t.famille, t.prenom), '[]'::jsonb)
+         ) order by o.rang), '[]'::jsonb)
     into changes
     from (
       select p.*, private.categorie_pour(p.date_naissance, r.date_debut,
                                          r.age_bebe, r.age_enfant, r.age_jeune) as attendue
         from private.participants p
     ) t
+    join private.ordre_familial() o on o.id = t.id
    where t.attendue is not null and t.attendue <> t.categorie_age;
 
   update private.participants p
@@ -1868,8 +1978,9 @@ begin
                'prenom', p.prenom,
                'famille', p.famille,
                'repondu', exists (select 1 from public.voeux v where v.participant_id = p.id)
-             ) order by (p.id <> p_acteur), p.prenom)
+             ) order by (p.id <> p_acteur), o.rang)
       from private.participants p
+      join private.ordre_familial() o on o.id = p.id
       where p.id in (select m.id from private.personnes_modifiables(p_acteur) m)
     ), '[]'::jsonb),
 
@@ -2113,8 +2224,9 @@ begin
                'famille', p.famille,
                'repondu', exists (select 1 from public.refus_lieu x
                                    where x.participant_id = p.id)
-             ) order by (p.id <> p_acteur), p.prenom)
+             ) order by (p.id <> p_acteur), o.rang)
       from private.participants p
+      join private.ordre_familial() o on o.id = p.id
       where p.id in (select m.id from private.personnes_modifiables(p_acteur) m)
     ), '[]'::jsonb),
 
@@ -2760,9 +2872,10 @@ begin
                'age', private.age_au(p.date_naissance, r.date_debut),
                -- L'organisateur deplace tout le monde.
                'mien', true
-             ) order by p.famille, p.prenom)
+             ) order by o.rang)
       from public.presences pr
       join private.participants p on p.id = pr.participant_id
+      join private.ordre_familial() o on o.id = p.id
       -- La jointure ecarte les affectations tombees au-dela du rang apres
       -- une baisse du nombre : la personne revient simplement a placer.
       left join private.couchages c
@@ -3480,8 +3593,9 @@ begin
                'famille', p.famille,
                'categorie_age', p.categorie_age,
                'invite', p.invite
-             ) order by p.famille, p.prenom)
+             ) order by o.rang)
       from private.participants p
+      join private.ordre_familial() o on o.id = p.id
     ), '[]'::jsonb),
 
     'presences', coalesce((

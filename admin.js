@@ -508,9 +508,10 @@ function remplirSelecteurs() {
 
   const precedent = selectCible.value;
   selectCible.innerHTML = "";
-  for (const personne of [...etat.participants].sort((a, b) =>
-    a.prenom.localeCompare(b.prenom, "fr")
-  )) {
+  // Dans l'ordre de la base, comme la liste au-dessus : chercher quelqu'un
+  // dans deux rangements differents sur la meme page est un effort qu'on
+  // peut epargner.
+  for (const personne of etat.participants) {
     selectCible.add(new Option(`${personne.prenom} — ${personne.famille}`, personne.id));
   }
   if (precedent) selectCible.value = precedent;
@@ -2499,7 +2500,15 @@ function comparerEtats(avant, apres) {
   const tables = COMPARABLES.map((def) => {
     const r = comparerTable(avant[def.clef], apres[def.clef], def);
     for (const g of r.personnes) g.prenom = noms.get(g.pid) || "(inconnu)";
-    r.personnes.sort((x, y) => x.prenom.localeCompare(y.prenom, "fr"));
+    // Le meme ordre que partout ailleurs. Qui n'est plus dans la liste --
+    // une personne retiree depuis la sauvegarde -- passe en queue.
+    const rang = new Map((etat.participants || []).map((p, i) => [p.id, i]));
+    r.personnes.sort(
+      (x, y) =>
+        (rang.has(x.pid) ? rang.get(x.pid) : 1e9) -
+          (rang.has(y.pid) ? rang.get(y.pid) : 1e9) ||
+        x.prenom.localeCompare(y.prenom, "fr")
+    );
     return { clef: def.clef, nom: def.nom, ...r };
   });
 

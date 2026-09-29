@@ -709,6 +709,14 @@ l'export, en JavaScript pour la page, qui ne peut pas appeler le premier —
 et [`tests/test_facture.py`](tests/test_facture.py) les compare au centime
 sur deux jeux de données à chaque exécution de la suite.
 
+**Les noms se lisent dans l'ordre de l'arbre**, partout : le couple de
+première génération le plus âgé, sa descendance dessous du plus âgé au plus
+jeune, les conjoints côte à côte. Une seule définition en base
+(`private.ordre_familial`), et toutes les listes s'y rangent — celle de
+l'organisateur, les pastilles « pour qui remplis-tu », le plateau de
+couchage, la facture. Sans date de naissance, on passe en fin de fratrie :
+ne pas savoir n'est pas être jeune.
+
 ## Points à connaître
 
 **Absent est l'état par défaut, et ça se voit dans la grille.** La colonne
