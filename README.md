@@ -303,7 +303,7 @@ séjour, et le reste suit.
 
 Deux fois la même chose, à deux endroits : sous l'inventaire dans l'onglet
 **Logements** d'`admin.html`, et **sous la grille** de
-[`index.html`](index.html) pour toute la famille. L'inventaire dit
+[`presences.html`](presences.html) pour toute la famille. L'inventaire dit
 **combien** de couchages ; le plan dit **qui est dans lequel**.
 
 Sous la grille, et non sur une page à part : on dit d'abord **quelles nuits**

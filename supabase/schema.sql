@@ -1322,7 +1322,7 @@ end $fn$;
 -- ---- 8f. L'import des presences deja connues ----
 --
 --  Le sejour a d'abord ete tenu dans un tableur, et il s'y trouve deja
---  soixante lignes de presences. Les ressaisir a la main sur index.html
+--  soixante lignes de presences. Les ressaisir a la main sur presences.html
 --  serait long et fautif.
 --
 --  Cette fonction fait pour les presences ce que `admin_importer` fait
