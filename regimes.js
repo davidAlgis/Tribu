@@ -191,7 +191,7 @@ async function recharger() {
     p_acteur: etat.moi.id,
   });
   etat.gens = d.gens || [];
-  etat.ouverte = d.saisie_ouverte;
+  etat.ouverte = d.ouverte;
   dessiner();
 }
 

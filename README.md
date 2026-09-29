@@ -728,6 +728,14 @@ couverts à chaque repas — par tranche d'âge, avec le compte des végétarien
 vegans, sans gluten et non buveurs attablés. **Aucun nom n'y figure** :
 l'hôtel n'a pas besoin de savoir qui, et ce qui ne sort pas ne se perd pas.
 
+**Les quatre pages familiales s'ouvrent et se ferment depuis un seul
+panneau**, dans l'onglet Séjour : une case par page, plus « tout fermer » et
+« tout rouvrir ». Fermer ne cache rien — la page se lit encore, on voit ce
+qu'on a dit et où en sont les autres, mais plus rien ne s'enregistre. C'est
+la base qui refuse ; la page le montre seulement. Les préférences
+alimentaires ont leur propre verrou : on ferme les présences quand le nombre
+est arrêté, et une allergie se déclare encore après.
+
 ## Points à connaître
 
 **Absent est l'état par défaut, et ça se voit dans la grille.** La colonne

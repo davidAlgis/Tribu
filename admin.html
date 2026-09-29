@@ -101,11 +101,38 @@
         <p class="note">
           Ces deux dates bornent la grille de <a href="./presences.html">saisie</a> et
           filtrent tout ce qui s'écrit&nbsp;: une présence en dehors est refusée.
-          <label class="interrupteur">
-            <input type="checkbox" id="saisie-ouverte"> Saisie ouverte
-          </label>
         </p>
         <p id="message-sejour" role="status" aria-live="polite"></p>
+      </fieldset>
+
+      <fieldset>
+        <legend>Ce qui est ouvert à la famille <span id="compteur-ouvertures" class="discret-inline"></span></legend>
+
+        <!--
+          Les quatre verrous au même endroit. Ils existaient déjà, mais
+          chacun se tournait dans un onglet différent : on ne savait jamais
+          ce qui restait ouvert sans faire le tour.
+        -->
+        <div id="ouvertures"></div>
+
+        <div class="actions">
+          <button type="button" id="tout-fermer" class="discret">Tout fermer</button>
+          <button type="button" id="tout-ouvrir" class="discret">Tout rouvrir</button>
+        </div>
+        <p id="message-ouvertures" role="status" aria-live="polite"></p>
+
+        <p class="note">
+          Fermer ne cache rien&nbsp;: la page se lit encore, on voit ce qu'on
+          a dit et où en sont les autres&nbsp;— mais plus rien ne s'enregistre.
+          La page le montre&nbsp;; c'est la <strong>base</strong> qui refuse,
+          une page ne faisant pas foi.
+        </p>
+
+        <p class="note">
+          Les préférences alimentaires ont leur propre verrou, et ce n'est
+          pas un oubli&nbsp;: on ferme les présences quand le nombre est
+          arrêté, et une allergie se déclare encore après.
+        </p>
       </fieldset>
 
       <fieldset>
@@ -677,9 +704,8 @@
 
         <p class="note">
           Retirer un week-end supprime les réponses déjà données pour lui.
-          <label class="interrupteur">
-            <input type="checkbox" id="voeux-ouverts"> Sondage ouvert
-          </label>
+          Le sondage s'ouvre et se ferme depuis l'onglet <strong>Séjour</strong>,
+          avec les trois autres pages.
         </p>
       </fieldset>
     </div>
@@ -691,10 +717,8 @@
         <div id="classement-lieux"></div>
         <p class="note">
           Les départements que personne ne refuse, d'après
-          <a href="./lieux.html">la carte</a>.
-          <label class="interrupteur">
-            <input type="checkbox" id="lieux-ouverts"> Carte ouverte
-          </label>
+          <a href="./lieux.html">la carte</a>. Elle s'ouvre et se ferme depuis
+          l'onglet <strong>Séjour</strong>, avec les trois autres pages.
         </p>
         <p id="message-lieux" role="status" aria-live="polite"></p>
       </fieldset>

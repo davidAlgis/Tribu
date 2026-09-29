@@ -627,7 +627,6 @@ onglets.forEach((onglet, i) => {
 const zoneDates = document.getElementById("liste-dates");
 const compteurDates = document.getElementById("compteur-dates");
 const messageDates = document.getElementById("message-dates");
-const interrupteur = document.getElementById("voeux-ouverts");
 
 function afficherJour(iso) {
   return new Date(iso + "T00:00:00").toLocaleDateString("fr-FR", {
@@ -638,7 +637,6 @@ function afficherJour(iso) {
 
 async function rechargerDates() {
   const donnees = await rpc("admin_dates_lister", { p_code: etat.code });
-  interrupteur.checked = donnees.voeux_ouverts;
   compteurDates.textContent = donnees.options.length
     ? `${donnees.options.length} proposé(s)`
     : "aucun pour l'instant";
@@ -719,19 +717,107 @@ document.getElementById("ajouter-date").addEventListener("click", async () => {
   }
 });
 
-interrupteur.addEventListener("change", async () => {
-  try {
-    await rpc("admin_voeux_ouvrir", { p_code: etat.code, p_ouvert: interrupteur.checked });
-    messageDates.className = "ok";
-    messageDates.textContent = interrupteur.checked
-      ? "Sondage ouvert."
-      : "Sondage clos : la famille ne peut plus répondre.";
-  } catch (erreur) {
-    interrupteur.checked = !interrupteur.checked;
-    messageDates.className = "erreur";
-    messageDates.textContent = erreur.message;
+// -------------------------------------------------------- ouvertures
+//
+// QUATRE PAGES, QUATRE VERROUS, UN SEUL PANNEAU. Ils existaient deja,
+// mais chacun se tournait dans un onglet different : on ne savait jamais
+// ce qui restait ouvert sans faire le tour des trois.
+//
+// Fermer ne cache rien : la page se lit encore, elle ne s'ecrit plus.
+// C'est la base qui refuse -- la page le montre seulement.
+
+const PAGES_FAMILLE = [
+  ["lieux", "Le lieu", "lieux.html"],
+  ["voeux", "La date", "dates.html"],
+  ["saisie", "Les présences", "presences.html"],
+  ["regimes", "Préférences alimentaires", "regimes.html"],
+];
+
+const zoneOuvertures = document.getElementById("ouvertures");
+const compteurOuvertures = document.getElementById("compteur-ouvertures");
+const messageOuvertures = document.getElementById("message-ouvertures");
+
+function dessinerOuvertures() {
+  const etats = etat.ouvertures || {};
+  const fermees = PAGES_FAMILLE.filter(([cle]) => etats[cle] === false).length;
+  compteurOuvertures.textContent = fermees
+    ? `${fermees} page(s) fermée(s)`
+    : "les quatre sont ouvertes";
+
+  zoneOuvertures.textContent = "";
+  for (const [cle, titre, page] of PAGES_FAMILLE) {
+    const ligne = document.createElement("div");
+    ligne.className = "personne-regime";
+
+    const etiquette = document.createElement("label");
+    etiquette.className = "interrupteur";
+    const boite = document.createElement("input");
+    boite.type = "checkbox";
+    boite.id = `ouvrir-${cle}`;
+    boite.checked = etats[cle] !== false;
+    boite.addEventListener("change", () => ouvrir(cle, boite.checked));
+    etiquette.append(boite, ` ${titre}`);
+
+    const ou = document.createElement("a");
+    ou.href = `./${page}`;
+    ou.className = "discret-inline";
+    ou.textContent = page;
+
+    ligne.append(etiquette, " ", ou);
+    if (etats[cle] === false) ligne.append(span("fermée", "etiquette alerte"));
+    zoneOuvertures.appendChild(ligne);
   }
-});
+}
+
+async function ouvrir(quoi, ouvert) {
+  messageOuvertures.className = "";
+  messageOuvertures.textContent = "Enregistrement…";
+  try {
+    etat.ouvertures = await rpc("admin_ouvrir", {
+      p_code: etat.code,
+      p_quoi: quoi,
+      p_ouvert: ouvert,
+    });
+    dessinerOuvertures();
+    const nom = (PAGES_FAMILLE.find(([c]) => c === quoi) || [])[1] || quoi;
+    messageOuvertures.className = "ok";
+    messageOuvertures.textContent = ouvert
+      ? `« ${nom} » est de nouveau ouverte.`
+      : `« ${nom} » est fermée : elle se lit, elle ne s'écrit plus.`;
+  } catch (erreur) {
+    messageOuvertures.className = "erreur";
+    messageOuvertures.textContent = erreur.message;
+    dessinerOuvertures();
+  }
+}
+
+// Les quatre d'un coup : une par une, c'est quatre allers-retours et
+// autant d'occasions d'en oublier une ouverte.
+async function toutes(ouvert) {
+  messageOuvertures.className = "";
+  messageOuvertures.textContent = "Enregistrement…";
+  try {
+    for (const [cle] of PAGES_FAMILLE) {
+      etat.ouvertures = await rpc("admin_ouvrir", {
+        p_code: etat.code,
+        p_quoi: cle,
+        p_ouvert: ouvert,
+      });
+    }
+    dessinerOuvertures();
+    messageOuvertures.className = "ok";
+    messageOuvertures.textContent = ouvert
+      ? "Les quatre pages sont ouvertes."
+      : "Les quatre pages sont fermées : la famille lit, elle n'écrit plus.";
+  } catch (erreur) {
+    messageOuvertures.className = "erreur";
+    messageOuvertures.textContent = erreur.message;
+    dessinerOuvertures();
+  }
+}
+
+document.getElementById("tout-fermer").addEventListener("click", () => toutes(false));
+document.getElementById("tout-ouvrir").addEventListener("click", () => toutes(true));
 
 
 // ------------------------------------------ preferences alimentaires
@@ -2651,11 +2737,9 @@ document.getElementById("couchages-reporter").addEventListener("click", async ()
 const zoneLieux = document.getElementById("classement-lieux");
 const compteurLieux = document.getElementById("compteur-lieux");
 const messageLieux = document.getElementById("message-lieux");
-const interrupteurLieux = document.getElementById("lieux-ouverts");
 
 async function rechargerLieux() {
   const d = await rpc("admin_lieux", { p_code: etat.code });
-  interrupteurLieux.checked = d.lieux_ouverts;
   compteurLieux.textContent = `${d.repondants} réponse(s) sur ${d.participants}`;
 
   const totaux = d.totaux || {};
@@ -2694,24 +2778,6 @@ async function rechargerLieux() {
   }
   zoneLieux.appendChild(liste);
 }
-
-interrupteurLieux.addEventListener("change", async () => {
-  try {
-    await rpc("admin_lieux_ouvrir", {
-      p_code: etat.code,
-      p_ouvert: interrupteurLieux.checked,
-    });
-    messageLieux.className = "ok";
-    messageLieux.textContent = interrupteurLieux.checked
-      ? "Carte ouverte."
-      : "Carte close : la famille ne peut plus la modifier.";
-  } catch (erreur) {
-    interrupteurLieux.checked = !interrupteurLieux.checked;
-    messageLieux.className = "erreur";
-    messageLieux.textContent = erreur.message;
-  }
-});
-
 
 // ------------------------------------------------------ sauvegardes
 //
@@ -3159,7 +3225,6 @@ const champDebut = document.getElementById("sejour-debut");
 const champFin = document.getElementById("sejour-fin");
 const resumeSejour = document.getElementById("sejour-resume");
 const messageSejour = document.getElementById("message-sejour");
-const interrupteurSaisie = document.getElementById("saisie-ouverte");
 
 // Deplacer les dates ne deplace pas ce qui a ete saisi. Les journees qui
 // tombent hors des nouvelles bornes restent en base, invisibles du
@@ -3177,8 +3242,11 @@ async function rechargerSejour() {
   const d = await rpc("admin_sejour", { p_code: etat.code });
   champDebut.value = d.date_debut;
   champFin.value = d.date_fin;
-  interrupteurSaisie.checked = d.saisie_ouverte;
   remplirAges(d);
+  // Les quatre verrous arrivent avec le sejour : ils se tournent dans le
+  // meme onglet, ils se lisent dans le meme appel.
+  etat.ouvertures = d.ouvertures || {};
+  dessinerOuvertures();
   resumeSejour.textContent =
     `${d.jours} jour(s), ${d.presences} journée(s) saisie(s)`;
   direHorsSejour(d.presences_hors);
@@ -3287,21 +3355,5 @@ document.getElementById("sejour-enregistrer").addEventListener("click", async ()
   }
 });
 
-interrupteurSaisie.addEventListener("change", async () => {
-  try {
-    await rpc("admin_saisie_ouvrir", {
-      p_code: etat.code,
-      p_ouvert: interrupteurSaisie.checked,
-    });
-    messageSejour.className = "ok";
-    messageSejour.textContent = interrupteurSaisie.checked
-      ? "Saisie ouverte."
-      : "Saisie close : la famille ne peut plus remplir ses présences.";
-  } catch (erreur) {
-    // Le serveur n'a pas suivi : la case doit revenir a ce qu'elle etait,
-    // sans quoi elle montrerait un etat que la base ne connait pas.
-    interrupteurSaisie.checked = !interrupteurSaisie.checked;
-    messageSejour.className = "erreur";
-    messageSejour.textContent = erreur.message;
-  }
-});
+// Les quatre verrous se tournent dans le panneau « Ce qui est ouvert a
+// la famille », plus haut dans cet onglet.

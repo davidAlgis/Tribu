@@ -72,6 +72,12 @@ alter table private.reglages
 alter table private.reglages
   add column if not exists age_jeune smallint not null default 18;
 
+-- Les preferences alimentaires suivaient `saisie_ouverte`, faute d'avoir
+-- le leur. C'etait commode et faux : on ferme les presences quand le
+-- nombre est arrete, et une allergie se declare encore apres.
+alter table private.reglages
+  add column if not exists regimes_ouverts boolean not null default true;
+
 -- Quels jours de la semaine se facturent au tarif week-end. Lundi = 0,
 -- dimanche = 6 ; par defaut vendredi et samedi, les deux nuits que la
 -- plupart des hotels comptent a part. Ce reglage vivait dans
@@ -973,7 +979,7 @@ begin
   perform private.verifier_code(p_code);
 
   return jsonb_build_object(
-    'saisie_ouverte', (select saisie_ouverte from private.reglages),
+    'ouverte', (select regimes_ouverts from private.reglages),
     'gens', coalesce((
       select jsonb_agg(jsonb_build_object(
                'id', p.id,
@@ -1011,7 +1017,10 @@ declare
 begin
   perform private.verifier_code(p_code);
 
-  if not (select saisie_ouverte from private.reglages) then
+  -- Leur propre verrou, et non celui des presences : on ferme les
+  -- presences quand le nombre est arrete, et une allergie se declare
+  -- encore apres.
+  if not (select regimes_ouverts from private.reglages) then
     raise exception 'SAISIE_CLOSE' using errcode = 'P0001';
   end if;
 
@@ -1608,6 +1617,13 @@ begin
     'age_bebe', r.age_bebe,
     'age_enfant', r.age_enfant,
     'age_jeune', r.age_jeune,
+    -- Les quatre verrous, lus au meme endroit qu'ils se tournent.
+    'ouvertures', jsonb_build_object(
+      'saisie', r.saisie_ouverte,
+      'voeux', r.voeux_ouverts,
+      'lieux', r.lieux_ouverts,
+      'regimes', r.regimes_ouverts
+    ),
     -- Combien de personnes n'ont pas de date : le panneau le dit, sinon
     -- « recalculer » paraitrait ne rien faire pour la moitie du monde.
     'sans_naissance', (select count(*) from private.participants
@@ -1670,16 +1686,71 @@ begin
   );
 end $fn$;
 
-create or replace function public.admin_saisie_ouvrir(p_code text, p_ouvert boolean)
+-- ---- 8l. Ouvrir et fermer les pages familiales ----
+--
+--  QUATRE PAGES, QUATRE VERROUS, UN SEUL GESTE. Ils existaient deja --
+--  `saisie_ouverte`, `voeux_ouverts`, `lieux_ouverts` -- mais chacun se
+--  tournait dans un onglet different, et l'on ne savait jamais ce qui
+--  restait ouvert sans faire le tour. Les preferences alimentaires, elles,
+--  n'en avaient pas : elles suivaient celui des presences.
+--
+--  Trois fonctions faisaient la meme chose a une colonne pres. Une seule
+--  les remplace, et le nom de la page passe en argument : le jour ou une
+--  cinquieme page arrive, c'est une ligne de plus dans un tableau.
+--
+--  CE QUE FERMER VEUT DIRE : la page se lit encore, elle ne s'ecrit plus.
+--  On garde ce qu'on a dit, on voit ou en sont les autres, et le bouton
+--  d'enregistrement ne repond plus. La page le montre ; la BASE le refuse
+--  -- une page ne fait pas foi.
+--
+drop function if exists public.admin_saisie_ouvrir(text, boolean);
+drop function if exists public.admin_voeux_ouvrir(text, boolean);
+drop function if exists public.admin_lieux_ouvrir(text, boolean);
+
+create or replace function public.admin_ouvrir(
+  p_code text, p_quoi text, p_ouvert boolean
+)
 returns jsonb
 language plpgsql security definer
 set search_path = private, pg_temp as $fn$
 begin
   perform private.verifier_code(p_code, 'admin');
+
+  if p_ouvert is null then
+    raise exception 'DEMANDE_INVALIDE' using errcode = 'P0001';
+  end if;
+
+  -- Un `update` par colonne : on ne construit pas de SQL a partir d'un
+  -- argument, meme derriere un code d'acces. Quatre lignes lisibles
+  -- valent mieux qu'un `execute` qu'il faudra relire deux fois.
+  --
   -- `where id` : safeupdate refuse un UPDATE sans clause WHERE.
-  update private.reglages set saisie_ouverte = p_ouvert where id;
-  return jsonb_build_object('saisie_ouverte', p_ouvert);
+  if p_quoi = 'saisie' then
+    update private.reglages set saisie_ouverte = p_ouvert where id;
+  elsif p_quoi = 'voeux' then
+    update private.reglages set voeux_ouverts = p_ouvert where id;
+  elsif p_quoi = 'lieux' then
+    update private.reglages set lieux_ouverts = p_ouvert where id;
+  elsif p_quoi = 'regimes' then
+    update private.reglages set regimes_ouverts = p_ouvert where id;
+  else
+    raise exception 'PAGE_INCONNUE' using errcode = 'P0001';
+  end if;
+
+  -- Les quatre en retour : la page redessine tout son panneau sans avoir
+  -- a deviner ce qui a bouge.
+  return (
+    select jsonb_build_object(
+             'saisie', r.saisie_ouverte,
+             'voeux', r.voeux_ouverts,
+             'lieux', r.lieux_ouverts,
+             'regimes', r.regimes_ouverts
+           )
+      from private.reglages r
+  );
 end $fn$;
+
+grant execute on function public.admin_ouvrir(text, text, boolean) to anon;
 
 -- ---- 8h. Les dates de naissance ----
 --
@@ -2138,21 +2209,9 @@ begin
   return jsonb_build_object('retire', partant.libelle);
 end $fn$;
 
-create or replace function public.admin_voeux_ouvrir(p_code text, p_ouvert boolean)
-returns jsonb
-language plpgsql security definer
-set search_path = private, pg_temp as $fn$
-begin
-  perform private.verifier_code(p_code, 'admin');
-  -- `where id` : safeupdate refuse un UPDATE sans clause WHERE.
-  update private.reglages set voeux_ouverts = p_ouvert where id;
-  return jsonb_build_object('voeux_ouverts', p_ouvert);
-end $fn$;
-
 grant execute on function public.admin_dates_lister(text)                      to anon;
 grant execute on function public.admin_date_ajouter(text, text, date, date)    to anon;
 grant execute on function public.admin_date_retirer(text, uuid)                to anon;
-grant execute on function public.admin_voeux_ouvrir(text, boolean)             to anon;
 
 
 -- ============================================================
@@ -2330,19 +2389,7 @@ begin
   );
 end $fn$;
 
-create or replace function public.admin_lieux_ouvrir(p_code text, p_ouvert boolean)
-returns jsonb
-language plpgsql security definer
-set search_path = private, pg_temp as $fn$
-begin
-  perform private.verifier_code(p_code, 'admin');
-  -- `where id` : safeupdate refuse un UPDATE sans clause WHERE.
-  update private.reglages set lieux_ouverts = p_ouvert where id;
-  return jsonb_build_object('lieux_ouverts', p_ouvert);
-end $fn$;
-
 grant execute on function public.admin_lieux(text)                 to anon;
-grant execute on function public.admin_lieux_ouvrir(text, boolean) to anon;
 
 -- ============================================================
 --  11. Les logements
