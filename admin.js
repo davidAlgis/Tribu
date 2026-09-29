@@ -2019,6 +2019,31 @@ function dessinerFacture(calcul) {
     alerteFacture.appendChild(p);
   }
 
+  // LA TRANCHE D'AGE DECIDE DE TOUT : le prix de la nuit, celui des repas,
+  // et si la taxe de sejour est due -- elle ne l'est que par les MAJEURS.
+  // Or c'est la tranche ENREGISTREE qui facture, pas la date de naissance :
+  // une tranche posee avant que « jeune » existe dit encore « adulte », et
+  // fait payer la taxe a un garcon de quinze ans. On le dit ici, ou le
+  // chiffre faux se lit.
+  const factures = new Set(calcul.lignes.map((l) => l.personne_id));
+  const concernes = (etat.participants || []).filter((p) => factures.has(p.id));
+  const perimees = concernes.filter(
+    (p) => p.categorie_attendue && p.categorie_attendue !== p.categorie_age
+  );
+
+  if (perimees.length) {
+    const p = document.createElement("p");
+    p.className = "erreur";
+    p.textContent =
+      `${perimees.length} personne(s) dont la tranche d'âge ne correspond plus ` +
+      `à leur date de naissance (${perimees
+        .slice(0, 6)
+        .map((x) => x.prenom)
+        .join(", ")}${perimees.length > 6 ? "…" : ""}) : leurs prix et leur ` +
+      "taxe de séjour sont faux. « Recalculer les catégories », onglet Séjour.";
+    alerteFacture.appendChild(p);
+  }
+
   // --- le recapitulatif, en tete : ce que chacun doit, en trois nombres
   //
   // LA TAXE EST DANS L'HEBERGEMENT. Quatre colonnes, et le total doit

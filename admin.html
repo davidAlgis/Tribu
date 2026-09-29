@@ -496,31 +496,40 @@
 
     <!-- ---- Facture --------------------------------------------- -->
     <div class="volet" id="volet-facture" role="tabpanel" aria-labelledby="onglet-facture" tabindex="0" hidden>
-      <fieldset>
-        <legend>Ce que chacun paie <span id="compteur-facture" class="discret-inline"></span></legend>
+      <!--
+        Tout se recalcule à chaque ouverture de l'onglet : rien n'est gardé.
+        La base ne stocke aucun total — elle rend les faits, et le calcul se
+        fait ici.
 
-        <!--
-          Le tableau se recalcule à chaque ouverture de l'onglet : il ne
-          garde rien. La base ne stocke aucun total — elle rend les faits,
-          et le calcul se fait ici.
-        -->
-        <div id="alerte-facture"></div>
+        CE QUI REND LE TOTAL FAUX RESTE HORS DES PANNEAUX. Une alerte pliée
+        dans un tiroir n'alerte personne.
+      -->
+      <div id="alerte-facture"></div>
+      <p id="message-facture" role="status" aria-live="polite"></p>
+
+      <!--
+        Trois tableaux, trois panneaux. Le récapitulatif est OUVERT : c'est
+        ce qu'on vient chercher. Le détail est plié — on l'ouvre quand un
+        chiffre du dessus surprend, et pas avant.
+      -->
+      <details class="panneau-pliable" id="panneau-resume" open>
+        <summary>Ce que chacun paie <span id="compteur-facture" class="discret-inline"></span></summary>
+
         <div id="facture-resume"></div>
-        <p id="message-facture" role="status" aria-live="polite"></p>
 
         <p class="note">
           Une ligne par personne, et chaque famille ferme sur sa somme&nbsp;:
           c'est le chiffre à demander. La colonne
           <strong>hébergement</strong> comprend la taxe de séjour&nbsp;— sans
           quoi le total ne serait pas la somme des deux colonnes d'à côté, et
-          on le lirait de travers. Les deux tableaux du dessous disent le
+          on le lirait de travers. Les deux panneaux du dessous disent le
           détail, nuit par nuit et repas par repas, et la taxe y a sa propre
           colonne.
         </p>
-      </fieldset>
+      </details>
 
-      <fieldset>
-        <legend>Les nuits <span id="compteur-nuits" class="discret-inline"></span></legend>
+      <details class="panneau-pliable" id="panneau-nuits">
+        <summary>Les nuits <span id="compteur-nuits" class="discret-inline"></span></summary>
 
         <div id="facture-hebergement"></div>
 
@@ -531,13 +540,14 @@
           et, pour un gîte, c'est la <strong>part</strong> qui revient à
           chacun&nbsp;: le gîte se loue entier et sa note se divise entre ceux
           qui y dorment cette nuit-là. La <strong>taxe</strong> n'est due que
-          par les adultes, une fois par nuit&nbsp;; elle a sa colonne, et le
+          par les <strong>majeurs</strong>, une fois par nuit&nbsp;: un jeune
+          de douze à dix-huit ans n'en paie pas. Elle a sa colonne, et le
           total est donné avec et sans elle.
         </p>
-      </fieldset>
+      </details>
 
-      <fieldset>
-        <legend>Les repas hors pension <span id="compteur-repas" class="discret-inline"></span></legend>
+      <details class="panneau-pliable" id="panneau-repas">
+        <summary>Les repas hors pension <span id="compteur-repas" class="discret-inline"></span></summary>
 
         <div id="facture-repas"></div>
 
@@ -549,12 +559,12 @@
         </p>
 
         <p class="note">
-          Ce tableau refait le calcul de l'export Excel, dans le navigateur.
+          Ces tableaux refont le calcul de l'export Excel, dans le navigateur.
           Les deux sont tenus d'accord par un test qui les compare au centime.
-          Un prix manquant est facturé 0&nbsp;: la ligne rouge au-dessus du
-          tableau dit lesquels, et le total est faux tant qu'elle est là.
+          Un prix manquant est facturé 0&nbsp;: la ligne rouge en tête de
+          l'onglet dit lesquels, et le total est faux tant qu'elle est là.
         </p>
-      </fieldset>
+      </details>
     </div>
 
     <!-- ---- Week-ends ------------------------------------------- -->
