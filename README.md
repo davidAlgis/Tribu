@@ -21,7 +21,7 @@ Quatre pages pour la famille, une pour toi :
 | [`dates.html`](dates.html) | la famille | quel week-end arrange chacun, et où en est le choix |
 | [`index.html`](index.html) | la famille | qui vient, quelles nuits, quels repas, et qui dort où |
 | [`regimes.html`](regimes.html) | la famille | ce que chacun mange et boit |
-| [`admin.html`](admin.html) | toi | dates du séjour, participants, régimes alimentaires, logements et plan de couchage, tarifs, facture, week-ends, résultat de la carte, retour en arrière |
+| [`admin.html`](admin.html) | toi | dates du séjour, participants, préférences alimentaires, logements et plan de couchage, tarifs, facture, **hôtel**, week-ends, résultat de la carte, retour en arrière |
 
 Le code se donne **une fois**, sur la page d'accueil : il est retenu sur
 l'appareil, et les quatre étapes le reprennent toutes seules — elles ne
@@ -716,6 +716,12 @@ jeune, les conjoints côte à côte. Une seule définition en base
 l'organisateur, les pastilles « pour qui remplis-tu », le plateau de
 couchage, la facture. Sans date de naissance, on passe en fin de fratrie :
 ne pas savoir n'est pas être jeune.
+
+L'onglet **Hôtel** met en forme ce qu'on lui envoie : combien d'exemplaires
+de chaque type de couchage sont occupés nuit par nuit, et combien de
+couverts à chaque repas — par tranche d'âge, avec le compte des végétariens,
+vegans, sans gluten et non buveurs attablés. **Aucun nom n'y figure** :
+l'hôtel n'a pas besoin de savoir qui, et ce qui ne sort pas ne se perd pas.
 
 ## Points à connaître
 

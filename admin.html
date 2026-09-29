@@ -71,6 +71,8 @@
               aria-controls="volet-tarifs" aria-selected="false" tabindex="-1">Tarifs</button>
       <button type="button" role="tab" id="onglet-facture"
               aria-controls="volet-facture" aria-selected="false" tabindex="-1">Facture</button>
+      <button type="button" role="tab" id="onglet-hotel"
+              aria-controls="volet-hotel" aria-selected="false" tabindex="-1">Hôtel</button>
       <button type="button" role="tab" id="onglet-dates"
               aria-controls="volet-dates" aria-selected="false" tabindex="-1">Week-ends</button>
       <button type="button" role="tab" id="onglet-lieu"
@@ -563,6 +565,57 @@
           Les deux sont tenus d'accord par un test qui les compare au centime.
           Un prix manquant est facturé 0&nbsp;: la ligne rouge en tête de
           l'onglet dit lesquels, et le total est faux tant qu'elle est là.
+        </p>
+      </details>
+    </div>
+
+    <!-- ---- Hôtel ----------------------------------------------- -->
+    <div class="volet" id="volet-hotel" role="tabpanel" aria-labelledby="onglet-hotel" tabindex="0" hidden>
+      <!--
+        Ce qu'on envoie à l'hôtel, et rien d'autre : des nombres de
+        chambres et des nombres de couverts. Aucun nom — l'hôtel n'a pas
+        besoin de savoir qui, et ce qui ne sort pas ne se perd pas.
+
+        Tout se recalcule à l'ouverture de l'onglet, comme la facture : la
+        base ne garde aucun total.
+      -->
+      <div id="alerte-hotel"></div>
+      <p id="message-hotel" role="status" aria-live="polite"></p>
+
+      <details class="panneau-pliable" id="panneau-couchages" open>
+        <summary>Les couchages, nuit par nuit <span id="compteur-hotel-nuits" class="discret-inline"></span></summary>
+
+        <div id="hotel-couchages"></div>
+
+        <p class="note">
+          Le nombre d'exemplaires de chaque type <strong>réellement
+          occupés</strong> cette nuit-là, d'après le plan de couchage&nbsp;—
+          pas d'après l'inventaire, qui dit ce qu'on pourrait prendre, ni
+          d'après les souhaits, qui disent ce qu'on voudrait. Une chambre où
+          dort une seule personne compte pour une chambre.
+        </p>
+      </details>
+
+      <details class="panneau-pliable" id="panneau-couverts" open>
+        <summary>Les couverts, repas par repas <span id="compteur-hotel-repas" class="discret-inline"></span></summary>
+
+        <div id="hotel-couverts"></div>
+
+        <p class="note">
+          Un couvert par personne qui a coché ce repas, qu'il soit compris
+          dans une pension ou pris à part&nbsp;— l'hôtel sert les deux de la
+          même façon. Les quatre tranches d'âge sont données séparément&nbsp;:
+          beaucoup d'établissements comptent les jeunes avec les adultes,
+          d'autres non, et l'addition est plus facile à faire que la
+          division.
+        </p>
+
+        <p class="note">
+          Les colonnes de <strong>préférences</strong> comptent, parmi les
+          personnes attablées, celles qui l'ont déclaré. Elles ne
+          s'excluent pas&nbsp;: un vegan sans gluten est compté dans les
+          deux. <strong>Non buveurs</strong> sert à commander les
+          bouteilles&nbsp;; les mineurs y sont d'office.
         </p>
       </details>
     </div>
