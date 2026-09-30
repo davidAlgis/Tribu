@@ -20,9 +20,17 @@ Tout repas qui n'est pas absorbe par un de ces regimes est
 facture HORS PENSION (cas explicitement demande : une personne
 logee en chambre peut prendre un repas hors pension).
 
-Les gites suivent une logique differente : la nuit est facturee
-au gite et AUCUN repas n'y est inclus. Tous les repas d'une
-personne en gite sont donc hors pension.
+CE QU'UNE NUIT COMPREND SE LIT SUR LE LOGEMENT, et non sur son
+nom. Chaque type declare `repas_compris` : la liste des repas que sa
+nuit absorbe. L'escalier ci-dessus ne joue que sur ces repas-la, et
+un type qui ne comprend rien -- un gite, ou une chambre d'hotel sans
+pension -- met tous les repas de ses occupants hors pension.
+
+Les deux cas d'hier s'ecrivent dans ce vocabulaire sans rien changer :
+une chambre comprend les trois repas, un gite n'en comprend aucun.
+C'est ce que la base pose sur les lignes existantes, et c'est ce que
+ce module suppose quand le type n'est pas connu -- une declaration
+generique, « en chambre » sans taille, n'en designe aucun.
 
 Il n'existe que trois hebergements : `chambre`, `gite`, et
 `exterieur` (presente ce jour-la mais ne dort pas sur place).
@@ -54,6 +62,10 @@ DEMI_PENSION_MIDI = "demi_pension_midi"
 NUIT_PETIT_DEJEUNER = "nuit_petit_dejeuner"
 NUIT_SEULE = "nuit_seule"
 GITE_NUIT = "gite_nuit"
+# Le meme regime, sous le nom qu'il merite depuis qu'une chambre peut le
+# porter : une nuit dont rien n'est compris. La cle ne change pas -- elle
+# est comparee dans les tests et dans les imports -- seul le mot change.
+SANS_PENSION = GITE_NUIT
 
 LIBELLES_REGIME = {
     PENSION_COMPLETE: "Pension complete",
@@ -61,7 +73,7 @@ LIBELLES_REGIME = {
     DEMI_PENSION_MIDI: "Demi-pension midi",
     NUIT_PETIT_DEJEUNER: "Nuit + petit-dejeuner",
     NUIT_SEULE: "Nuit seule",
-    GITE_NUIT: "Gite (nuit seule)",
+    GITE_NUIT: "Nuit sans pension",
 }
 
 REPAS = ("petit_dejeuner", "dejeuner", "diner")
@@ -107,17 +119,52 @@ class Prestations:
     anomalies: list[Anomalie] = field(default_factory=list)
 
 
-def _regime_chambre(diner_j: bool, pdj_j1: bool, dej_j1: bool) -> str:
-    """Traduit une combinaison de repas en regime hotelier."""
-    if not pdj_j1:
+# Ce que valait la regle avant que le reglage existe. Elle sert encore de
+# repli : une declaration generique -- « en chambre », sans taille -- ne
+# designe aucun type, et il faut bien savoir ce que sa nuit comprend.
+COMPRIS_PAR_DEFAUT = {
+    CHAMBRE: frozenset(REPAS),
+    GITE: frozenset(),
+}
+
+
+def repas_compris(logements: dict | None, logement_id, hebergement: str) -> frozenset:
+    """Les repas que la nuit de ce type absorbe."""
+    ligne = (logements or {}).get(logement_id)
+    if ligne is not None and ligne.get("repas_compris") is not None:
+        return frozenset(ligne["repas_compris"])
+    return COMPRIS_PAR_DEFAUT.get(hebergement, frozenset(REPAS))
+
+
+def _regime(compris: frozenset, diner_j: bool, pdj_j1: bool, dej_j1: bool) -> str:
+    """Traduit une combinaison de repas en regime hotelier.
+
+    L'escalier ne voit que ce que la nuit PEUT comprendre : un repas pris
+    hors de cette liste ne l'abaisse pas d'un cran, il se facture a part.
+    Avec les trois repas, c'est mot pour mot la regle d'avant ; avec une
+    liste vide, aucune formule n'existe et tout se paie separement.
+
+    LA LIMITE DE CE MODELE : l'escalier est la convention de CET hotel --
+    pas de petit-dejeuner, pas de formule. Un hotel qui annoncerait quatre
+    prix de pension independants demanderait une grille plus large, et non
+    une reduction retranchee de la pension complete.
+    """
+    if not compris:
+        return SANS_PENSION
+
+    diner = diner_j and "diner" in compris
+    petit_dejeuner = pdj_j1 and "petit_dejeuner" in compris
+    dejeuner = dej_j1 and "dejeuner" in compris
+
+    if "petit_dejeuner" in compris and not petit_dejeuner:
         # Sans petit-dejeuner, l'hotel ne reconnait aucune formule :
         # c'est une nuit seche, les repas eventuels passent hors pension.
         return NUIT_SEULE
-    if diner_j and dej_j1:
+    if diner and dejeuner:
         return PENSION_COMPLETE
-    if diner_j:
+    if diner:
         return DEMI_PENSION_SOIR
-    if dej_j1:
+    if dejeuner:
         return DEMI_PENSION_MIDI
     return NUIT_PETIT_DEJEUNER
 
@@ -135,11 +182,16 @@ def _repas_absorbes(regime: str) -> set[tuple[int, str]]:
     return set()  # NUIT_SEULE et GITE_NUIT n'incluent aucun repas
 
 
-def calculer_prestations(presences: list) -> Prestations:
+def calculer_prestations(presences: list, logements: dict | None = None) -> Prestations:
     """Transforme les faits saisis en prestations facturables.
 
     Equivalent de la feuille `Prestations-Pers` du classeur, mais
     en un seul endroit et testable.
+
+    `logements` est l'inventaire, indexe par identifiant : c'est lui qui
+    dit ce que la nuit de chaque type comprend. Absent, on retombe sur la
+    regle d'avant -- une chambre comprend tout, un gite rien -- ce qui
+    laisse passer les jeux de test ecrits avant ce reglage.
     """
     resultat = Prestations()
 
@@ -172,14 +224,12 @@ def calculer_prestations(presences: list) -> Prestations:
 
             lendemain = jours.get(jour + timedelta(days=1))
 
-            if presence.hebergement == GITE:
-                regime = GITE_NUIT
-            else:
-                regime = _regime_chambre(
-                    diner_j=presence.diner,
-                    pdj_j1=bool(lendemain and lendemain.petit_dejeuner),
-                    dej_j1=bool(lendemain and lendemain.dejeuner),
-                )
+            regime = _regime(
+                repas_compris(logements, presence.logement_id, presence.hebergement),
+                diner_j=presence.diner,
+                pdj_j1=bool(lendemain and lendemain.petit_dejeuner),
+                dej_j1=bool(lendemain and lendemain.dejeuner),
+            )
 
             resultat.nuitees.append(
                 Nuitee(

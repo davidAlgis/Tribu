@@ -132,21 +132,30 @@
         "categorie": "chambre",
         "capacite": 2,
         "nombre": 3,
-        "vue_mer": false
+        "vue_mer": false,
+        "part_logement": "aucune",
+        "part_personne": "par_occupant",
+        "repas_compris": ["petit_dejeuner", "dejeuner", "diner"]
       },
       {
         "id": "lm",
         "categorie": "chambre",
         "capacite": 2,
         "nombre": 1,
-        "vue_mer": true
+        "vue_mer": true,
+        "part_logement": "aucune",
+        "part_personne": "par_occupant",
+        "repas_compris": ["petit_dejeuner", "dejeuner", "diner"]
       },
       {
         "id": "lg",
         "categorie": "gite",
         "capacite": 4,
         "nombre": 1,
-        "vue_mer": false
+        "vue_mer": false,
+        "part_logement": "fixe",
+        "part_personne": "aucune",
+        "repas_compris": []
       }
     ],
     "tarifs": [

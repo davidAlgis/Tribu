@@ -122,10 +122,102 @@ PARTAGE = {
 }
 
 
+# L'hôtel de l'an prochain : on paie la chambre ET la personne, et rien
+# n'est compris. Les deux parts s'additionnent, et tous les repas tombent
+# hors pension — ce qu'aucun des deux autres jeux n'exerce.
+#
+# `ch3` va plus loin : son prix dépend du nombre d'occupants. Deux nuits,
+# deux occupations différentes, deux prix différents pour la même chambre.
+HOTEL = {
+    "_commentaire": "Jeu de test : deux parts qui s'additionnent, sans pension.",
+    "personnes": [
+        {"id": "a1", "prenom": "Alice", "famille": "A", "categorie_age": "adulte"},
+        {"id": "a2", "prenom": "Bruno", "famille": "A", "categorie_age": "adulte"},
+        {"id": "e1", "prenom": "Chloe", "famille": "A", "categorie_age": "enfant"},
+        {"id": "d1", "prenom": "David", "famille": "D", "categorie_age": "adulte"},
+    ],
+    # 2027-09-13 est un lundi : tout est au tarif semaine.
+    "presences": [
+        {"personne_id": "a1", "jour": "2027-09-13", "hebergement": "chambre",
+         "logement_id": "ch2", "diner": True},
+        {"personne_id": "e1", "jour": "2027-09-13", "hebergement": "chambre",
+         "logement_id": "ch2", "diner": True},
+        {"personne_id": "a2", "jour": "2027-09-13", "hebergement": "chambre",
+         "logement_id": "ch3", "diner": True},
+        {"personne_id": "d1", "jour": "2027-09-13", "hebergement": "chambre",
+         "logement_id": "ch3"},
+        {"personne_id": "a1", "jour": "2027-09-14", "hebergement": "chambre",
+         "logement_id": "ch2", "petit_dejeuner": True, "dejeuner": True},
+        {"personne_id": "e1", "jour": "2027-09-14", "hebergement": "chambre",
+         "logement_id": "ch2", "petit_dejeuner": True},
+        {"personne_id": "a2", "jour": "2027-09-14", "hebergement": "chambre",
+         "logement_id": "ch3", "petit_dejeuner": True},
+        {"personne_id": "d1", "jour": "2027-09-14", "hebergement": "exterieur",
+         "petit_dejeuner": True},
+        {"personne_id": "a1", "jour": "2027-09-15", "hebergement": "exterieur",
+         "petit_dejeuner": True},
+        {"personne_id": "e1", "jour": "2027-09-15", "hebergement": "exterieur"},
+        {"personne_id": "a2", "jour": "2027-09-15", "hebergement": "exterieur",
+         "petit_dejeuner": True},
+    ],
+    "grille": {
+        "logements": [
+            {"id": "ch2", "categorie": "chambre", "capacite": 2, "nombre": 3,
+             "vue_mer": False, "part_logement": "fixe",
+             "part_personne": "par_occupant", "repas_compris": []},
+            {"id": "ch3", "categorie": "chambre", "capacite": 3, "nombre": 1,
+             "vue_mer": False, "part_logement": "selon_occupation",
+             "part_personne": "par_occupant", "repas_compris": []},
+        ],
+        "tarifs": [
+            {"logement_id": "ch2", "tranche": "entier", "semaine": 60, "weekend": 70,
+             "remise": 0},
+            {"logement_id": "ch2", "tranche": "adulte", "semaine": 25, "weekend": 25,
+             "remise": 0},
+            {"logement_id": "ch2", "tranche": "enfant", "semaine": 12, "weekend": 12,
+             "remise": 10},
+            {"logement_id": "ch3", "tranche": "entier_1", "semaine": 55, "weekend": 55,
+             "remise": 0},
+            {"logement_id": "ch3", "tranche": "entier_2", "semaine": 71, "weekend": 71,
+             "remise": 0},
+            {"logement_id": "ch3", "tranche": "entier_3", "semaine": 80, "weekend": 80,
+             "remise": 0},
+            {"logement_id": "ch3", "tranche": "adulte", "semaine": 25, "weekend": 25,
+             "remise": 0},
+        ],
+        "annexes": [
+            {"cle": "taxe_sejour", "tranche": "", "montant": 1.10},
+            {"cle": "petit_dejeuner", "tranche": "adulte", "montant": 9},
+            {"cle": "petit_dejeuner", "tranche": "enfant", "montant": 5},
+            {"cle": "dejeuner", "tranche": "adulte", "montant": 19},
+            {"cle": "diner", "tranche": "adulte", "montant": 31},
+            {"cle": "diner", "tranche": "enfant", "montant": 16},
+        ],
+        "repas_jour": [],
+        "jours_weekend": [4, 5],
+        "couchages": [
+            {"personne_id": "a1", "jour": "2027-09-13", "logement_id": "ch2", "numero": 1},
+            {"personne_id": "e1", "jour": "2027-09-13", "logement_id": "ch2", "numero": 1},
+            {"personne_id": "a2", "jour": "2027-09-13", "logement_id": "ch3", "numero": 1},
+            {"personne_id": "d1", "jour": "2027-09-13", "logement_id": "ch3", "numero": 1},
+            {"personne_id": "a1", "jour": "2027-09-14", "logement_id": "ch2", "numero": 1},
+            {"personne_id": "e1", "jour": "2027-09-14", "logement_id": "ch2", "numero": 1},
+            {"personne_id": "a2", "jour": "2027-09-14", "logement_id": "ch3", "numero": 1},
+        ],
+    },
+}
+
+
 def colonnes_python(chemin: Path) -> dict:
     """Ce que le moteur facture, réparti comme la page l'affiche."""
     personnes, presences, brute = charger_json(chemin)
-    facturation = facturer(calculer_prestations(presences), personnes, grille_depuis(brute))
+    grille = grille_depuis(brute)
+    # L'INVENTAIRE PASSE AUX REGLES, comme dans `run_export.py` : c'est lui
+    # qui dit ce que la nuit de chaque type comprend. L'oublier ferait
+    # retomber le Python sur la règle d'avant — une chambre comprend tout —
+    # pendant que le JavaScript lirait le réglage. Les deux se sépareraient
+    # sur le seul jeu qui l'exerce.
+    facturation = facturer(calculer_prestations(presences, grille.logements), personnes, grille)
 
     compte = defaultdict(lambda: {"hebergement": 0.0, "repas": 0.0, "taxe": 0.0})
     for ligne in facturation.lignes:
@@ -187,21 +279,32 @@ def colonnes_js(chemin: Path) -> dict:
 
 
 @pytest.fixture(scope="module")
-def partage(tmp_path_factory) -> Path:
-    chemin = tmp_path_factory.mktemp("facture") / "partage.json"
-    chemin.write_text(json.dumps(PARTAGE, ensure_ascii=False), encoding="utf-8")
-    return chemin
+def ecrits(tmp_path_factory) -> dict:
+    """Les jeux definis ici, poses sur disque : `charger_json` prend un
+    chemin, et `node` doit pouvoir les relire."""
+    dossier = tmp_path_factory.mktemp("facture")
+    chemins = {"exemple": EXEMPLE}
+    for nom, donnees in (("partage", PARTAGE), ("hotel", HOTEL)):
+        chemin = dossier / f"{nom}.json"
+        chemin.write_text(json.dumps(donnees, ensure_ascii=False), encoding="utf-8")
+        chemins[nom] = chemin
+    return chemins
 
 
 @pytest.fixture
-def jeux(request, partage):
+def jeux(request, ecrits):
     if not shutil.which("node"):
         pytest.skip("node absent : la comparaison des deux calculs se saute")
-    chemin = EXEMPLE if request.param == "exemple" else partage
+    chemin = ecrits[request.param]
     return colonnes_python(chemin), colonnes_js(chemin)
 
 
-JEUX = pytest.mark.parametrize("jeux", ["exemple", "partage"], indirect=True)
+# TROIS JEUX, et non un seul. Celui de la demonstration montre le cas
+# courant ; `partage` va chercher le gite divise a trois, dont le prix ne
+# tombe pas rond ; `hotel` exerce ce qu'aucun des deux ne contient -- deux
+# parts qui s'additionnent, un prix qui depend de l'occupation, et pas une
+# miette de pension.
+JEUX = pytest.mark.parametrize("jeux", ["exemple", "partage", "hotel"], indirect=True)
 
 
 @JEUX
@@ -235,8 +338,11 @@ def test_le_gite_partage_tombe_bien_a_trois():
     """Le cas que le jeu de démonstration ne contient pas : 100 € divisés
     par trois, sans qu'un centime se perde."""
     personnes, presences, brute = charger_json_dict(PARTAGE)
-    facturation = facturer(calculer_prestations(presences), personnes, grille_depuis(brute))
-    gite = [l for l in facturation.lignes if l.libelle.startswith("Gite")]
+    grille = grille_depuis(brute)
+    facturation = facturer(calculer_prestations(presences, grille.logements), personnes, grille)
+    # « Le logement » et non plus « Gite… » : la part du logement n'est pas
+    # un régime, et une chambre peut désormais la porter.
+    gite = [l for l in facturation.lignes if l.libelle == "Le logement"]
     assert sorted(l.prix for l in gite) == [33.33, 33.33, 33.34]
     assert round(sum(l.prix for l in gite), 2) == 100.0
 
@@ -336,6 +442,9 @@ def test_les_regimes_sont_nommes_comme_l_hotel_les_nomme(jeux):
         "Demi-pension déjeuner",
         "Nuit + petit-déjeuner",
         "Nuit seule",
+        # Une nuit dont rien n'est compris. Ce n'est plus l'affaire des
+        # seuls gîtes : une chambre d'hôtel sans pension la porte aussi.
+        "Nuit sans pension",
     )
     for ligne in nuits:
         assert ligne["libelle"].startswith(connus), ligne["libelle"]

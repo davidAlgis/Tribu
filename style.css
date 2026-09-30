@@ -256,6 +256,35 @@ td.rien { color: var(--doux); }
 .cases-regime { display: flex; flex-wrap: wrap; gap: 4px 22px; }
 .cases-regime .interrupteur { margin: 6px 0 0; }
 
+/* ---------- Comment un type se facture ---------- */
+/* Les trois questions, juste au-dessus du tableau de prix dont elles
+   commandent les colonnes. Une bande discrete : c'est un reglage qu'on
+   pose une fois, pas la saisie du jour. */
+.facturation {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: 8px 18px;
+  padding: 10px 12px;
+  margin-bottom: 6px;
+  border: 1px dashed var(--trait);
+  border-radius: 8px;
+  background: var(--carte);
+}
+.facturation .reglage {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin: 0;
+  font-size: 0.82rem;
+  color: var(--doux);
+}
+.facturation select { width: auto; min-width: 12em; }
+/* Les trois cases tiennent sur une ligne, et se replient sur un
+   telephone plutot que de pousser le panneau en largeur. */
+.facturation .repas-compris { flex-direction: column; }
+.facturation .repas-compris .interrupteur { margin: 0; font-size: 0.88rem; }
+
 /* ---------- Les activites ---------- */
 /* Une idee, une reponse. L'intitule et la liste deroulante sur la meme
    ligne : c'est la paire qu'on lit, et sur un telephone elle se replie

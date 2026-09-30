@@ -1869,6 +1869,155 @@ function recopierTableau(source) {
   return combien;
 }
 
+// ---------------------------------------------- comment ca se facture
+//
+// LE MOT « CHAMBRE » DECIDAIT DE TROIS CHOSES A LA FOIS : on paie par
+// personne, on ne paie pas le logement, et la nuit comprend les repas. Le
+// mot « gite » decidait des trois autres. Il n'y avait que ces deux
+// paquets, et un hotel qui fait payer la chambre ET la personne, sans
+// pension, n'etait pas descriptible.
+//
+// Les trois questions se posent donc separement, et ICI plutot que dans
+// l'inventaire : ce sont elles qui commandent les colonnes de prix du
+// tableau juste en dessous, et voir la cause a cote de son effet vaut
+// mieux que de les separer de deux onglets.
+
+const PARTS_LOGEMENT = [
+  ["aucune", "rien"],
+  ["fixe", "un prix, divisé entre les occupants"],
+  ["selon_occupation", "un prix par nombre d'occupants"],
+];
+
+const PARTS_PERSONNE = [
+  ["aucune", "rien"],
+  ["par_occupant", "selon la tranche d'âge"],
+];
+
+const REPAS_NUIT = [
+  ["petit_dejeuner", "petit-déjeuner"],
+  ["dejeuner", "déjeuner"],
+  ["diner", "dîner"],
+];
+
+// Ce que valait la regle avant que ces colonnes existent. Elle sert de
+// repli tant qu'une base n'a pas ete recollee -- la page ne doit pas
+// changer de comportement en attendant.
+function reglagesDe(logement) {
+  const gite = logement.categorie === "gite";
+  return {
+    partLogement: logement.part_logement || (gite ? "fixe" : "aucune"),
+    partPersonne: logement.part_personne || (gite ? "aucune" : "par_occupant"),
+    compris: logement.repas_compris || (gite ? [] : REPAS_NUIT.map(([c]) => c)),
+  };
+}
+
+// Les colonnes de prix DECOULENT des reponses : une colonne « le logement
+// entier » s'il a un prix fixe, une par occupation s'il suit le nombre de
+// dormeurs, les quatre tranches d'age s'il se paie par personne.
+function colonnesDe(logement) {
+  const { partLogement, partPersonne } = reglagesDe(logement);
+  const colonnes = [];
+
+  if (partLogement === "fixe") {
+    colonnes.push({ cle: "entier", libelle: "Le logement entier" });
+  } else if (partLogement === "selon_occupation") {
+    for (let n = 1; n <= logement.capacite; n += 1) {
+      colonnes.push({ cle: `entier_${n}`, libelle: `À ${n}` });
+    }
+  }
+  if (partPersonne === "par_occupant") {
+    colonnes.push(...TRANCHES.map((t) => ({ cle: t, libelle: libelleTranche(t) })));
+  }
+  return colonnes;
+}
+
+async function poserFacturation(logement, reglages) {
+  messageTarifs.className = "";
+  messageTarifs.textContent = "Enregistrement…";
+  try {
+    await rpc("admin_logement_facturation", {
+      p_code: etat.code,
+      p_id: logement.id,
+      p_part_logement: reglages.partLogement,
+      p_part_personne: reglages.partPersonne,
+      p_repas_compris: reglages.compris,
+    });
+    // `rechargerTarifs` et non `rechargerLogements` : cette derniere ne
+    // redessine la grille que si les TYPES ont change -- une garde qui
+    // protege les prix en cours de saisie. Ici on VEUT la redessiner,
+    // puisque ce sont ses colonnes qui viennent de changer.
+    await rechargerTarifs();
+    messageTarifs.className = "ok";
+    messageTarifs.textContent =
+      `${nommerTarif(logement)} : c'est noté. Les colonnes de prix ont suivi — ` +
+      "relis-les avant d'enregistrer.";
+  } catch (erreur) {
+    messageTarifs.className = "erreur";
+    messageTarifs.textContent = erreur.message;
+    await rechargerTarifs();
+  }
+}
+
+function listeReglage(titre, valeurs, choisi, quand) {
+  const bloc = document.createElement("label");
+  bloc.className = "reglage";
+  bloc.append(titre);
+  const choix = document.createElement("select");
+  for (const [valeur, libelle] of valeurs) {
+    const option = document.createElement("option");
+    option.value = valeur;
+    option.textContent = libelle;
+    choix.appendChild(option);
+  }
+  choix.value = choisi;
+  choix.addEventListener("change", () => quand(choix.value));
+  bloc.appendChild(choix);
+  return bloc;
+}
+
+function panneauFacturation(logement) {
+  const reglages = reglagesDe(logement);
+
+  const bloc = document.createElement("div");
+  bloc.className = "facturation";
+  bloc.dataset.logement = logement.id;
+
+  bloc.appendChild(
+    listeReglage("On paie le logement", PARTS_LOGEMENT, reglages.partLogement, (v) =>
+      poserFacturation(logement, { ...reglages, partLogement: v })
+    )
+  );
+  bloc.appendChild(
+    listeReglage("On paie par personne", PARTS_PERSONNE, reglages.partPersonne, (v) =>
+      poserFacturation(logement, { ...reglages, partPersonne: v })
+    )
+  );
+
+  const compris = document.createElement("div");
+  compris.className = "reglage repas-compris";
+  compris.append("La nuit comprend");
+  for (const [cle, libelle] of REPAS_NUIT) {
+    const etiquette = document.createElement("label");
+    etiquette.className = "interrupteur";
+    const boite = document.createElement("input");
+    boite.type = "checkbox";
+    boite.checked = reglages.compris.includes(cle);
+    boite.dataset.repas = cle;
+    boite.setAttribute("aria-label", `${nommerTarif(logement)} — ${libelle} compris`);
+    boite.addEventListener("change", () => {
+      const garde = REPAS_NUIT.map(([c]) => c).filter((c) =>
+        c === cle ? boite.checked : reglages.compris.includes(c)
+      );
+      poserFacturation(logement, { ...reglages, compris: garde });
+    });
+    etiquette.append(boite, ` ${libelle}`);
+    compris.appendChild(etiquette);
+  }
+  bloc.appendChild(compris);
+
+  return bloc;
+}
+
 function dessinerGrilleTarifs() {
   const logements = tarifs.logements || [];
   zoneGrilleTarifs.textContent = "";
@@ -1877,18 +2026,17 @@ function dessinerGrilleTarifs() {
     rien.className = "note";
     rien.textContent =
       "L'inventaire est vide : pose des chambres ou des gîtes dans l'onglet " +
-      "Logements, et leurs prix apparaîtront ici.";
+      "Logements, et leurs prix apparaîtront ici — avec les colonnes que " +
+      "leur façon de se facturer appelle.";
     zoneGrilleTarifs.appendChild(rien);
     return;
   }
 
   for (const logement of logements) {
-    const colonnes =
-      logement.categorie === "gite"
-        ? [{ cle: "entier", libelle: "Le gîte entier" }]
-        : TRANCHES.map((t) => ({ cle: t, libelle: libelleTranche(t) }));
-
+    const colonnes = colonnesDe(logement);
     const titre = nommerTarif(logement);
+
+    zoneGrilleTarifs.appendChild(panneauFacturation(logement));
 
     const table = tableauTarifs(titre, colonnes, LIGNES_PRIX, (ligne, colonne) => {
       const pose = prixPose(logement.id, colonne.cle);

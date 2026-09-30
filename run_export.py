@@ -51,7 +51,9 @@ def main() -> int:
         config = {}
 
     grille = grille_depuis(brute)
-    prestations = calculer_prestations(presences)
+    # L'inventaire dit ce que la nuit de chaque type comprend comme repas :
+    # sans lui, le moteur retombe sur la regle d'avant ce reglage.
+    prestations = calculer_prestations(presences, grille.logements)
     facturation = facturer(prestations, personnes, grille)
 
     sortie = Path(args.out)

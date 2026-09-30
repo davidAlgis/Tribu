@@ -2751,6 +2751,84 @@ alter table private.logements drop constraint if exists logements_categorie_vali
 alter table private.logements add constraint logements_categorie_valide
   check (categorie in ('chambre', 'gite'));
 
+
+-- ---- Comment ce type se facture ----
+--
+--  Le mot « chambre » decidait jusqu'ici de TROIS choses a la fois : on
+--  paie par personne, on ne paie pas le logement, et la nuit comprend les
+--  repas. Le mot « gite » decidait des trois autres. Il n'y avait que ces
+--  deux paquets -- et un hotel qui fait payer la chambre ET la personne,
+--  sans pension, n'etait pas descriptible.
+--
+--  Les trois questions se posent donc separement. Elles se lisent sur la
+--  ligne du type, et non dans `rules.py`.
+--
+--    part_logement   ce qu'on paie pour le logement lui-meme
+--      'aucune'            rien : la chambre n'a pas de prix en soi
+--      'fixe'              un prix, divise entre ceux qui y dorment
+--      'selon_occupation'  un prix par nombre d'occupants -- la chambre a
+--                          deux ne coute pas la chambre a trois
+--
+--    part_personne   ce que paie chaque occupant
+--      'aucune'            rien : l'age des occupants ne change rien
+--      'par_occupant'      son prix, selon sa tranche d'age
+--
+--    repas_compris   les repas que la nuit absorbe. Vide = pas de pension,
+--                    et tout repas pris se facture a part.
+--
+--  LES DEUX PARTS S'ADDITIONNENT. C'est ce qui rend « on paie a la chambre
+--  et par la personne » exprimable sans inventer un troisieme mode.
+--
+--  `par_place` -- les lits vides dus -- n'est pas ici : il faudrait dire A
+--  QUEL TARIF se facture un lit vide, et cette regle-la s'invente, elle ne
+--  se deduit pas. Elle attend qu'un hotel la reclame.
+--
+do $mig$
+begin
+  if not exists (
+    select 1 from information_schema.columns
+     where table_schema = 'private' and table_name = 'logements'
+       and column_name = 'part_logement'
+  ) then
+    alter table private.logements
+      add column part_logement text not null default 'aucune',
+      add column part_personne text not null default 'par_occupant',
+      add column repas_compris text[] not null default '{}';
+
+    -- CE QUE LE CODE FAISAIT EN DUR, ecrit une fois sur les lignes deja
+    -- posees. Relire ces deux cas, c'est relire l'ancien moteur : une
+    -- chambre se payait par personne et comprenait les trois repas, un
+    -- gite se louait entier et n'en comprenait aucun. Rien ne change pour
+    -- le sejour en cours.
+    update private.logements l
+       set part_logement = case when l.categorie = 'gite' then 'fixe' else 'aucune' end,
+           part_personne = case when l.categorie = 'gite' then 'aucune' else 'par_occupant' end,
+           repas_compris = case when l.categorie = 'gite' then '{}'::text[]
+                                else '{petit_dejeuner,dejeuner,diner}'::text[] end
+     where l.id is not null;
+  end if;
+end $mig$;
+
+alter table private.logements drop constraint if exists logements_part_logement_valide;
+alter table private.logements add constraint logements_part_logement_valide
+  check (part_logement in ('aucune', 'fixe', 'selon_occupation'));
+
+alter table private.logements drop constraint if exists logements_part_personne_valide;
+alter table private.logements add constraint logements_part_personne_valide
+  check (part_personne in ('aucune', 'par_occupant'));
+
+-- Un type qui ne se facture d'aucune facon serait une nuit gratuite, sans
+-- que rien ne le signale -- ni prix manquant, ni alerte. Une chambre
+-- offerte s'ecrit « par occupant, a zero euro » : ca se voit dans la
+-- grille, et ca se corrige.
+alter table private.logements drop constraint if exists logements_se_facture;
+alter table private.logements add constraint logements_se_facture
+  check (part_logement <> 'aucune' or part_personne <> 'aucune');
+
+alter table private.logements drop constraint if exists logements_repas_connus;
+alter table private.logements add constraint logements_repas_connus
+  check (repas_compris <@ array['petit_dejeuner', 'dejeuner', 'diner']::text[]);
+
 -- Des bornes de formulaire, pas des bornes de verite : elles existent pour
 -- qu'un doigt qui glisse sur le pave numerique ne pose pas trois mille
 -- couchages sans que rien ne bronche.
@@ -2808,6 +2886,9 @@ begin
                'capacite', l.capacite,
                'nombre', l.nombre,
                'vue_mer', l.vue_mer,
+               'part_logement', l.part_logement,
+               'part_personne', l.part_personne,
+               'repas_compris', to_jsonb(l.repas_compris),
                'places', l.capacite * l.nombre
              ) order by l.categorie, l.vue_mer, l.capacite)
       from private.logements l
@@ -2899,8 +2980,16 @@ begin
   -- Reposer un type deja connu le CORRIGE, il ne s'ajoute pas. C'est ce qui
   -- permet au formulaire de n'avoir qu'un bouton, et a la liste de n'avoir
   -- jamais deux lignes a dire la meme chose.
-  insert into private.logements (categorie, capacite, nombre, vue_mer)
-  values (p_categorie, p_capacite, p_nombre, coalesce(p_vue_mer, false))
+  -- Un type neuf part sur les reglages de sa categorie -- ceux d'avant que
+  -- ces colonnes existent. On les corrige ensuite dans l'onglet Tarifs, la
+  -- ou l'on voit les colonnes de prix qu'ils commandent.
+  insert into private.logements
+    (categorie, capacite, nombre, vue_mer, part_logement, part_personne, repas_compris)
+  values (p_categorie, p_capacite, p_nombre, coalesce(p_vue_mer, false),
+          case when p_categorie = 'gite' then 'fixe' else 'aucune' end,
+          case when p_categorie = 'gite' then 'aucune' else 'par_occupant' end,
+          case when p_categorie = 'gite' then '{}'::text[]
+               else '{petit_dejeuner,dejeuner,diner}'::text[] end)
   on conflict (categorie, capacite, vue_mer) do update set nombre = excluded.nombre
   returning * into pose;
 
@@ -3004,7 +3093,66 @@ begin
   return jsonb_build_object('retire', partant.capacite * partant.nombre);
 end $fn$;
 
+
+-- ---- 11f. Comment un type se facture ----
+--
+--  Les trois reponses de la ligne du type. Elles vivent dans l'onglet
+--  Tarifs et non dans l'inventaire : ce sont elles qui commandent les
+--  colonnes de prix, et voir la cause a cote de son effet vaut mieux que
+--  de les separer de deux onglets.
+--
+create or replace function public.admin_logement_facturation(
+  p_code          text,
+  p_id            uuid,
+  p_part_logement text,
+  p_part_personne text,
+  p_repas_compris text[]
+)
+returns jsonb
+language plpgsql security definer
+set search_path = private, pg_temp as $fn$
+declare
+  pose private.logements;
+begin
+  perform private.verifier_code(p_code, 'admin');
+  perform private.sauver_si_nouvelle_semaine();
+
+  if p_part_logement is null
+     or p_part_logement not in ('aucune', 'fixe', 'selon_occupation') then
+    raise exception 'PART_INCONNUE' using errcode = 'P0001';
+  end if;
+  if p_part_personne is null or p_part_personne not in ('aucune', 'par_occupant') then
+    raise exception 'PART_INCONNUE' using errcode = 'P0001';
+  end if;
+  if p_part_logement = 'aucune' and p_part_personne = 'aucune' then
+    raise exception 'RIEN_A_FACTURER' using errcode = 'P0001';
+  end if;
+  if not (coalesce(p_repas_compris, '{}'::text[])
+          <@ array['petit_dejeuner', 'dejeuner', 'diner']::text[]) then
+    raise exception 'REPAS_INCONNU' using errcode = 'P0001';
+  end if;
+
+  update private.logements l
+     set part_logement = p_part_logement,
+         part_personne = p_part_personne,
+         repas_compris = coalesce(p_repas_compris, '{}'::text[])
+   where l.id = p_id
+  returning * into pose;
+
+  if pose.id is null then
+    raise exception 'UNITE_INCONNUE' using errcode = 'P0001';
+  end if;
+
+  return jsonb_build_object(
+    'id', pose.id,
+    'part_logement', pose.part_logement,
+    'part_personne', pose.part_personne,
+    'repas_compris', to_jsonb(pose.repas_compris)
+  );
+end $fn$;
+
 grant execute on function public.admin_logements(text)                                  to anon;
+grant execute on function public.admin_logement_facturation(text, uuid, text, text, text[]) to anon;
 grant execute on function public.admin_logement_poser(text, text, integer, integer, boolean) to anon;
 grant execute on function public.admin_logement_modifier(text, uuid, text, integer, integer, boolean) to anon;
 grant execute on function public.admin_logement_retirer(text, uuid)                     to anon;
@@ -3846,7 +3994,9 @@ grant execute on function public.admin_tarifs_enregistrer(text, jsonb, jsonb, js
 --  `tarifs` naissent plus bas dans le fichier.
 --
 create or replace view public.v_logements as
-  select id, categorie, capacite, nombre, vue_mer from private.logements;
+  select id, categorie, capacite, nombre, vue_mer,
+         part_logement, part_personne, repas_compris
+    from private.logements;
 
 create or replace view public.v_tarifs as
   select logement_id, tranche, semaine, weekend, remise from private.tarifs;
@@ -3975,7 +4125,12 @@ set search_path = private, pg_temp as $fn$
                'categorie', l.categorie,
                'capacite', l.capacite,
                'nombre', l.nombre,
-               'vue_mer', l.vue_mer
+               'vue_mer', l.vue_mer,
+               -- Comment ce type se facture : c'est de la que le moteur
+               -- tire ses deux parts et ce que la nuit comprend.
+               'part_logement', l.part_logement,
+               'part_personne', l.part_personne,
+               'repas_compris', to_jsonb(l.repas_compris)
              ) order by l.categorie, l.vue_mer, l.capacite)
       from private.logements l
     ), '[]'::jsonb),
@@ -4670,7 +4825,7 @@ grant execute on function public.admin_sauvegarde_restaurer(text, uuid)  to anon
 --    options_date   les week-ends proposes, poses depuis admin.html
 --    voeux          les reponses de la famille au sondage des dates
 --    refus_lieu     les departements peints en rouge sur la carte
---    logements      l'inventaire des couchages, pose depuis admin.html
+--    logements      l'inventaire des couchages, et comment il se facture
 --    couchages      qui dort ou, nuit par nuit
 --    activites      les sorties proposees, par la famille ou l'organisateur
 --    envies         les « oui » et les « pourquoi pas » -- jamais les « non »

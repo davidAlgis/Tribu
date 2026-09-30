@@ -117,6 +117,62 @@ panneau qui arrive prend le bord accentué de la saisie et se signale une
 fois, brièvement — l'animation est un renfort, jamais le seul message,
 et `prefers-reduced-motion` la supprime.
 
+## Décrire l'hôtel, au lieu de le coder
+
+Chaque année, une cousinade, et chaque année un hôtel qui facture à sa
+façon. Le mot **« chambre »** décidait jusqu'ici de trois choses à la fois —
+on paie par personne, on ne paie pas le logement, la nuit comprend les
+repas — et **« gîte »** décidait des trois autres. Il n'existait que ces
+deux paquets, et un hôtel qui fait payer la chambre *et* la personne, sans
+pension, n'était pas descriptible.
+
+**Les trois questions se posent maintenant séparément**, une fois par type
+de logement, dans l'onglet **Tarifs** — juste au-dessus du tableau de prix
+dont elles commandent les colonnes :
+
+| question | réponses |
+|---|---|
+| **On paie le logement** | rien · un prix fixe, divisé entre ses occupants · un prix par nombre d'occupants |
+| **On paie par personne** | rien · selon la tranche d'âge |
+| **La nuit comprend** | les repas qu'elle absorbe — aucun s'il n'y a pas de pension |
+
+**Les deux premières s'additionnent.** C'est ce qui rend « on paie à la
+chambre et par la personne » exprimable sans inventer un troisième mode :
+les deux boucles du moteur ont simplement cessé de s'exclure.
+
+L'existant se traduit dans ce vocabulaire **sans rien changer**, et c'est
+ce que la base écrit sur les lignes déjà posées : une chambre devient
+*(rien, par occupant, les trois repas)*, un gîte *(prix fixe, rien, aucun
+repas)*. Ces deux lignes disent exactement ce que le code disait en dur —
+le comportement ne bouge pas, il devient lisible et modifiable.
+
+**Les colonnes de prix découlent des réponses** : « le logement entier » si
+la part fixe existe, « à 1 », « à 2 »… si elle suit l'occupation, les
+quatre tranches d'âge si la part par personne existe. Changer une réponse
+redessine le tableau depuis ce qui est enregistré : des prix tapés et non
+encore enregistrés seraient perdus, ce qui n'a rien de grave pour un
+réglage qu'on pose une fois l'hôtel connu.
+
+**Un type qui se paie au logement exige le plan de couchage** : sans lui,
+on sait que quelqu'un dort là, mais pas dans quel exemplaire ni avec qui —
+donc pas quelle part lui revient. Ces nuits-là ne sont facturées à personne
+et la facture le dit en rouge. Cela ne concernait que les gîtes ; cela
+concerne désormais tout type qui a une part de logement.
+
+**Ce qui n'est pas là, et pourquoi.** *Les lits vides dus* — une chambre de
+4 occupée à 3 facturée 4 — supposerait de dire à quel tarif se facture un
+lit vide, et cette règle-là s'invente au lieu de se déduire : elle attend
+qu'un hôtel la réclame. Et les régimes restent modélisés comme *pension
+complète moins une réduction en euros*, parce que c'est ainsi qu'un hôtel
+les annonce ; un hôtel qui afficherait quatre prix indépendants demanderait
+une grille plus large.
+
+Le calcul existe en deux exemplaires — Python pour l'export, JavaScript
+pour les pages — et [`tests/test_facture.py`](tests/test_facture.py) les
+compare au centime sur **trois** jeux de données, dont un qui n'exerce que
+ça : deux parts qui s'additionnent, un prix qui dépend de l'occupation, et
+pas une miette de pension.
+
 ## Les activités
 
 Une liste d'idées, et trois réponses par personne : **Oui**, **Pourquoi
@@ -824,7 +880,9 @@ encore après et qu'une sortie se décide bien avant.
 
 **Absent est l'état par défaut, et ça se voit dans la grille.** La colonne
 de gauche ne demande qu'une chose — **où l'on dort** : « pas sur place »,
-« en chambre », « en chambre, vue mer », « en gîte ». La vue mer y figure
+« en chambre », « en chambre, vue mer », « en gîte ». Ces mots ne disent
+plus comment ça se facture&nbsp;— ils ne désignent qu'une ligne de
+l'inventaire, qui porte ses trois réponses (voir plus haut). La vue mer y figure
 comme une variante de chambre, et non comme une case à part : elle tenait
 une colonne entière, désactivée les trois quarts du temps puisque seule une
 chambre peut l'avoir. La base, elle, garde deux champs — un hébergement et

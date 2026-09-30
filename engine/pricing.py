@@ -14,27 +14,45 @@ pas, ne depend pas du regime, et ne se partage pas entre les occupants
 d'un gite : c'est la personne qui la doit. Elle sort donc en ligne
 distincte, comme sur une note d'hotel.
 
-COMMENT SE CALCULE UNE NUIT EN CHAMBRE
+UNE NUIT A DEUX PARTS, ET ELLES S'ADDITIONNENT
 
-    prix de la ligne (semaine ou week-end, selon le jour ou l'on se couche)
-    - la reduction du regime, jamais en dessous de zero
-    + le supplement vue mer
-    le tout diminue de la remise, en pourcentage
+Chaque type de logement dit lesquelles il a (`part_logement`,
+`part_personne`, section 11 du schema). Le mot « chambre » decidait des
+deux a la fois ; il n'en decide plus.
 
-Le prix de la ligne est celui de la PENSION COMPLETE : les autres regimes
-s'en deduisent par une reduction en euros, parce que c'est ainsi qu'un
-hotel les annonce -- « la demi-pension, c'est vingt euros de moins ». Un
-bebe facture zero reste a zero : une reduction ne rend pas d'argent.
+    part par personne (`par_occupant`) -- ce que chaque occupant paie
+      prix de sa tranche d'age (semaine ou week-end, selon le jour ou
+        l'on se couche)
+      - la reduction du regime, jamais en dessous de zero
+      + le supplement vue mer
+      le tout diminue de la remise, en pourcentage
 
-UN GITE NE SE FACTURE PAS PAR PERSONNE
+    part du logement (`fixe` ou `selon_occupation`) -- ce que coute le
+      logement lui-meme, PARTAGE entre ceux qui y passent la nuit
+      `fixe`             un seul prix, ligne « entier »
+      `selon_occupation` un prix par nombre d'occupants, lignes
+                         « entier_1 », « entier_2 »...
 
-C'est LE GITE qu'on paye -- un gite de six coute son prix qu'on y dorme a
-quatre ou a six -- et la note se partage entre ceux qui y passent la nuit.
-D'ou le besoin du PLAN DE COUCHAGE : sans lui, on sait que quelqu'un dort
-en gite, mais pas dans lequel ni avec qui, donc pas quelle part lui
-revient. Ceux qui n'ont pas de place attribuee ne sont donc factures de
-rien et remontent dans `sans_place`, que l'export affiche : c'est un
-travail qui reste a faire, pas un cadeau.
+Une chambre d'hier n'avait que la premiere, un gite que la seconde. Un
+hotel qui fait payer la chambre ET la personne a les deux, et rien dans
+le calcul n'a eu a changer pour cela : les deux boucles ont simplement
+cesse de s'exclure.
+
+Le prix par personne est celui de la PENSION COMPLETE quand la nuit
+comprend des repas : les autres regimes s'en deduisent par une reduction
+en euros, parce que c'est ainsi qu'un hotel les annonce -- « la
+demi-pension, c'est vingt euros de moins ». Un type qui ne comprend aucun
+repas n'a pas de regime, donc pas de reduction. Un bebe facture zero
+reste a zero : une reduction ne rend pas d'argent.
+
+LA PART DU LOGEMENT EXIGE LE PLAN DE COUCHAGE
+
+Sans lui, on sait que quelqu'un dort la, mais pas dans quel exemplaire ni
+avec qui -- donc pas quelle part lui revient. Ceux qui n'ont pas de place
+attribuee ne sont factures de rien et remontent dans `sans_place`, que
+l'export affiche : c'est un travail qui reste a faire, pas un cadeau.
+Cela ne concernait que les gites ; cela concerne desormais tout type qui
+se paie au logement.
 
 Un tarif absent ne fait pas planter le calcul : la ligne est facturee 0 et
 remontee dans `tarifs_manquants`. L'export liste alors exactement les prix
@@ -50,12 +68,22 @@ from pathlib import Path
 from engine.rules import (
     CHAMBRE,
     GITE,
-    GITE_NUIT,
     LIBELLES_REGIME,
     LIBELLES_REPAS,
     PENSION_COMPLETE,
     Prestations,
 )
+
+# La ligne de la part du logement. Ce n'est pas un regime -- une chambre
+# peut la porter tout en comprenant des repas -- donc pas un libelle de
+# `LIBELLES_REGIME` : c'est LE LOGEMENT qu'on paye.
+LIBELLE_LOGEMENT = "Le logement"
+
+# Ce que le type dit de sa facturation. Les memes mots que la base.
+AUCUNE = "aucune"
+FIXE = "fixe"
+SELON_OCCUPATION = "selon_occupation"
+PAR_OCCUPANT = "par_occupant"
 
 # Les nombres qui ne dependent d'aucun couchage, tels que la page les
 # range. `''` en tranche : le montant ne depend pas de l'age.
@@ -106,6 +134,25 @@ class Grille:
     # (personne_id, jour) -> (logement_id, numero)
     couchages: dict[tuple[str, date], tuple[str, int]] = field(default_factory=dict)
 
+    # --- Comment un type se facture -------------------------------
+    #
+    # Le repli par categorie n'est pas une commodite : un type declare
+    # sans taille -- « en chambre », generique -- ne designe aucune ligne
+    # d'inventaire, et il faut bien le facturer quand meme. C'est aussi ce
+    # qui laisse passer les jeux de test ecrits avant ce reglage.
+
+    def part_personne(self, logement_id, hebergement: str) -> str:
+        ligne = self.logements.get(logement_id)
+        if ligne and ligne.get("part_personne"):
+            return ligne["part_personne"]
+        return AUCUNE if hebergement == GITE else PAR_OCCUPANT
+
+    def part_logement(self, logement_id, hebergement: str) -> str:
+        ligne = self.logements.get(logement_id)
+        if ligne and ligne.get("part_logement"):
+            return ligne["part_logement"]
+        return FIXE if hebergement == GITE else AUCUNE
+
     def nom(self, logement_id: str) -> str:
         """« gite de 6 », « chambre vue mer de 2 » -- de quoi lire un
         tarif manquant sans aller chercher l'identifiant en base."""
@@ -132,6 +179,12 @@ def grille_depuis(donnees: dict) -> Grille:
             "categorie": ligne["categorie"],
             "capacite": ligne["capacite"],
             "vue_mer": bool(ligne.get("vue_mer", False)),
+            # Comment ce type se facture. Absents d'un jeu de donnees
+            # ecrit avant ce reglage : les methodes de `Grille` retombent
+            # alors sur la regle de la categorie.
+            "part_logement": ligne.get("part_logement"),
+            "part_personne": ligne.get("part_personne"),
+            "repas_compris": ligne.get("repas_compris"),
         }
 
     for ligne in donnees.get("tarifs", []):
@@ -215,16 +268,16 @@ def _detail_chambre(grille: Grille, logement_id, vue_mer: bool) -> str:
     return nom + (" + vue mer" if vue_mer and not deja else "")
 
 
-def _facturer_chambres(prestations, personnes, grille, facturation) -> None:
+def _facturer_par_personne(prestations, personnes, grille, facturation) -> None:
     for nuitee in prestations.nuitees:
-        if nuitee.hebergement != CHAMBRE:
-            continue
-        personne = personnes[nuitee.personne_id]
-
         # La place REELLE d'abord -- c'est la qu'on a dormi -- et le type
         # declare a defaut, pour qui n'a pas encore de place sur le plan.
         place = grille.couchages.get((nuitee.personne_id, _jour(nuitee.jour)))
         logement_id = place[0] if place else nuitee.logement_id
+
+        if grille.part_personne(logement_id, nuitee.hebergement) == AUCUNE:
+            continue
+        personne = personnes[nuitee.personne_id]
 
         if logement_id is None:
             facturation.tarifs_manquants.add(
@@ -270,26 +323,28 @@ def _parts(total: float, combien: int) -> list[float]:
     return parts
 
 
-def _facturer_gites(prestations, personnes, grille, facturation) -> None:
-    # Un gite se paye entier : on regroupe donc les dormeurs par unite --
-    # la ligne d'inventaire ET le numero de l'exemplaire, sans quoi deux
+def _facturer_au_logement(prestations, personnes, grille, facturation) -> None:
+    # Le logement se paye entier : on regroupe donc les dormeurs par unite
+    # -- la ligne d'inventaire ET le numero de l'exemplaire, sans quoi deux
     # gites jumeaux n'en feraient qu'un.
     par_unite: dict[tuple[date, str, int], list] = {}
 
     for nuitee in prestations.nuitees:
-        if nuitee.hebergement != GITE:
-            continue
         place = grille.couchages.get((nuitee.personne_id, _jour(nuitee.jour)))
+        logement_id = place[0] if place else nuitee.logement_id
+        mode = grille.part_logement(logement_id, nuitee.hebergement)
+        if mode == AUCUNE:
+            continue
         if place is None:
-            # Sans place, pas de part : on ne sait ni quel gite ni avec
-            # combien. C'est le plan de couchage qui le dira.
+            # Sans place, pas de part : on ne sait ni quel exemplaire ni
+            # avec combien. C'est le plan de couchage qui le dira.
             facturation.sans_place.append((nuitee.personne_id, nuitee.jour))
             facturation.lignes.append(
                 LigneFacture(
                     personne_id=nuitee.personne_id,
                     jour=nuitee.jour,
-                    libelle=LIBELLES_REGIME[GITE_NUIT],
-                    detail="gite sans place attribuee",
+                    libelle=LIBELLE_LOGEMENT,
+                    detail="logement sans place attribuee",
                     prix=0.0,
                 )
             )
@@ -299,20 +354,32 @@ def _facturer_gites(prestations, personnes, grille, facturation) -> None:
     for (jour, logement_id, numero), occupants in sorted(
         par_unite.items(), key=lambda x: (x[0][0], str(x[0][1]), x[0][2])
     ):
-        prix, remise = _montant(grille, logement_id, "entier", jour)
+        # `selon_occupation` : le prix depend du nombre de dormeurs de la
+        # nuit -- la chambre a deux ne coute pas la chambre a trois. Une
+        # ligne par occupation, et le prix plat en repli : un hotel qui
+        # n'aurait rempli que « entier » ne facture pas zero pour autant.
+        combien = len(occupants)
+        mode = grille.part_logement(logement_id, occupants[0].hebergement)
+        tranche = f"entier_{combien}" if mode == SELON_OCCUPATION else "entier"
+        prix, remise = _montant(grille, logement_id, tranche, jour)
+        if prix <= 0 and tranche != "entier":
+            prix, remise = _montant(grille, logement_id, "entier", jour)
         if prix <= 0:
-            facturation.tarifs_manquants.add(f"{grille.nom(logement_id)} - le gite entier")
+            facturation.tarifs_manquants.add(
+                f"{grille.nom(logement_id)} - le logement entier"
+                + (f", a {combien}" if mode == SELON_OCCUPATION else "")
+            )
 
         occupants.sort(key=lambda n: n.personne_id)
-        parts = _parts(_remiser(prix, remise), len(occupants))
+        parts = _parts(_remiser(prix, remise), combien)
         for nuitee, part in zip(occupants, parts):
             facturation.lignes.append(
                 LigneFacture(
                     personne_id=nuitee.personne_id,
                     jour=nuitee.jour,
-                    libelle=LIBELLES_REGIME[GITE_NUIT],
+                    libelle=LIBELLE_LOGEMENT,
                     detail=f"{grille.nom(logement_id)} n° {numero}"
-                    + (f", partage a {len(occupants)}" if len(occupants) > 1 else ""),
+                    + (f", partage a {combien}" if combien > 1 else ""),
                     prix=part,
                 )
             )
@@ -393,8 +460,10 @@ def _facturer_repas(prestations, personnes, grille, facturation) -> None:
 
 def facturer(prestations: Prestations, personnes: dict, grille: Grille) -> Facturation:
     facturation = Facturation()
-    _facturer_chambres(prestations, personnes, grille, facturation)
-    _facturer_gites(prestations, personnes, grille, facturation)
+    # LES DEUX PARTS NE S'EXCLUENT PLUS : un type qui les a toutes les deux
+    # passe dans les deux boucles, et sa nuit coute la somme.
+    _facturer_par_personne(prestations, personnes, grille, facturation)
+    _facturer_au_logement(prestations, personnes, grille, facturation)
     _facturer_taxe(prestations, personnes, grille, facturation)
     _facturer_repas(prestations, personnes, grille, facturation)
     facturation.lignes.sort(key=lambda l: (l.jour, l.personne_id, l.libelle))

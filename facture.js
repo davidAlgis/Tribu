@@ -29,6 +29,16 @@ window.FACTURE = (function () {
   const DEMI_PENSION_MIDI = "demi_pension_midi";
   const NUIT_PETIT_DEJEUNER = "nuit_petit_dejeuner";
   const NUIT_SEULE = "nuit_seule";
+  // Une nuit dont rien n'est compris. La cle garde son vieux nom -- les
+  // tests et l'import la comparent -- mais ce n'est plus l'affaire des
+  // seuls gites : une chambre d'hotel sans pension la porte aussi.
+  const SANS_PENSION = "gite_nuit";
+
+  // Comment un type se facture. Les memes mots que la base.
+  const AUCUNE = "aucune";
+  const FIXE = "fixe";
+  const SELON_OCCUPATION = "selon_occupation";
+  const PAR_OCCUPANT = "par_occupant";
 
   const REPAS = ["petit_dejeuner", "dejeuner", "diner"];
 
@@ -40,7 +50,13 @@ window.FACTURE = (function () {
     [DEMI_PENSION_MIDI]: "Demi-pension déjeuner",
     [NUIT_PETIT_DEJEUNER]: "Nuit + petit-déjeuner",
     [NUIT_SEULE]: "Nuit seule",
+    [SANS_PENSION]: "Nuit sans pension",
   };
+
+  // La ligne de la part du logement. Ce n'est pas un regime -- une chambre
+  // peut la porter tout en comprenant des repas -- c'est LE LOGEMENT qu'on
+  // paye.
+  const NOM_LOGEMENT = "Le logement";
   const NOMS_REPAS = {
     petit_dejeuner: "Petit-déjeuner",
     dejeuner: "Déjeuner",
@@ -83,17 +99,36 @@ window.FACTURE = (function () {
 
   // ------------------------------------------------------- les regimes
 
-  // Le meme escalier que `_regime_chambre` : sans petit-dejeuner le
-  // lendemain, l'hotel ne reconnait aucune formule.
-  function regimeChambre(dinerJ, pdjJ1, dejJ1) {
-    if (!pdjJ1) return NUIT_SEULE;
-    if (dinerJ && dejJ1) return PENSION_COMPLETE;
-    if (dinerJ) return DEMI_PENSION_SOIR;
-    if (dejJ1) return DEMI_PENSION_MIDI;
+  // Ce que valait la regle avant que le reglage existe. Elle sert encore
+  // de repli : une declaration generique -- « en chambre », sans taille --
+  // ne designe aucun type, et il faut bien savoir ce que sa nuit comprend.
+  function comprisDe(logements, logementId, hebergement) {
+    const ligne = logements && logements.get ? logements.get(logementId) : null;
+    if (ligne && Array.isArray(ligne.repas_compris)) return new Set(ligne.repas_compris);
+    return hebergement === GITE ? new Set() : new Set(REPAS);
+  }
+
+  // Le meme escalier que `_regime` dans `engine/rules.py`. Il ne voit que
+  // ce que la nuit PEUT comprendre : un repas pris hors de cette liste ne
+  // l'abaisse pas d'un cran, il se facture a part. Avec les trois repas,
+  // c'est mot pour mot la regle d'avant ; avec une liste vide, aucune
+  // formule n'existe.
+  function regimeDe(compris, dinerJ, pdjJ1, dejJ1) {
+    if (!compris.size) return SANS_PENSION;
+
+    const diner = dinerJ && compris.has("diner");
+    const petitDejeuner = pdjJ1 && compris.has("petit_dejeuner");
+    const dejeuner = dejJ1 && compris.has("dejeuner");
+
+    // Sans petit-dejeuner, l'hotel ne reconnait aucune formule.
+    if (compris.has("petit_dejeuner") && !petitDejeuner) return NUIT_SEULE;
+    if (diner && dejeuner) return PENSION_COMPLETE;
+    if (diner) return DEMI_PENSION_SOIR;
+    if (dejeuner) return DEMI_PENSION_MIDI;
     return NUIT_PETIT_DEJEUNER;
   }
 
-  function prestations(presences) {
+  function prestations(presences, logements) {
     const parPersonne = new Map();
     for (const p of presences) {
       const qui = p.participant_id || p.personne_id;
@@ -113,14 +148,12 @@ window.FACTURE = (function () {
         if (presence.hebergement === EXTERIEUR) continue;
 
         const suivant = jours.get(lendemain(jour));
-        const regime =
-          presence.hebergement === GITE
-            ? "gite_nuit"
-            : regimeChambre(
-                !!presence.diner,
-                !!(suivant && suivant.petit_dejeuner),
-                !!(suivant && suivant.dejeuner)
-              );
+        const regime = regimeDe(
+          comprisDe(logements, presence.logement_id, presence.hebergement),
+          !!presence.diner,
+          !!(suivant && suivant.petit_dejeuner),
+          !!(suivant && suivant.dejeuner)
+        );
 
         nuitees.push({
           personne_id: qui,
@@ -182,6 +215,21 @@ window.FACTURE = (function () {
     return grille;
   }
 
+  // Le repli par categorie n'est pas une commodite : un type declare sans
+  // taille -- « en chambre », generique -- ne designe aucune ligne
+  // d'inventaire, et il faut bien le facturer quand meme.
+  function partPersonne(grille, logementId, hebergement) {
+    const ligne = grille.logements.get(logementId);
+    if (ligne && ligne.part_personne) return ligne.part_personne;
+    return hebergement === GITE ? AUCUNE : PAR_OCCUPANT;
+  }
+
+  function partLogement(grille, logementId, hebergement) {
+    const ligne = grille.logements.get(logementId);
+    if (ligne && ligne.part_logement) return ligne.part_logement;
+    return hebergement === GITE ? FIXE : AUCUNE;
+  }
+
   // La base ecrit « gite » sans accent -- c'est une clef, pas un mot. Ces
   // libelles-la partent sur un document qu'on envoie a l'hotel : ils
   // s'ecrivent en francais.
@@ -235,7 +283,9 @@ window.FACTURE = (function () {
   function calculer(faits, brut) {
     const personnes = new Map((faits.personnes || []).map((p) => [p.id, p]));
     const grille = grilleDepuis(brut || {}, faits.couchages);
-    const { nuitees, horsPension } = prestations(faits.presences || []);
+    // L'inventaire dit ce que la nuit de chaque type comprend : il se
+    // construit donc AVANT les prestations, et non apres.
+    const { nuitees, horsPension } = prestations(faits.presences || [], grille.logements);
 
     const compte = new Map();
     const pour = (id) => {
@@ -285,10 +335,12 @@ window.FACTURE = (function () {
     // --- les chambres : par personne, selon l'age
     for (const nuitee of nuitees) {
       pour(nuitee.personne_id).nuits += 1;
-      if (nuitee.hebergement !== CHAMBRE) continue;
-      const personne = personnes.get(nuitee.personne_id) || {};
+      // La place REELLE d'abord -- c'est la qu'on a dormi -- et le type
+      // declare a defaut, pour qui n'a pas encore de place sur le plan.
       const place = grille.couchages.get(`${nuitee.personne_id}|${nuitee.jour}`);
       const logementId = place ? place.logement_id : nuitee.logement_id;
+      if (partPersonne(grille, logementId, nuitee.hebergement) === AUCUNE) continue;
+      const personne = personnes.get(nuitee.personne_id) || {};
 
       let prix = 0;
       let remise = 0;
@@ -340,11 +392,15 @@ window.FACTURE = (function () {
       p.jours.add(nuitee.jour);
     }
 
-    // --- les gites : le gite entier, partage entre ceux qui y dorment
+    // --- la part du logement : le logement entier, partage entre ceux qui
+    // y dorment. LES DEUX BOUCLES NE S'EXCLUENT PLUS : un type qui a les
+    // deux parts passe dans les deux, et sa nuit coute la somme.
     const parUnite = new Map();
     for (const nuitee of nuitees) {
-      if (nuitee.hebergement !== GITE) continue;
-      const place = grille.couchages.get(`${nuitee.personne_id}|${nuitee.jour}`);
+      const placeVue = grille.couchages.get(`${nuitee.personne_id}|${nuitee.jour}`);
+      const typeVu = placeVue ? placeVue.logement_id : nuitee.logement_id;
+      if (partLogement(grille, typeVu, nuitee.hebergement) === AUCUNE) continue;
+      const place = placeVue;
       if (!place) {
         // Sans place, on ne sait ni quel gite ni avec combien : il n'y a
         // pas de part a calculer, et la deviner reviendrait a facturer
@@ -359,19 +415,35 @@ window.FACTURE = (function () {
 
     for (const [cle, occupants] of [...parUnite.entries()].sort()) {
       const [jour, logementId] = cle.split("|");
-      const trouve = montantDe(grille, logementId, "entier", jour);
+      const combien = occupants.length;
+
+      // `selon_occupation` : le prix depend du nombre de dormeurs de la
+      // nuit -- la chambre a deux ne coute pas la chambre a trois. Une
+      // ligne par occupation, et le prix plat en repli : un hotel qui
+      // n'aurait rempli que « entier » ne facture pas zero pour autant.
+      const mode = partLogement(grille, logementId, occupants[0].hebergement);
+      const tranche = mode === SELON_OCCUPATION ? `entier_${combien}` : "entier";
+      let trouve = montantDe(grille, logementId, tranche, jour);
+      if ((!trouve || trouve.montant <= 0) && tranche !== "entier") {
+        trouve = montantDe(grille, logementId, "entier", jour);
+      }
       if (!trouve || trouve.montant <= 0) {
-        manquants.add(`${nommer(grille, logementId)} — le gîte entier`);
+        manquants.add(
+          `${nommer(grille, logementId)} — le logement entier` +
+            (mode === SELON_OCCUPATION ? `, à ${combien}` : "")
+        );
       }
       const total = trouve ? remiser(trouve.montant, trouve.remise) : 0;
 
-      // Le gite se loue entier : la ligne du contrat compte des NUITS DE
-      // GITE, pas des personnes. Les parts qu'on repartit ensuite sont
-      // une affaire interne a la famille.
+      // Le logement se loue entier : la ligne du contrat compte des NUITS
+      // DE LOGEMENT, pas des personnes. Les parts qu'on repartit ensuite
+      // sont une affaire interne a la famille.
       const periode = enWeekend(grille, jour) ? "week-end" : "semaine";
-      const g = prester(`2gite|${logementId}|${periode}`, {
+      const g = prester(`2gite|${logementId}|${periode}|${tranche}`, {
         ordre: 2,
-        libelle: `Nuitée ${nommer(grille, logementId)} — ${periode}`,
+        libelle:
+          `Nuitée ${nommer(grille, logementId)} — ${periode}` +
+          (mode === SELON_OCCUPATION ? ` — à ${combien}` : ""),
         unitaire: trouve ? arrondir(trouve.montant) : 0,
         remise: trouve ? trouve.remise : 0,
       });
@@ -380,7 +452,7 @@ window.FACTURE = (function () {
       g.jours.add(jour);
 
       occupants.sort((a, b) => (a.personne_id < b.personne_id ? -1 : 1));
-      const morceaux = parts(total, occupants.length);
+      const morceaux = parts(total, combien);
       occupants.forEach((nuitee, rang) => {
         const ligne = pour(nuitee.personne_id);
         ligne.hebergement = arrondir(ligne.hebergement + morceaux[rang]);
