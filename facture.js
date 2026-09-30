@@ -505,5 +505,74 @@ window.FACTURE = (function () {
     };
   }
 
-  return { calculer, prestations };
+
+  // ---------------------------------------------------------- synthese
+  //
+  // La FORME de la depense, quand les tableaux en donnent le montant.
+  // Quatre series, et pour chacune : moyenne, ecart-type, minimum,
+  // maximum.
+  //
+  // L'ECART-TYPE EST CELUI DE LA POPULATION, et non d'un echantillon : on
+  // a tout le monde sous la main, on n'estime rien. Diviser par n-1
+  // gonflerait un chiffre dont la seule utilite est de dire si la depense
+  // est egale ou dispersee.
+  //
+  // CHAQUE SERIE PORTE SON EFFECTIF, parce qu'elles ne le partagent pas.
+  // Un prix par nuit n'existe pas pour qui n'a declare aucune nuit ; le
+  // compter zero tirerait la moyenne vers le bas en repondant a une autre
+  // question. Les trois premieres, en revanche, comptent tout le monde :
+  // quelqu'un qui ne prend aucun repas hors pension paie bel et bien zero
+  // de repas, et c'est le prix moyen d'un participant qu'on cherche.
+  function serie(valeurs) {
+    if (!valeurs.length) {
+      return { personnes: 0, moyenne: null, ecartType: null, min: null, max: null };
+    }
+    const moyenne = valeurs.reduce((t, v) => t + v, 0) / valeurs.length;
+    const variance =
+      valeurs.reduce((t, v) => t + (v - moyenne) * (v - moyenne), 0) / valeurs.length;
+    return {
+      personnes: valeurs.length,
+      moyenne: arrondir(moyenne),
+      ecartType: arrondir(Math.sqrt(variance)),
+      min: arrondir(Math.min.apply(null, valeurs)),
+      max: arrondir(Math.max.apply(null, valeurs)),
+    };
+  }
+
+  // Combien de repas ont ete FACTURES a quelqu'un. Un repas compris dans
+  // une pension n'en est pas un : il est deja paye avec la nuit, et le
+  // compter ferait baisser le prix moyen d'un repas sans que personne
+  // n'ait rien paye de moins.
+  function repasFactures(ligne) {
+    return Object.keys(ligne.parRepas || {}).length;
+  }
+
+  function synthese(lignes) {
+    const tous = lignes || [];
+    const dormeurs = tous.filter((l) => l.nuits > 0);
+    return [
+      {
+        cle: "repas",
+        libelle: "Repas par personne",
+        ...serie(tous.map((l) => l.repas)),
+      },
+      {
+        cle: "hebergement",
+        libelle: "Hébergement par personne",
+        ...serie(tous.map((l) => arrondir(l.hebergement + l.taxe))),
+      },
+      {
+        cle: "total",
+        libelle: "Total par personne",
+        ...serie(tous.map((l) => l.total)),
+      },
+      {
+        cle: "nuitee",
+        libelle: "Total par personne et par nuit",
+        ...serie(dormeurs.map((l) => l.total / l.nuits)),
+      },
+    ];
+  }
+
+  return { calculer, prestations, synthese, repasFactures };
 })();

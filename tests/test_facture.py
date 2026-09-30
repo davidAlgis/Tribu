@@ -23,6 +23,7 @@ que Python ne doit pas échouer pour une absence d'outil.
 import json
 import shutil
 import subprocess
+from statistics import mean, pstdev
 from collections import defaultdict
 from pathlib import Path
 
@@ -169,6 +170,7 @@ def colonnes_js(chemin: Path) -> dict:
         colonnesNuits: resultat.nuits,
         colonnesRepas: resultat.repasColonnes.map((c) => c.cle),
         prestations: resultat.prestations,
+        synthese: fenetre.FACTURE.synthese(resultat.lignes),
       }}));
     """
     # `encoding` explicite : sans lui, Python decode la sortie de node avec
@@ -338,3 +340,121 @@ def test_les_regimes_sont_nommes_comme_l_hotel_les_nomme(jeux):
     for ligne in nuits:
         assert ligne["libelle"].startswith(connus), ligne["libelle"]
 
+@JEUX
+def test_la_synthese_se_relit_avec_statistics(jeux):
+    """Moyenne, écart-type, minimum, maximum : quatre nombres qu'un
+    tableau de soixante lignes ne laisse pas vérifier à l'œil.
+
+    Le calcul est en JavaScript, comme le reste de la facture. On le
+    relit ici avec le module `statistics` de la bibliothèque standard,
+    sur les mêmes lignes — deux implémentations indépendantes qui doivent
+    tomber au centime.
+
+    `pstdev` et non `stdev` : c'est l'écart-type de la POPULATION. On a
+    tout le monde sous la main, on n'estime rien, et diviser par n-1
+    gonflerait un chiffre dont la seule utilité est de dire si la dépense
+    est égale ou dispersée.
+    """
+    _, js = jeux
+    lignes = list(js["par"].values())
+    assert lignes, "aucune ligne : le test ne sert à rien"
+
+    totaux = {
+        qui: round(v["hebergement"] + v["repas"] + v["taxe"], 2)
+        for qui, v in js["par"].items()
+    }
+    dormeurs = [v for v in js["par"].values() if v["nuits"] > 0]
+
+    attendu = {
+        "repas": [v["repas"] for v in lignes],
+        "hebergement": [round(v["hebergement"] + v["taxe"], 2) for v in lignes],
+        "total": list(totaux.values()),
+        "nuitee": [
+            (v["hebergement"] + v["repas"] + v["taxe"]) / v["nuits"] for v in dormeurs
+        ],
+    }
+
+    par_cle = {serie["cle"]: serie for serie in js["synthese"]}
+    assert sorted(par_cle) == sorted(attendu), "les quatre séries, et pas d'autres"
+
+    for cle, valeurs in attendu.items():
+        serie = par_cle[cle]
+        assert serie["personnes"] == len(valeurs), f"{cle} : effectif"
+        assert serie["moyenne"] == pytest.approx(mean(valeurs), abs=0.01), f"{cle} : moyenne"
+        assert serie["ecartType"] == pytest.approx(pstdev(valeurs), abs=0.01), f"{cle} : écart-type"
+        assert serie["min"] == pytest.approx(min(valeurs), abs=0.01), f"{cle} : min"
+        assert serie["max"] == pytest.approx(max(valeurs), abs=0.01), f"{cle} : max"
+
+
+@JEUX
+def test_la_derniere_serie_laisse_dehors_ceux_qui_ne_dorment_pas(jeux):
+    """Un prix par nuit n'existe pas pour qui n'a déclaré aucune nuit.
+
+    Le compter zéro tirerait la moyenne vers le bas en répondant à une
+    autre question — et c'est l'erreur facile, puisque toutes les autres
+    séries, elles, comptent bien tout le monde.
+    """
+    _, js = jeux
+    par_cle = {serie["cle"]: serie for serie in js["synthese"]}
+    dormeurs = [v for v in js["par"].values() if v["nuits"] > 0]
+
+    assert par_cle["nuitee"]["personnes"] == len(dormeurs)
+    for cle in ("repas", "hebergement", "total"):
+        assert par_cle[cle]["personnes"] == len(js["par"]), cle
+
+
+def test_une_synthese_sans_personne_ne_ment_pas():
+    """Aucune ligne facturée : il n'y a pas de moyenne, et zéro n'est pas
+    la bonne réponse — la page doit pouvoir montrer un tiret."""
+    sortie = subprocess.run(
+        [
+            "node",
+            "-e",
+            f"""
+              const fs = require("fs");
+              const fenetre = {{}};
+              new Function("window", fs.readFileSync({str(RACINE / "facture.js")!r}, "utf8"))(fenetre);
+              process.stdout.write(JSON.stringify(fenetre.FACTURE.synthese([])));
+            """,
+        ],
+        capture_output=True,
+        text=True,
+        encoding="utf-8",
+        check=True,
+    )
+    for serie in json.loads(sortie.stdout):
+        assert serie["personnes"] == 0
+        assert serie["moyenne"] is None, serie["cle"]
+        assert serie["ecartType"] is None and serie["min"] is None and serie["max"] is None
+
+
+def test_seuls_les_repas_factures_se_comptent():
+    """Le prix moyen d'un repas se divise par les repas PAYÉS.
+
+    Un dîner compris dans une pension complète est déjà payé avec la
+    nuit ; le compter ferait baisser le prix moyen d'un repas sans que
+    personne n'ait payé moins.
+    """
+    sortie = subprocess.run(
+        [
+            "node",
+            "-e",
+            f"""
+              const fs = require("fs");
+              const fenetre = {{}};
+              new Function("window", fs.readFileSync({str(RACINE / "facture.js")!r}, "utf8"))(fenetre);
+              process.stdout.write(JSON.stringify([
+                fenetre.FACTURE.repasFactures({{ parRepas: {{}} }}),
+                fenetre.FACTURE.repasFactures({{ parRepas: {{ "a|diner": 12, "b|dejeuner": 0 }} }}),
+                fenetre.FACTURE.repasFactures({{}}),
+              ]));
+            """,
+        ],
+        capture_output=True,
+        text=True,
+        encoding="utf-8",
+        check=True,
+    )
+    # Un repas facturé zéro reste un repas : c'est un prix manquant, pas
+    # un repas absent — et la ligne rouge de l'onglet le dit déjà.
+    assert json.loads(sortie.stdout) == [0, 2, 0]

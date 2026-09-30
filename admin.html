@@ -601,9 +601,9 @@
       <p id="message-facture" role="status" aria-live="polite"></p>
 
       <!--
-        Trois tableaux, trois panneaux. Le récapitulatif est OUVERT : c'est
-        ce qu'on vient chercher. Le détail est plié — on l'ouvre quand un
-        chiffre du dessus surprend, et pas avant.
+        Quatre tableaux, quatre panneaux. Le récapitulatif est OUVERT :
+        c'est ce qu'on vient chercher. Le reste est plié — on l'ouvre quand
+        un chiffre du dessus surprend, et pas avant.
       -->
       <details class="panneau-pliable" id="panneau-resume" open>
         <summary>Ce que chacun paie <span id="compteur-facture" class="discret-inline"></span></summary>
@@ -618,6 +618,41 @@
           on le lirait de travers. Les deux panneaux du dessous disent le
           détail, nuit par nuit et repas par repas, et la taxe y a sa propre
           colonne.
+        </p>
+
+        <p class="note">
+          Les colonnes <strong>par nuitée</strong> et <strong>par repas</strong>
+          ramènent chaque somme à ce qu'elle achète&nbsp;: elles ne
+          s'additionnent pas, et les lignes de total les recalculent — la
+          dépense de la famille divisée par ses nuitées, et non la somme de
+          ses moyennes. Les repas comptés sont ceux qui sont
+          <strong>facturés</strong>&nbsp;: un dîner compris dans une pension
+          est déjà payé avec la nuit, et le compter ferait baisser le prix
+          moyen d'un repas sans que personne n'ait payé moins.
+        </p>
+      </details>
+
+      <details class="panneau-pliable" id="panneau-synthese">
+        <summary>En résumé <span id="compteur-synthese" class="discret-inline"></span></summary>
+
+        <div id="facture-synthese"></div>
+
+        <p class="note">
+          La <strong>forme</strong> de la dépense, là où les tableaux en
+          donnent le montant. Un écart-type proche de zéro dit que tout le
+          monde paie à peu près la même chose&nbsp;; large, il dit que la
+          moyenne ne représente personne — et les colonnes
+          <strong>min</strong> et <strong>max</strong> disent alors entre
+          quoi et quoi.
+        </p>
+
+        <p class="note">
+          C'est l'écart-type de la <strong>population</strong>, pas celui
+          d'un échantillon&nbsp;: on a tout le monde sous la main, on
+          n'estime rien. La dernière ligne ne compte que ceux qui dorment
+          sur place — un prix par nuit n'existe pas pour qui n'en a déclaré
+          aucune, et le compter zéro répondrait à une autre question. Chaque
+          ligne dit sur combien de personnes elle porte.
         </p>
       </details>
 

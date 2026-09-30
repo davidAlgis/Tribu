@@ -737,13 +737,37 @@ d'âge, et des **jours qui font exception** — le dîner du samedi n'est pas
 celui du mardi. On n'y pose que les jours qui s'écartent du prix ordinaire.
 
 L'onglet **Facture** montre la même chose dans le navigateur, sans lancer
-de script. Deux tableaux, une ligne par personne : **les nuits**, une
-colonne par nuit du séjour, puis la taxe et le total avec et sans elle ;
-**les repas hors pension**, une colonne par repas réellement servi. Chaque
-famille ferme sur sa somme. Le calcul y est écrit deux fois — en Python pour
-l'export, en JavaScript pour la page, qui ne peut pas appeler le premier —
-et [`tests/test_facture.py`](tests/test_facture.py) les compare au centime
-sur deux jeux de données à chaque exécution de la suite.
+de script. Quatre panneaux, une ligne par personne : **ce que chacun paie**,
+en tête et déplié ; **en résumé** ; **les nuits**, une colonne par nuit du
+séjour, puis la taxe et le total avec et sans elle ; **les repas hors
+pension**, une colonne par repas réellement servi. Chaque famille ferme sur
+sa somme. Le calcul y est écrit deux fois — en Python pour l'export, en
+JavaScript pour la page, qui ne peut pas appeler le premier — et
+[`tests/test_facture.py`](tests/test_facture.py) les compare au centime sur
+deux jeux de données à chaque exécution de la suite.
+
+**Chaque montant est suivi de ce qu'il achète** : l'hébergement par nuitée,
+les repas par repas, et le total ramené aux nuitées puis aux deux à la fois.
+Sans quoi le plus gros total est toujours celui qui est resté le plus
+longtemps — ce qu'on savait déjà. Ces colonnes **ne s'additionnent pas** :
+deux personnes à 45 € la nuit n'en font pas une à 90, et les lignes de total
+refont donc la division sur les deux sommes — la dépense de la famille
+divisée par ses nuitées, et non la moyenne de ses moyennes. Les repas
+comptés sont ceux qui sont **facturés** : un dîner compris dans une pension
+est déjà payé avec la nuit.
+
+Le panneau **En résumé** donne la *forme* de la dépense là où les tableaux
+en donnent le montant : moyenne, écart-type, minimum et maximum, pour les
+repas par personne, l'hébergement par personne, le total par personne et le
+total par personne et par nuit. Un écart-type proche de zéro dit que tout le
+monde paie à peu près la même chose ; large, il dit que la moyenne ne
+représente personne. C'est celui de la **population**, pas d'un échantillon —
+on a tout le monde sous la main, on n'estime rien. La dernière ligne ne
+compte que ceux qui dorment sur place : un prix par nuit n'existe pas pour
+qui n'en a déclaré aucune, et le compter zéro répondrait à une autre
+question. Chaque ligne dit sur combien de personnes elle porte quand ce
+n'est pas tout le monde, et le calcul se relit dans la suite de tests avec
+le module `statistics` de Python.
 
 **Les noms se lisent dans l'ordre de l'arbre**, partout : le couple de
 première génération le plus âgé, sa descendance dessous du plus âgé au plus
