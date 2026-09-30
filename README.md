@@ -13,7 +13,7 @@ Pensions, tarifs et totaux sont recalculés par
 [`engine/rules.py`](engine/rules.py), seul endroit où vivent les règles.
 Les Excel ne sont qu'une sortie : plus une seule formule à maintenir.
 
-Cinq pages pour la famille, une pour toi :
+Six pages pour la famille, une pour toi :
 
 | Page | Qui | Quoi |
 |---|---|---|
@@ -22,6 +22,7 @@ Cinq pages pour la famille, une pour toi :
 | [`presences.html`](presences.html) | la famille | qui vient, quelles nuits, quels repas, et qui dort où |
 | [`regimes.html`](regimes.html) | la famille | ce que chacun mange et boit |
 | [`activites.html`](activites.html) | la famille | ce qu'on a envie de faire sur place, et qui en a envie |
+| [`facture.html`](facture.html) | la famille | ce que ça coûte, à soi et aux siens — en lecture seule |
 | [`admin.html`](admin.html) | toi | dates du séjour, participants, préférences alimentaires, **activités**, logements et plan de couchage, tarifs, facture, hôtel, week-ends, résultat de la carte, retour en arrière |
 
 Le code se donne **une fois**, sur la page d'accueil : il est retenu sur
@@ -31,7 +32,7 @@ Entrer directement sur l'une d'elles marche aussi : elle demandera le code.
 
 Les pages familiales portent le même menu en tête — **Accueil**, **Le
 lieu**, **La date**, **Les présences**, **Préférences alimentaires**, **Les
-activités** — dans l'ordre où les décisions se prennent. Celle qu'on regarde y est remplie.
+activités**, **La facture** — dans l'ordre où les décisions se prennent. Celle qu'on regarde y est remplie.
 L'accueil, lui, ne porte pas ce menu : il **est** le menu.
 
 `admin.html` n'y figure pas : elle ne s'ouvre pas avec le code famille, et
@@ -768,6 +769,28 @@ qui n'en a déclaré aucune, et le compter zéro répondrait à une autre
 question. Chaque ligne dit sur combien de personnes elle porte quand ce
 n'est pas tout le monde, et le calcul se relit dans la suite de tests avec
 le module `statistics` de Python.
+
+**Chacun lit sa note**, sur [`facture.html`](facture.html) : la sienne et
+celle des gens dont il remplit les présences — la règle de
+`personnes_modifiables`, comme partout ailleurs. Les mêmes trois tableaux
+que les tiens, au même format, parce que c'est le **même module** qui les
+dessine ([`tableaux.js`](tableaux.js)) à partir du **même calcul**
+([`facture.js`](facture.js)) : celui qui demande l'argent et celui qui le
+paie doivent lire la même chose. La page ne porte ni champ ni bouton
+d'enregistrement ; pour changer un montant, on change ce qu'il compte, sur
+**Les présences**.
+
+**Ce que la base lui envoie s'arrête à ce qui le regarde** — à une
+exception près, et elle est nécessaire. Un gîte se loue entier et sa note
+se divise entre ceux qui y dorment cette nuit-là : sans savoir combien ils
+sont, la part affichée serait fausse, et **plus chère**, puisqu'on
+diviserait par les seuls occupants visibles. `facture_charger` joint donc
+les **co-occupants de gîte**, et seulement pour les nuits partagées —
+réduits à ce qui fait la division : une nuit, dans un gîte. Pas leur âge,
+pas leurs repas, pas même leur prénom, rien de ce qui permettrait de
+chiffrer ce qu'eux paient. Et qu'untel dorme dans tel gîte, le plan de
+couchage le montre déjà à toute la famille. Un banc d'essai tient l'écart :
+sans le co-occupant, la part passe de 101 € à 201 €.
 
 **Les noms se lisent dans l'ordre de l'arbre**, partout : le couple de
 première génération le plus âgé, sa descendance dessous du plus âgé au plus

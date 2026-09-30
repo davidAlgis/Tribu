@@ -3647,8 +3647,11 @@ begin
     raise exception 'REGLAGES_ABSENTS' using errcode = 'P0001';
   end if;
 
-  return jsonb_build_object(
-    'jours_weekend', to_jsonb(r.jours_weekend),
+  -- La grille qui CHIFFRE vient d'une seule definition, partagee avec
+  -- la page familiale (section 12d) : deux serialisations des memes prix
+  -- divergeraient le jour ou l'une gagne une colonne. On y ajoute ce qui
+  -- ne sert qu'a la SAISIE.
+  return private.grille_tarifs() || jsonb_build_object(
     -- Les bornes voyagent avec la grille : les colonnes s'intitulent
     -- « jusqu'a 3 ans », « 3 a 12 ans »... et personne n'a a se souvenir
     -- de ce qu'« enfant » veut dire ici.
@@ -3656,54 +3659,12 @@ begin
     'age_enfant', r.age_enfant,
     'age_jeune', r.age_jeune,
 
-    'logements', coalesce((
-      select jsonb_agg(jsonb_build_object(
-               'id', l.id,
-               'categorie', l.categorie,
-               'capacite', l.capacite,
-               'nombre', l.nombre,
-               'vue_mer', l.vue_mer
-             ) order by l.categorie, l.vue_mer, l.capacite)
-      from private.logements l
-    ), '[]'::jsonb),
-
-    'tarifs', coalesce((
-      select jsonb_agg(jsonb_build_object(
-               'logement_id', t.logement_id,
-               'tranche', t.tranche,
-               'semaine', t.semaine,
-               'weekend', t.weekend,
-               'remise', t.remise
-             ) order by t.logement_id, t.tranche)
-      from private.tarifs t
-    ), '[]'::jsonb),
-
     -- Les jours du sejour : la page en fait la liste ou l'on choisit
     -- celui qui fait exception.
     'jours', coalesce((
       select jsonb_agg(d.jour order by d.jour)
         from (select (r.date_debut + i) as jour
                 from generate_series(0, r.date_fin - r.date_debut) as i) d
-    ), '[]'::jsonb),
-
-    -- Les repas qui ne coutent pas leur prix ordinaire ce jour-la.
-    'repas_jour', coalesce((
-      select jsonb_agg(jsonb_build_object(
-               'jour', j.jour,
-               'repas', j.repas,
-               'tranche', j.tranche,
-               'montant', j.montant
-             ) order by j.jour, j.repas, j.tranche)
-      from private.tarifs_repas_jour j
-    ), '[]'::jsonb),
-
-    'annexes', coalesce((
-      select jsonb_agg(jsonb_build_object(
-               'cle', a.cle,
-               'tranche', a.tranche,
-               'montant', a.montant
-             ) order by a.cle, a.tranche)
-      from private.tarifs_annexes a
     ), '[]'::jsonb)
   );
 end $fn$;
@@ -3989,6 +3950,217 @@ end $fn$;
 
 grant execute on function public.admin_faits(text) to anon;
 
+
+-- ---- 12d. La grille des prix, pour qui doit chiffrer ----
+--
+--  `admin_tarifs` servait cette grille en meme temps que ce qui ne sert
+--  qu'a la SAISIE : les bornes d'age qui intitulent les colonnes, la
+--  liste des jours du sejour. La page familiale, elle, n'a besoin que de
+--  ce qui chiffre -- et deux serialisations de la meme grille finiraient
+--  par diverger le jour ou l'une gagne une colonne.
+--
+--  CE N'EST PAS UN SECRET. Un prix negocie avec l'hotel est ce que la
+--  famille paiera : le lui cacher tout en lui demandant de virer la
+--  somme n'aurait pas de sens. Ce qui reste reserve, c'est la NOTE DES
+--  AUTRES -- et cela se joue plus bas, dans `facture_faits`.
+create or replace function private.grille_tarifs()
+returns jsonb language sql stable
+set search_path = private, pg_temp as $fn$
+  select jsonb_build_object(
+    'jours_weekend', to_jsonb((select g.jours_weekend from private.reglages g)),
+
+    'logements', coalesce((
+      select jsonb_agg(jsonb_build_object(
+               'id', l.id,
+               'categorie', l.categorie,
+               'capacite', l.capacite,
+               'nombre', l.nombre,
+               'vue_mer', l.vue_mer
+             ) order by l.categorie, l.vue_mer, l.capacite)
+      from private.logements l
+    ), '[]'::jsonb),
+
+    'tarifs', coalesce((
+      select jsonb_agg(jsonb_build_object(
+               'logement_id', t.logement_id,
+               'tranche', t.tranche,
+               'semaine', t.semaine,
+               'weekend', t.weekend,
+               'remise', t.remise
+             ) order by t.logement_id, t.tranche)
+      from private.tarifs t
+    ), '[]'::jsonb),
+
+    'repas_jour', coalesce((
+      select jsonb_agg(jsonb_build_object(
+               'jour', j.jour,
+               'repas', j.repas,
+               'tranche', j.tranche,
+               'montant', j.montant
+             ) order by j.jour, j.repas, j.tranche)
+      from private.tarifs_repas_jour j
+    ), '[]'::jsonb),
+
+    'annexes', coalesce((
+      select jsonb_agg(jsonb_build_object(
+               'cle', a.cle,
+               'tranche', a.tranche,
+               'montant', a.montant
+             ) order by a.cle, a.tranche)
+      from private.tarifs_annexes a
+    ), '[]'::jsonb)
+  )
+$fn$;
+
+-- ---- 12e. Les faits d'une personne, et de ceux dont elle repond ----
+--
+--  CE QU'ELLE NE REND PAS : la note des autres. On sert les presences et
+--  les repas des SIENS -- la meme regle que partout ailleurs
+--  (`personnes_modifiables`, section 5) -- et rien de plus.
+--
+--  A UNE EXCEPTION PRES, et elle est necessaire. Un gite se loue ENTIER
+--  et sa note se divise entre ceux qui y dorment cette nuit-la : sans
+--  savoir combien ils sont, la part qu'on affiche serait fausse -- plus
+--  chere, puisqu'on diviserait par les seuls occupants qu'on voit. On
+--  ajoute donc les CO-OCCUPANTS DE GITE, et uniquement pour les nuits
+--  partagees.
+--
+--  Ce qu'on en dit est le minimum : qu'ils dorment la cette nuit-la. Pas
+--  leur age, pas leurs repas, pas meme leur prenom -- rien de ce qui
+--  permettrait de chiffrer ce qu'eux paient. Et qu'untel dorme dans tel
+--  gite, le plan de couchage le montre deja a toute la famille.
+create or replace function private.facture_faits(p_acteur uuid)
+returns jsonb language sql stable
+set search_path = private, pg_temp as $fn$
+  with
+  bornes as (select b.date_debut, b.date_fin from private.reglages b),
+  miens as (select m.id from private.personnes_modifiables(p_acteur) m),
+  -- Les gites ou l'un des miens dort, nuit par nuit et exemplaire par
+  -- exemplaire. La jointure ecarte les affectations tombees au-dela du
+  -- rang, comme le plan lui-meme.
+  unites as (
+    select distinct c.jour, c.logement_id, c.numero
+      from private.couchages c
+      join miens m on m.id = c.participant_id
+      join private.logements g on g.id = c.logement_id and c.numero <= g.nombre
+     where g.categorie = 'gite'
+  ),
+  voisins as (
+    select distinct c.participant_id, c.jour, c.logement_id, c.numero
+      from private.couchages c
+      join unites u
+        on u.jour = c.jour and u.logement_id = c.logement_id and u.numero = c.numero
+     where not exists (select 1 from miens m where m.id = c.participant_id)
+  )
+  select jsonb_build_object(
+    -- Seulement les miens : un co-occupant n'a meme pas de ligne ici, et
+    -- le calcul s'en passe -- il ne lui demande que d'exister.
+    'personnes', coalesce((
+      select jsonb_agg(jsonb_build_object(
+               'id', p.id,
+               'prenom', p.prenom,
+               'famille', p.famille,
+               'categorie_age', p.categorie_age,
+               'invite', p.invite
+             ) order by o.rang)
+      from private.participants p
+      join miens m on m.id = p.id
+      join private.ordre_familial() o on o.id = p.id
+    ), '[]'::jsonb),
+
+    'presences', coalesce((
+      select jsonb_agg(x.ligne order by x.participant_id, x.jour)
+        from (
+          select pr.participant_id, pr.jour,
+                 jsonb_build_object(
+                   'participant_id', pr.participant_id,
+                   'jour', pr.jour,
+                   'hebergement', pr.hebergement,
+                   'vue_mer', pr.vue_mer,
+                   'logement_id', pr.logement_id,
+                   'petit_dejeuner', pr.petit_dejeuner,
+                   'dejeuner', pr.dejeuner,
+                   'diner', pr.diner
+                 ) as ligne
+            from public.presences pr
+            join miens m on m.id = pr.participant_id
+           where pr.jour between (select d.date_debut from bornes d)
+                             and (select d.date_fin from bornes d)
+
+          union all
+
+          -- Le co-occupant, reduit a ce qui fait la division : une nuit,
+          -- dans un gite. Les repas a faux, l'age absent : de quoi le
+          -- compter, jamais de quoi le facturer.
+          select pr.participant_id, pr.jour,
+                 jsonb_build_object(
+                   'participant_id', pr.participant_id,
+                   'jour', pr.jour,
+                   'hebergement', pr.hebergement,
+                   'vue_mer', false,
+                   'logement_id', pr.logement_id,
+                   'petit_dejeuner', false,
+                   'dejeuner', false,
+                   'diner', false
+                 ) as ligne
+            from public.presences pr
+            join voisins v
+              on v.participant_id = pr.participant_id and v.jour = pr.jour
+           where pr.hebergement = 'gite'
+        ) x
+    ), '[]'::jsonb),
+
+    'couchages', coalesce((
+      select jsonb_agg(jsonb_build_object(
+               'participant_id', y.participant_id,
+               'jour', y.jour,
+               'logement_id', y.logement_id,
+               'numero', y.numero
+             ) order by y.participant_id, y.jour)
+        from (
+          select c.participant_id, c.jour, c.logement_id, c.numero
+            from private.couchages c
+            join miens m on m.id = c.participant_id
+            join private.logements g on g.id = c.logement_id and c.numero <= g.nombre
+          union
+          select v.participant_id, v.jour, v.logement_id, v.numero from voisins v
+        ) y
+    ), '[]'::jsonb)
+  )
+$fn$;
+
+-- Ce que la page familiale demande, en un appel : qui je peux regarder,
+-- les faits qui les concernent, et la grille qui les chiffre.
+create or replace function public.facture_charger(p_code text, p_acteur uuid)
+returns jsonb
+language plpgsql stable security definer
+set search_path = private, pg_temp as $fn$
+declare
+  reg private.reglages;
+begin
+  perform private.verifier_code(p_code);
+  select * into reg from private.reglages;
+  if reg.id is null then
+    raise exception 'REGLAGES_ABSENTS' using errcode = 'P0001';
+  end if;
+
+  return jsonb_build_object(
+    -- Ceux dont la page montrera la note. La meme liste que sur les
+    -- autres pages familiales, et dans le meme ordre.
+    'gens', coalesce((
+      select jsonb_agg(jsonb_build_object(
+               'id', p.id, 'prenom', p.prenom, 'famille', p.famille
+             ) order by o.rang)
+      from private.participants p
+      join private.personnes_modifiables(p_acteur) m on m.id = p.id
+      join private.ordre_familial() o on o.id = p.id
+    ), '[]'::jsonb),
+    'faits', private.facture_faits(p_acteur),
+    'grille', private.grille_tarifs()
+  );
+end $fn$;
+
+grant execute on function public.facture_charger(text, uuid) to anon;
 
 -- ============================================================
 --  13. Revenir en arriere

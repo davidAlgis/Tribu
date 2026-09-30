@@ -29,6 +29,10 @@ PAGES = {
     "lieux.html": "lieux.js",
     "regimes.html": "regimes.js",
     "activites.html": "activites.js",
+    # `facture.js` est pris par le calcul, qui vit hors du navigateur : le
+    # script de la page s'appelle donc autrement, comme `app.js` est celui
+    # de `presences.html`.
+    "facture.html": "note.js",
     "admin.html": "admin.js",
 }
 
@@ -44,6 +48,7 @@ FAMILIALES = (
     "presences.html",
     "regimes.html",
     "activites.html",
+    "facture.html",
 )
 
 
@@ -275,6 +280,7 @@ MODULES = {
     "PLAN": "plan.js",
     "REPARTIR": "repartir.js",
     "FACTURE": "facture.js",
+    "TABLEAUX": "tableaux.js",
 }
 
 
