@@ -1,0 +1,134 @@
+<!doctype html>
+<html lang="fr">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="robots" content="noindex">
+  <title>Tribu — les activités</title>
+  <link rel="stylesheet" href="./style.css">
+</head>
+<body>
+<main>
+  <nav class="menu" aria-label="Les étapes du séjour">
+    <a href="./index.html">Accueil</a>
+    <a href="./lieux.html">Le lieu</a>
+    <a href="./dates.html">La date</a>
+    <a href="./presences.html">Les présences</a>
+    <a href="./regimes.html">Préférences alimentaires</a>
+    <a href="./activites.html" aria-current="page">Les activités</a>
+  </nav>
+
+  <h1>Qu'est-ce qu'on fait&nbsp;?</h1>
+  <p class="sous-titre" id="sous-titre">
+    Une liste d'idées, et trois réponses possibles. Ce que personne ne
+    choisit n'aura pas lieu&nbsp;— et ce qui manque à la liste, tu peux
+    l'ajouter.
+  </p>
+
+  <!-- Reste affiché une fois le code accepté : c'est le signe que la page
+       a bougé, là où deux champs de texte au même endroit ne le disent
+       pas. -->
+  <p id="fil" class="fil" role="status" hidden>
+    <strong>✓ Code accepté.</strong>
+    <span id="fil-suite">Reste à dire qui tu es.</span>
+  </p>
+
+  <!-- ---- Étape 1 : le code ----------------------------------- -->
+  <section id="etape-code">
+    <fieldset>
+      <legend>Le code de la famille</legend>
+      <form id="form-code">
+        <div>
+          <label for="code">Code</label>
+          <input type="text" id="code" required maxlength="40" autocomplete="off"
+                 spellcheck="false">
+        </div>
+        <button type="submit">Entrer</button>
+        <p id="message-code" role="status" aria-live="polite"></p>
+      </form>
+    </fieldset>
+  </section>
+
+  <!-- ---- Étape 2 : qui es-tu ? -------------------------------- -->
+  <section id="etape-prenom" hidden>
+    <fieldset class="panneau-saisie surgit">
+      <legend>Ton prénom</legend>
+      <div>
+        <label for="prenom">Prénom</label>
+        <input type="text" id="prenom" autocomplete="off" spellcheck="false"
+               role="combobox" aria-expanded="false" aria-controls="suggestions"
+               aria-autocomplete="list">
+        <ul id="suggestions" role="listbox"></ul>
+      </div>
+      <p id="message-prenom" role="status" aria-live="polite"></p>
+    </fieldset>
+  </section>
+
+  <!-- ---- Étape 3 : les envies --------------------------------- -->
+  <section id="etape-activites" hidden>
+
+    <!-- Comme sur la page des présences : on dit d'abord POUR QUI, et la
+         liste ne change pas, seules ses réponses changent. -->
+    <fieldset id="bloc-pour-qui">
+      <legend>Pour qui réponds-tu&nbsp;?</legend>
+      <div id="personnes" class="pastilles"></div>
+    </fieldset>
+
+    <!--
+      PLIÉ PAR DÉFAUT. On vient ici pour répondre, pas pour proposer :
+      déplié, le formulaire mettrait un champ vide entre la question et les
+      réponses. Il s'ouvre quand on a une idée.
+
+      `<details>` plutôt qu'un bouton et une classe : le pli est natif, il
+      marche sans script, et le lecteur d'écran l'annonce sans qu'on ait à
+      le lui dire.
+    -->
+    <details id="bloc-proposer" class="panneau-pliable">
+      <summary>Proposer une activité</summary>
+      <div class="grille">
+        <div>
+          <label for="titre">Intitulé</label>
+          <input type="text" id="titre" maxlength="80" autocomplete="off"
+                 placeholder="ex. randonnée au phare">
+        </div>
+        <div>
+          <label for="description">Précision (facultatif)</label>
+          <input type="text" id="description" maxlength="200" autocomplete="off"
+                 placeholder="ex. trois heures, chaussures de marche">
+        </div>
+      </div>
+      <div class="actions">
+        <button type="button" id="proposer">Ajouter à la liste</button>
+      </div>
+      <p id="message-proposer" role="status" aria-live="polite"></p>
+      <p class="note">
+        Une idée proposée apparaît chez tout le monde, et chacun répond ce
+        qu'il veut. Seul l'organisateur peut en retirer une&nbsp;: l'effacer
+        emporterait les réponses des autres.
+      </p>
+    </details>
+
+    <fieldset class="panneau-saisie">
+      <legend>Les idées <span id="compteur-activites" class="discret-inline"></span></legend>
+
+      <div id="activites"></div>
+
+      <div class="actions">
+        <button type="button" id="changer" class="discret">Changer de personne</button>
+      </div>
+      <p id="message" role="status" aria-live="polite"></p>
+
+      <p class="note">
+        Chaque réponse part toute seule&nbsp;: il n'y a rien à enregistrer.
+        <strong>Non</strong> est la réponse par défaut&nbsp;— tant que
+        personne n'a rien dit, tout le monde y est. Ce n'est pas un vote
+        qui tranche&nbsp;: c'est de quoi voir ce qui rassemble.
+      </p>
+    </fieldset>
+  </section>
+</main>
+
+<script src="./config.js"></script>
+<script src="./activites.js"></script>
+</body>
+</html>

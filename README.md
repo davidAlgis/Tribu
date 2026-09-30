@@ -13,24 +13,25 @@ Pensions, tarifs et totaux sont recalculés par
 [`engine/rules.py`](engine/rules.py), seul endroit où vivent les règles.
 Les Excel ne sont qu'une sortie : plus une seule formule à maintenir.
 
-Quatre pages pour la famille, une pour toi :
+Cinq pages pour la famille, une pour toi :
 
 | Page | Qui | Quoi |
 |---|---|---|
 | [`lieux.html`](lieux.html) | la famille | où l'on n'a pas envie d'aller |
 | [`dates.html`](dates.html) | la famille | quel week-end arrange chacun, et où en est le choix |
-| [`index.html`](index.html) | la famille | qui vient, quelles nuits, quels repas, et qui dort où |
+| [`presences.html`](presences.html) | la famille | qui vient, quelles nuits, quels repas, et qui dort où |
 | [`regimes.html`](regimes.html) | la famille | ce que chacun mange et boit |
-| [`admin.html`](admin.html) | toi | dates du séjour, participants, préférences alimentaires, logements et plan de couchage, tarifs, facture, **hôtel**, week-ends, résultat de la carte, retour en arrière |
+| [`activites.html`](activites.html) | la famille | ce qu'on a envie de faire sur place, et qui en a envie |
+| [`admin.html`](admin.html) | toi | dates du séjour, participants, préférences alimentaires, **activités**, logements et plan de couchage, tarifs, facture, hôtel, week-ends, résultat de la carte, retour en arrière |
 
 Le code se donne **une fois**, sur la page d'accueil : il est retenu sur
-l'appareil, et les quatre étapes le reprennent toutes seules — elles ne
+l'appareil, et les étapes suivantes le reprennent toutes seules — elles ne
 redemandent que le prénom, qui leur sert à savoir pour qui l'on répond.
 Entrer directement sur l'une d'elles marche aussi : elle demandera le code.
 
 Les pages familiales portent le même menu en tête — **Accueil**, **Le
-lieu**, **La date**, **Les présences**, **Préférences alimentaires** — dans
-l'ordre où les décisions se prennent. Celle qu'on regarde y est remplie.
+lieu**, **La date**, **Les présences**, **Préférences alimentaires**, **Les
+activités** — dans l'ordre où les décisions se prennent. Celle qu'on regarde y est remplie.
 L'accueil, lui, ne porte pas ce menu : il **est** le menu.
 
 `admin.html` n'y figure pas : elle ne s'ouvre pas avec le code famille, et
@@ -114,6 +115,41 @@ plus : il y a maintenant sur la page quelque chose qui n'y était pas. Le
 panneau qui arrive prend le bord accentué de la saisie et se signale une
 fois, brièvement — l'animation est un renfort, jamais le seul message,
 et `prefers-reduced-motion` la supprime.
+
+## Les activités
+
+Une liste d'idées, et trois réponses par personne : **Oui**, **Pourquoi
+pas**, **Non**. La famille répond sur [`activites.html`](activites.html),
+avec le même code et le même prénom que partout ailleurs, et pour les mêmes
+personnes qu'elle peut modifier partout ailleurs. Chaque réponse part toute
+seule : il n'y a rien à enregistrer.
+
+**Non est la réponse par défaut, et la base ne la garde pas.** Elle ne
+stocke que les « oui » et les « pourquoi pas » ; le nombre de « non » est le
+reste de la famille, ceux qui n'ont jamais ouvert la page compris. C'est la
+règle du reste du projet — saisir, c'est déclarer — et ici elle dit quelque
+chose de juste : une sortie que personne n'a demandée n'aura pas lieu.
+Répondre « non » **efface** donc la ligne au lieu d'en écrire une.
+
+**Tout le monde voit tout**, contrairement aux préférences alimentaires.
+Chaque idée porte ses comptes, et un pli « qui a dit quoi » donne les noms
+des trois groupes. On se décide pour une randonnée en sachant qui vient ;
+la question n'a pas de sens amputée des autres, exactement comme le plan de
+couchage — et à l'inverse de ce que mange le cousin.
+
+**N'importe qui ajoute à la liste.** Un panneau pliable, sous les pastilles
+de personnes, prend un intitulé et une précision facultative. C'est la seule
+page où la famille pose une ligne que tu n'as pas prévue. Deux intitulés qui
+ne diffèrent que par la casse, les accents ou la ponctuation sont la même
+idée : la base les refuse, sans quoi les voix se partageraient entre deux
+lignes qui disent la même chose.
+
+**Retirer reste à toi**, dans l'onglet **Activités** : une idée effacée
+emporte les réponses de tout le monde, et la question posée avant le dit —
+« 14 réponse(s) partent avec ». Le même onglet montre les comptes et un
+tableau d'ensemble, une ligne par personne et une colonne par idée. Ce
+tableau **se lit et ne se remplit pas** : une allergie se saisit pour
+quelqu'un qui n'ouvrira pas la page, une envie non.
 
 ## Choisir la date
 
@@ -728,13 +764,14 @@ couverts à chaque repas — par tranche d'âge, avec le compte des végétarien
 vegans, sans gluten et non buveurs attablés. **Aucun nom n'y figure** :
 l'hôtel n'a pas besoin de savoir qui, et ce qui ne sort pas ne se perd pas.
 
-**Les quatre pages familiales s'ouvrent et se ferment depuis un seul
+**Les cinq pages familiales s'ouvrent et se ferment depuis un seul
 panneau**, dans l'onglet Séjour : une case par page, plus « tout fermer » et
 « tout rouvrir ». Fermer ne cache rien — la page se lit encore, on voit ce
 qu'on a dit et où en sont les autres, mais plus rien ne s'enregistre. C'est
 la base qui refuse ; la page le montre seulement. Les préférences
-alimentaires ont leur propre verrou : on ferme les présences quand le nombre
-est arrêté, et une allergie se déclare encore après.
+alimentaires et les activités ont chacune leur verrou : on ferme les
+présences quand le nombre est arrêté, alors qu'une allergie se déclare
+encore après et qu'une sortie se décide bien avant.
 
 ## Points à connaître
 

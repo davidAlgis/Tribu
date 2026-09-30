@@ -65,6 +65,8 @@
               aria-controls="volet-participants" aria-selected="false" tabindex="-1">Participants</button>
       <button type="button" role="tab" id="onglet-regimes"
               aria-controls="volet-regimes" aria-selected="false" tabindex="-1">Préférences alimentaires</button>
+      <button type="button" role="tab" id="onglet-activites"
+              aria-controls="volet-activites" aria-selected="false" tabindex="-1">Activités</button>
       <button type="button" role="tab" id="onglet-logements"
               aria-controls="volet-logements" aria-selected="false" tabindex="-1">Logements</button>
       <button type="button" role="tab" id="onglet-tarifs"
@@ -109,9 +111,9 @@
         <legend>Ce qui est ouvert à la famille <span id="compteur-ouvertures" class="discret-inline"></span></legend>
 
         <!--
-          Les quatre verrous au même endroit. Ils existaient déjà, mais
-          chacun se tournait dans un onglet différent : on ne savait jamais
-          ce qui restait ouvert sans faire le tour.
+          Les verrous au même endroit. Ils existaient déjà, mais chacun se
+          tournait dans un onglet différent : on ne savait jamais ce qui
+          restait ouvert sans faire le tour.
         -->
         <div id="ouvertures"></div>
 
@@ -129,9 +131,10 @@
         </p>
 
         <p class="note">
-          Les préférences alimentaires ont leur propre verrou, et ce n'est
-          pas un oubli&nbsp;: on ferme les présences quand le nombre est
-          arrêté, et une allergie se déclare encore après.
+          Les préférences alimentaires et les activités ont chacune leur
+          verrou, et ce n'est pas un oubli&nbsp;: on ferme les présences
+          quand le nombre est arrêté, alors qu'une allergie se déclare
+          encore après et qu'une sortie se décide bien avant.
         </p>
       </fieldset>
 
@@ -255,6 +258,67 @@
           «&nbsp;vegan&nbsp;» ne coche pas «&nbsp;végétarien&nbsp;», parce
           que deviner ce que quelqu'un n'a pas coché, sur ce qu'il mange,
           n'est pas notre affaire.
+        </p>
+      </fieldset>
+    </div>
+
+    <!-- ---- Activités -------------------------------------------- -->
+    <div class="volet" id="volet-activites" role="tabpanel" aria-labelledby="onglet-activites" tabindex="0" hidden>
+      <fieldset>
+        <legend>Ajouter une idée</legend>
+        <div class="grille">
+          <div>
+            <label for="activite-titre">Intitulé</label>
+            <input type="text" id="activite-titre" maxlength="80" autocomplete="off"
+                   placeholder="ex. randonnée au phare">
+          </div>
+          <div>
+            <label for="activite-description">Précision (facultatif)</label>
+            <input type="text" id="activite-description" maxlength="200" autocomplete="off"
+                   placeholder="ex. trois heures, chaussures de marche">
+          </div>
+        </div>
+        <div class="actions">
+          <button type="button" id="activite-ajouter">Ajouter</button>
+        </div>
+        <p id="message-activites" role="status" aria-live="polite"></p>
+
+        <p class="note">
+          La famille en ajoute aussi, depuis la page
+          <strong>Les activités</strong>. C'est la seule page où elle pose
+          une ligne que tu n'as pas prévue&nbsp;— et la seule où elle voit
+          les réponses de tout le monde, ce qui est le but&nbsp;: on choisit
+          une sortie en sachant qui vient.
+        </p>
+      </fieldset>
+
+      <fieldset>
+        <legend>La liste <span id="compteur-activites" class="discret-inline"></span></legend>
+        <div id="liste-activites"></div>
+
+        <p class="note">
+          <strong>Non</strong> est la réponse par défaut&nbsp;: personne
+          n'écrit un refus, il se déduit du silence. Le nombre de «&nbsp;non&nbsp;»
+          est donc toujours le reste de la famille, y compris ceux qui n'ont
+          jamais ouvert la page.
+        </p>
+
+        <p class="note">
+          Retirer une idée emporte les réponses de tout le monde, sans
+          retour. La copie de la semaine est prise avant, comme pour les
+          autres gestes qui effacent&nbsp;— voir l'onglet
+          <strong>Sauvegardes</strong>.
+        </p>
+      </fieldset>
+
+      <fieldset>
+        <legend>Qui a répondu quoi <span id="compteur-avis" class="discret-inline"></span></legend>
+        <div id="tableau-activites"></div>
+
+        <p class="note">
+          Ce tableau se lit, il ne se remplit pas. Une allergie se saisit
+          pour quelqu'un qui n'ouvrira pas la page&nbsp;; une envie, non&nbsp;:
+          corriger le goût d'autrui n'aurait pas de sens.
         </p>
       </fieldset>
     </div>

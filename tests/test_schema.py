@@ -149,6 +149,8 @@ SAISIE = [
     "private.options_date",
     "private.logements",
     "private.couchages",
+    "private.activites",
+    "private.envies",
     "private.sauvegardes",
     "private.reglages",
     "private.acces",

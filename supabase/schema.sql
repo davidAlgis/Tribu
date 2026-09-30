@@ -78,6 +78,11 @@ alter table private.reglages
 alter table private.reglages
   add column if not exists regimes_ouverts boolean not null default true;
 
+-- Les activites ont le leur pour la meme raison : on arrete la liste des
+-- sorties bien avant d'arreter le nombre de couverts, ou bien apres.
+alter table private.reglages
+  add column if not exists activites_ouvertes boolean not null default true;
+
 -- Quels jours de la semaine se facturent au tarif week-end. Lundi = 0,
 -- dimanche = 6 ; par defaut vendredi et samedi, les deux nuits que la
 -- plupart des hotels comptent a part. Ce reglage vivait dans
@@ -1051,6 +1056,226 @@ grant execute on function public.regimes_charger(text, uuid)                  to
 grant execute on function public.regimes_enregistrer(text, uuid, uuid, jsonb) to anon;
 
 -- ============================================================
+--  6d. Les activites
+-- ============================================================
+--
+--  Une liste d'envies, et trois reponses par personne : oui, pourquoi
+--  pas, non.
+--
+--  NON EST L'ETAT PAR DEFAUT, ET IL NE S'ECRIT PAS. Qui n'a rien dit
+--  d'une sortie n'a aucune ligne -- la regle du fichier entier
+--  (principe 3, en tete), et ici elle dit quelque chose de juste : une
+--  sortie que personne n'a demandee n'aura pas lieu. Repondre « non »
+--  EFFACE donc la ligne, au lieu d'en ecrire une. La contrainte de
+--  la colonne `avis` le grave : elle n'accepte que les deux autres.
+--
+--  TOUT LE MONDE VOIT TOUT, contrairement aux preferences alimentaires.
+--  On se decide pour une randonnee en sachant qui vient ; la question n'a
+--  pas de sens amputee des autres. C'est la meme raison qui rend le plan
+--  de couchage visible de tous, et qui garde pour soi ce que mange le
+--  cousin.
+--
+--  N'IMPORTE QUI PROPOSE. C'est la seule page ou la famille AJOUTE a la
+--  liste au lieu de repondre a ce que l'organisateur a pose. RETIRER, en
+--  revanche, reste a l'organisateur : une activite effacee emporte les
+--  reponses de tous les autres, et ce n'est pas un geste qu'on laisse a
+--  qui passe.
+--
+create table if not exists private.activites (
+  id          uuid primary key default gen_random_uuid(),
+  titre       text not null,
+  description text,
+  -- Qui l'a proposee. `set null` et non `cascade` : le depart d'un
+  -- participant ne doit pas emporter une sortie que d'autres ont choisie.
+  -- Null veut donc dire « on ne sait plus », ou « l'organisateur ».
+  propose_par uuid references private.participants(id) on delete set null,
+  cree_le     timestamptz not null default now()
+);
+
+-- Deux fois « Randonnee », et les voix se partagent entre deux lignes qui
+-- disent la meme chose. La casse ne fait pas une sortie differente.
+create unique index if not exists activites_titre_idx
+  on private.activites (lower(titre));
+
+create table if not exists private.envies (
+  id             uuid primary key default gen_random_uuid(),
+  participant_id uuid not null references private.participants(id) on delete cascade,
+  activite_id    uuid not null references private.activites(id) on delete cascade,
+  -- Pas de 'non' : il ne s'ecrit pas, il s'efface.
+  avis           text not null check (avis in ('oui', 'peut_etre')),
+  maj_le         timestamptz not null default now(),
+  unique (participant_id, activite_id)
+);
+
+-- Ces deux tables naissent APRES le `revoke all` de la section 6 : il ne
+-- les couvre pas. On le redit pour elles, comme pour les sauvegardes.
+revoke all on private.activites, private.envies from anon, authenticated;
+
+-- Les faits bruts, sous la meme forme pour la famille et pour
+-- l'organisateur. Les COMPTES ne sont pas ici : « douze oui, quatre
+-- pourquoi pas » se deduit de ces lignes, et ce qui se deduit se calcule
+-- la ou ca s'eprouve -- dans le navigateur, comme la facture.
+create or replace function private.activites_liste()
+returns jsonb language sql stable
+set search_path = private, pg_temp as $fn$
+  select coalesce(jsonb_agg(jsonb_build_object(
+           'id', a.id,
+           'titre', a.titre,
+           'description', a.description,
+           'propose_par', a.propose_par,
+           'cree_le', a.cree_le
+         ) order by a.cree_le, a.titre), '[]'::jsonb)
+    from private.activites a
+$fn$;
+
+create or replace function private.envies_liste()
+returns jsonb language sql stable
+set search_path = private, pg_temp as $fn$
+  select coalesce(jsonb_agg(jsonb_build_object(
+           'participant_id', e.participant_id,
+           'activite_id', e.activite_id,
+           'avis', e.avis
+         ) order by e.participant_id, e.activite_id), '[]'::jsonb)
+    from private.envies e
+$fn$;
+
+create or replace function public.activites_charger(p_code text, p_acteur uuid)
+returns jsonb
+language plpgsql stable security definer
+set search_path = private, pg_temp as $fn$
+begin
+  perform private.verifier_code(p_code);
+
+  return jsonb_build_object(
+    'ouverte', (select r.activites_ouvertes from private.reglages r),
+    -- Ceux pour qui je reponds : la regle des presences, mot pour mot.
+    'gens', coalesce((
+      select jsonb_agg(jsonb_build_object(
+               'id', p.id, 'prenom', p.prenom, 'famille', p.famille
+             ) order by o.rang)
+        from private.participants p
+        join private.personnes_modifiables(p_acteur) m on m.id = p.id
+        join private.ordre_familial() o on o.id = p.id
+    ), '[]'::jsonb),
+    -- ...et tout le monde, parce que la page dit qui a repondu quoi. Ce
+    -- n'est pas une fuite : la liste des prenoms est deja servie par
+    -- `participants_lister` a qui a le code famille.
+    'tous', coalesce((
+      select jsonb_agg(jsonb_build_object(
+               'id', p.id, 'prenom', p.prenom, 'famille', p.famille
+             ) order by o.rang)
+        from private.participants p
+        join private.ordre_familial() o on o.id = p.id
+    ), '[]'::jsonb),
+    'activites', private.activites_liste(),
+    'envies', private.envies_liste()
+  );
+end $fn$;
+
+-- Un avis, pour une personne, sur une activite. Un a la fois : une liste
+-- deroulante se change une par une, et envoyer la grille entiere a chaque
+-- fois ecraserait ce qu'un autre vient de dire.
+create or replace function public.activites_voter(
+  p_code     text,
+  p_acteur   uuid,
+  p_cible    uuid,
+  p_activite uuid,
+  p_avis     text
+)
+returns jsonb
+language plpgsql security definer
+set search_path = private, pg_temp as $fn$
+begin
+  perform private.verifier_code(p_code);
+
+  if not (select r.activites_ouvertes from private.reglages r) then
+    raise exception 'SAISIE_CLOSE' using errcode = 'P0001';
+  end if;
+
+  if not exists (
+    select 1 from private.personnes_modifiables(p_acteur) m where m.id = p_cible
+  ) then
+    raise exception 'PAS_A_TOI' using errcode = 'P0001';
+  end if;
+
+  if not exists (select 1 from private.activites a where a.id = p_activite) then
+    raise exception 'ACTIVITE_INCONNUE' using errcode = 'P0001';
+  end if;
+
+  if p_avis is null or p_avis not in ('oui', 'peut_etre', 'non') then
+    raise exception 'AVIS_INCONNU' using errcode = 'P0001';
+  end if;
+
+  perform private.sauver_si_nouvelle_semaine();
+
+  -- « Non » ne s'ecrit pas : il s'efface.
+  if p_avis = 'non' then
+    delete from private.envies e
+     where e.participant_id = p_cible and e.activite_id = p_activite;
+  else
+    insert into private.envies (participant_id, activite_id, avis)
+    values (p_cible, p_activite, p_avis)
+    on conflict (participant_id, activite_id)
+      do update set avis = excluded.avis, maj_le = now();
+  end if;
+
+  return jsonb_build_object('pose', true);
+end $fn$;
+
+-- Proposer une sortie. Le seul endroit ou la famille ajoute une ligne que
+-- l'organisateur n'a pas posee.
+create or replace function public.activites_proposer(
+  p_code text, p_acteur uuid, p_titre text, p_description text
+)
+returns jsonb
+language plpgsql security definer
+set search_path = private, pg_temp as $fn$
+declare
+  propre   text := trim(coalesce(p_titre, ''));
+  nouvelle uuid;
+begin
+  perform private.verifier_code(p_code);
+
+  if not (select r.activites_ouvertes from private.reglages r) then
+    raise exception 'SAISIE_CLOSE' using errcode = 'P0001';
+  end if;
+
+  -- Le proposant doit exister : c'est son prenom qui s'affichera a cote
+  -- de la sortie, et une activite venue de nulle part ne se discute pas.
+  if not exists (select 1 from private.participants p where p.id = p_acteur) then
+    raise exception 'INCONNU' using errcode = 'P0001';
+  end if;
+
+  if propre = '' then
+    raise exception 'TITRE_VIDE' using errcode = 'P0001';
+  end if;
+
+  -- On compare les intitules comme on compare les codes : sans la casse,
+  -- sans les accents, sans la ponctuation. « Randonnee » et « randonnée »
+  -- sont la meme sortie, et l'index unique sur `lower(titre)` ne le dirait
+  -- pas. Ici le refus porte un nom que la page sait traduire ; la, ce
+  -- serait une violation de contrainte brute.
+  if exists (
+    select 1 from private.activites a
+     where private.normaliser_code(a.titre) = private.normaliser_code(propre)
+  ) then
+    raise exception 'ACTIVITE_EXISTE' using errcode = 'P0001';
+  end if;
+
+  perform private.sauver_si_nouvelle_semaine();
+
+  insert into private.activites (titre, description, propose_par)
+  values (propre, nullif(trim(coalesce(p_description, '')), ''), p_acteur)
+  returning id into nouvelle;
+
+  return jsonb_build_object('id', nouvelle);
+end $fn$;
+
+grant execute on function public.activites_charger(text, uuid)                 to anon;
+grant execute on function public.activites_voter(text, uuid, uuid, uuid, text) to anon;
+grant execute on function public.activites_proposer(text, uuid, text, text)    to anon;
+
+-- ============================================================
 --  7. La porte de sortie : l'export Python
 -- ============================================================
 --
@@ -1617,12 +1842,13 @@ begin
     'age_bebe', r.age_bebe,
     'age_enfant', r.age_enfant,
     'age_jeune', r.age_jeune,
-    -- Les quatre verrous, lus au meme endroit qu'ils se tournent.
+    -- Les verrous, lus au meme endroit qu'ils se tournent.
     'ouvertures', jsonb_build_object(
       'saisie', r.saisie_ouverte,
       'voeux', r.voeux_ouverts,
       'lieux', r.lieux_ouverts,
-      'regimes', r.regimes_ouverts
+      'regimes', r.regimes_ouverts,
+      'activites', r.activites_ouvertes
     ),
     -- Combien de personnes n'ont pas de date : le panneau le dit, sinon
     -- « recalculer » paraitrait ne rien faire pour la moitie du monde.
@@ -1721,7 +1947,7 @@ begin
   end if;
 
   -- Un `update` par colonne : on ne construit pas de SQL a partir d'un
-  -- argument, meme derriere un code d'acces. Quatre lignes lisibles
+  -- argument, meme derriere un code d'acces. Cinq lignes lisibles
   -- valent mieux qu'un `execute` qu'il faudra relire deux fois.
   --
   -- `where id` : safeupdate refuse un UPDATE sans clause WHERE.
@@ -1733,18 +1959,21 @@ begin
     update private.reglages set lieux_ouverts = p_ouvert where id;
   elsif p_quoi = 'regimes' then
     update private.reglages set regimes_ouverts = p_ouvert where id;
+  elsif p_quoi = 'activites' then
+    update private.reglages set activites_ouvertes = p_ouvert where id;
   else
     raise exception 'PAGE_INCONNUE' using errcode = 'P0001';
   end if;
 
-  -- Les quatre en retour : la page redessine tout son panneau sans avoir
-  -- a deviner ce qui a bouge.
+  -- Toutes en retour : la page redessine son panneau entier sans avoir a
+  -- deviner ce qui a bouge.
   return (
     select jsonb_build_object(
              'saisie', r.saisie_ouverte,
              'voeux', r.voeux_ouverts,
              'lieux', r.lieux_ouverts,
-             'regimes', r.regimes_ouverts
+             'regimes', r.regimes_ouverts,
+             'activites', r.activites_ouvertes
            )
       from private.reglages r
   );
@@ -1892,6 +2121,88 @@ begin
 end $fn$;
 
 grant execute on function public.admin_regime(text, uuid, jsonb) to anon;
+
+-- ---- 8m. Les activites, cote organisateur ----
+--
+--  Il en ajoute, il en retire, et il voit les avis de tout le monde. Il
+--  ne VOTE pour personne : un avis se donne depuis `activites.html`, sous
+--  le nom de quelqu'un, et corriger le gout d'autrui n'a pas de sens --
+--  contrairement a une allergie, qu'on saisit pour qui n'ouvrira pas la
+--  page.
+--
+create or replace function public.admin_activites(p_code text)
+returns jsonb
+language plpgsql stable security definer
+set search_path = private, pg_temp as $fn$
+begin
+  perform private.verifier_code(p_code, 'admin');
+  return jsonb_build_object(
+    'ouverte', (select r.activites_ouvertes from private.reglages r),
+    'activites', private.activites_liste(),
+    'envies', private.envies_liste()
+  );
+end $fn$;
+
+create or replace function public.admin_activite_ajouter(
+  p_code text, p_titre text, p_description text
+)
+returns jsonb
+language plpgsql security definer
+set search_path = private, pg_temp as $fn$
+declare
+  propre   text := trim(coalesce(p_titre, ''));
+  nouvelle uuid;
+begin
+  perform private.verifier_code(p_code, 'admin');
+
+  if propre = '' then
+    raise exception 'TITRE_VIDE' using errcode = 'P0001';
+  end if;
+
+  if exists (
+    select 1 from private.activites a
+     where private.normaliser_code(a.titre) = private.normaliser_code(propre)
+  ) then
+    raise exception 'ACTIVITE_EXISTE' using errcode = 'P0001';
+  end if;
+
+  perform private.sauver_si_nouvelle_semaine();
+
+  -- `propose_par` reste null : elle vient de l'organisateur, et la page
+  -- n'affiche un « propose par » que lorsqu'elle a un prenom a mettre.
+  insert into private.activites (titre, description)
+  values (propre, nullif(trim(coalesce(p_description, '')), ''))
+  returning id into nouvelle;
+
+  return jsonb_build_object('id', nouvelle);
+end $fn$;
+
+-- Retirer emporte les avis de tout le monde : c'est le `on delete cascade`
+-- de `envies`. On rend leur nombre pour que la page puisse le dire APRES
+-- coup -- avant, elle l'annonce depuis ce qu'elle a deja sous la main.
+create or replace function public.admin_activite_retirer(p_code text, p_id uuid)
+returns jsonb
+language plpgsql security definer
+set search_path = private, pg_temp as $fn$
+declare
+  perdus integer;
+begin
+  perform private.verifier_code(p_code, 'admin');
+  perform private.sauver_si_nouvelle_semaine();
+
+  select count(*) into perdus from private.envies e where e.activite_id = p_id;
+
+  delete from private.activites a where a.id = p_id;
+  if not found then
+    raise exception 'ACTIVITE_INCONNUE' using errcode = 'P0001';
+  end if;
+
+  return jsonb_build_object('retire', true, 'avis_perdus', perdus);
+end $fn$;
+
+grant execute on function public.admin_activites(text)                    to anon;
+grant execute on function public.admin_activite_ajouter(text, text, text) to anon;
+grant execute on function public.admin_activite_retirer(text, uuid)       to anon;
 
 -- ---- 8j. Les bornes d'age ----
 --
@@ -3774,7 +4085,11 @@ set search_path = private, pg_temp as $fn$
     'logements', coalesce(
       (select jsonb_agg(to_jsonb(l) order by l.id) from private.logements l), '[]'::jsonb),
     'couchages', coalesce(
-      (select jsonb_agg(to_jsonb(c) order by c.participant_id, c.jour) from private.couchages c), '[]'::jsonb)
+      (select jsonb_agg(to_jsonb(c) order by c.participant_id, c.jour) from private.couchages c), '[]'::jsonb),
+    'activites', coalesce(
+      (select jsonb_agg(to_jsonb(a) order by a.id) from private.activites a), '[]'::jsonb),
+    'envies', coalesce(
+      (select jsonb_agg(to_jsonb(e) order by e.participant_id, e.activite_id) from private.envies e), '[]'::jsonb)
   )
 $fn$;
 
@@ -3902,11 +4217,11 @@ end $fn$;
 --  annulable. Se tromper de ligne dans la liste ne doit pas etre la
 --  derniere erreur possible.
 --
---  Les cinq tables sont citees ensemble dans le TRUNCATE parce qu'elles
---  se referencent : Postgres refuse de vider seule une table dont une
---  autre depend. Les participants sont reinseres en premier, et leurs
---  liens croises (parent, conjoint) passent parce que les cles etrangeres
---  ne sont verifiees qu'en fin d'instruction.
+--  Les tables sont citees ensemble dans le TRUNCATE parce qu'elles se
+--  referencent : Postgres refuse de vider seule une table dont une autre
+--  depend. Les participants sont reinseres en premier, et leurs liens
+--  croises (parent, conjoint) passent parce que les cles etrangeres ne
+--  sont verifiees qu'en fin d'instruction.
 --
 create or replace function public.admin_sauvegarde_restaurer(p_code text, p_id uuid)
 returns jsonb
@@ -3921,8 +4236,12 @@ declare
   n_options      integer;
   n_logements    integer;   -- reste null si la copie ne dit rien des logements
   n_couchages    integer;   -- idem pour le plan de couchage
+  n_activites    integer;   -- idem pour la liste des sorties
+  n_envies       integer;   -- idem pour les avis
   couchages_gardes jsonb;   -- le plan mis de cote quand la copie l'ignore
   logements_gardes jsonb;   -- l'inventaire, de meme
+  activites_gardees jsonb;  -- les sorties, de meme
+  envies_gardees   jsonb;   -- et les avis qui vont avec
 begin
   perform private.verifier_code(p_code, 'admin');
 
@@ -3950,10 +4269,18 @@ begin
   if not (c ? 'logements') then
     select jsonb_agg(to_jsonb(x)) into logements_gardes from private.logements x;
   end if;
+  -- Les sorties et les avis partent ensemble, et se gardent ensemble : un
+  -- avis sans sa sortie ne designerait plus rien. Une copie d'avant les
+  -- activites n'en dit rien, et le silence n'est pas « il n'y en avait
+  -- aucune ».
+  if not (c ? 'activites') then
+    select jsonb_agg(to_jsonb(x)) into activites_gardees from private.activites x;
+    select jsonb_agg(to_jsonb(x)) into envies_gardees from private.envies x;
+  end if;
 
   truncate table public.presences, public.voeux, public.refus_lieu,
-                 private.couchages, private.logements,
-                 private.options_date, private.participants;
+                 private.couchages, private.logements, private.envies,
+                 private.activites, private.options_date, private.participants;
 
   insert into private.participants
     (id, prenom, famille, categorie_age, parent_id, conjoint_id, invite, portee,
@@ -4012,6 +4339,61 @@ begin
            coalesce((l->>'vue_mer')::boolean, false),
            coalesce((l->>'cree_le')::timestamptz, now())
       from jsonb_array_elements(logements_gardes) as l;
+  end if;
+
+
+  -- Les sorties reviennent apres les participants -- elles nomment celui
+  -- qui les a proposees -- et avant les avis, qui les visent.
+  if c ? 'activites' then
+    insert into private.activites (id, titre, description, propose_par, cree_le)
+    select (l->>'id')::uuid,
+           l->>'titre',
+           l->>'description',
+           (select q.id from private.participants q
+             where q.id = nullif(l->>'propose_par', '')::uuid),
+           coalesce((l->>'cree_le')::timestamptz, now())
+      from jsonb_array_elements(c->'activites') as l;
+    get diagnostics n_activites = row_count;
+
+    insert into private.envies (id, participant_id, activite_id, avis, maj_le)
+    select (l->>'id')::uuid,
+           (l->>'participant_id')::uuid,
+           (l->>'activite_id')::uuid,
+           l->>'avis',
+           coalesce((l->>'maj_le')::timestamptz, now())
+      from jsonb_array_elements(coalesce(c->'envies', '[]'::jsonb)) as l
+     -- Les deux bouts doivent tenir. Un seul avis orphelin ferait echouer
+     -- la restauration ENTIERE sur une cle etrangere -- et la copie, elle,
+     -- a peut-etre ete prise d'une base ou l'un des deux venait de partir.
+     where exists (select 1 from private.participants p
+                    where p.id = (l->>'participant_id')::uuid)
+       and exists (select 1 from private.activites a
+                    where a.id = (l->>'activite_id')::uuid);
+    get diagnostics n_envies = row_count;
+
+  elsif activites_gardees is not null then
+    -- La copie n'en parle pas : on les repose telles qu'elles etaient.
+    -- `n_activites` reste null -- rien n'a ete RESTAURE, seulement garde.
+    insert into private.activites (id, titre, description, propose_par, cree_le)
+    select (l->>'id')::uuid,
+           l->>'titre',
+           l->>'description',
+           (select q.id from private.participants q
+             where q.id = nullif(l->>'propose_par', '')::uuid),
+           coalesce((l->>'cree_le')::timestamptz, now())
+      from jsonb_array_elements(activites_gardees) as l;
+
+    insert into private.envies (id, participant_id, activite_id, avis, maj_le)
+    select (l->>'id')::uuid,
+           (l->>'participant_id')::uuid,
+           (l->>'activite_id')::uuid,
+           l->>'avis',
+           coalesce((l->>'maj_le')::timestamptz, now())
+      from jsonb_array_elements(coalesce(envies_gardees, '[]'::jsonb)) as l
+     where exists (select 1 from private.participants p
+                    where p.id = (l->>'participant_id')::uuid)
+       and exists (select 1 from private.activites a
+                    where a.id = (l->>'activite_id')::uuid);
   end if;
 
   insert into public.presences
@@ -4090,7 +4472,9 @@ begin
     'voeux', n_voeux,
     'refus_lieu', n_refus,
     'logements', n_logements,
-    'couchages', n_couchages
+    'couchages', n_couchages,
+    'activites', n_activites,
+    'envies', n_envies
   );
 end $fn$;
 
@@ -4116,6 +4500,8 @@ grant execute on function public.admin_sauvegarde_restaurer(text, uuid)  to anon
 --    refus_lieu     les departements peints en rouge sur la carte
 --    logements      l'inventaire des couchages, pose depuis admin.html
 --    couchages      qui dort ou, nuit par nuit
+--    activites      les sorties proposees, par la famille ou l'organisateur
+--    envies         les « oui » et les « pourquoi pas » -- jamais les « non »
 --    sauvegardes    0 tant que personne n'a rien modifie cette semaine
 --
 select
@@ -4129,4 +4515,6 @@ select
   (select count(*) from public.refus_lieu)    as refus_lieu,
   (select count(*) from private.logements)    as logements,
   (select count(*) from private.couchages)    as couchages,
+  (select count(*) from private.activites)    as activites,
+  (select count(*) from private.envies)       as envies,
   (select count(*) from private.sauvegardes)  as sauvegardes;

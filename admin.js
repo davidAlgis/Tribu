@@ -112,6 +112,9 @@ const MESSAGES = {
   LOGEMENT_EXISTANT: "Ce type est déjà dans l'inventaire : corrige plutôt sa ligne.",
   UNITE_INCONNUE: "Ce couchage n'existe plus. Recharge la page.",
   PAS_SUR_PLACE: "Cette personne n'a pas déclaré dormir sur place cette nuit-là.",
+  TITRE_VIDE: "Il manque l'intitulé de l'activité.",
+  ACTIVITE_EXISTE: "Cette idée est déjà dans la liste.",
+  ACTIVITE_INCONNUE: "Cette idée n'existe plus. Recharge la page.",
 };
 
 const etat = {
@@ -184,6 +187,7 @@ async function recharger() {
   await rechargerLogements();
   await rechargerDates();
   await rechargerLieux();
+  await rechargerActivites();
   await rechargerSauvegardes();
 }
 
@@ -749,9 +753,9 @@ document.getElementById("ajouter-date").addEventListener("click", async () => {
 
 // -------------------------------------------------------- ouvertures
 //
-// QUATRE PAGES, QUATRE VERROUS, UN SEUL PANNEAU. Ils existaient deja,
-// mais chacun se tournait dans un onglet different : on ne savait jamais
-// ce qui restait ouvert sans faire le tour des trois.
+// UNE PAGE, UN VERROU, UN SEUL PANNEAU. Ils existaient deja, mais chacun
+// se tournait dans un onglet different : on ne savait jamais ce qui
+// restait ouvert sans faire le tour.
 //
 // Fermer ne cache rien : la page se lit encore, elle ne s'ecrit plus.
 // C'est la base qui refuse -- la page le montre seulement.
@@ -761,6 +765,7 @@ const PAGES_FAMILLE = [
   ["voeux", "La date", "dates.html"],
   ["saisie", "Les présences", "presences.html"],
   ["regimes", "Préférences alimentaires", "regimes.html"],
+  ["activites", "Les activités", "activites.html"],
 ];
 
 const zoneOuvertures = document.getElementById("ouvertures");
@@ -772,7 +777,7 @@ function dessinerOuvertures() {
   const fermees = PAGES_FAMILLE.filter(([cle]) => etats[cle] === false).length;
   compteurOuvertures.textContent = fermees
     ? `${fermees} page(s) fermée(s)`
-    : "les quatre sont ouvertes";
+    : "toutes ouvertes";
 
   zoneOuvertures.textContent = "";
   for (const [cle, titre, page] of PAGES_FAMILLE) {
@@ -821,7 +826,7 @@ async function ouvrir(quoi, ouvert) {
   }
 }
 
-// Les quatre d'un coup : une par une, c'est quatre allers-retours et
+// Toutes d'un coup : une par une, c'est autant d'allers-retours et
 // autant d'occasions d'en oublier une ouverte.
 async function toutes(ouvert) {
   messageOuvertures.className = "";
@@ -837,8 +842,8 @@ async function toutes(ouvert) {
     dessinerOuvertures();
     messageOuvertures.className = "ok";
     messageOuvertures.textContent = ouvert
-      ? "Les quatre pages sont ouvertes."
-      : "Les quatre pages sont fermées : la famille lit, elle n'écrit plus.";
+      ? "Toutes les pages sont ouvertes."
+      : "Toutes les pages sont fermées : la famille lit, elle n'écrit plus.";
   } catch (erreur) {
     messageOuvertures.className = "erreur";
     messageOuvertures.textContent = erreur.message;
@@ -972,6 +977,249 @@ async function enregistrerRegime(personne, rangee) {
   }
 }
 
+
+
+// ------------------------------------------------------ les activites
+//
+// Une liste d'idees, et trois reponses par personne. L'organisateur en
+// AJOUTE et en RETIRE ; il ne repond pour personne.
+//
+// Ce n'est pas une symetrie oubliee avec les preferences alimentaires,
+// ou il remplit pour ceux qui n'ouvriront pas la page : une allergie est
+// un fait qu'un tiers peut connaitre, une envie non. Le tableau du bas se
+// lit donc, et ne se remplit pas.
+//
+// NON EST LA REPONSE PAR DEFAUT, ET LA BASE NE LE GARDE PAS. Elle ne
+// stocke que les « oui » et les « pourquoi pas » : le nombre de « non »
+// se calcule ici, comme le reste de la famille.
+
+const AVIS_ACTIVITE = [
+  ["oui", "Oui"],
+  ["peut_etre", "Pourquoi pas"],
+  ["non", "Non"],
+];
+
+const listeActivites = document.getElementById("liste-activites");
+const tableauActivites = document.getElementById("tableau-activites");
+const compteurActivites = document.getElementById("compteur-activites");
+const compteurAvis = document.getElementById("compteur-avis");
+const messageActivites = document.getElementById("message-activites");
+
+async function rechargerActivites() {
+  const donnees = await rpc("admin_activites", { p_code: etat.code });
+  etat.activites = donnees.activites || [];
+  etat.envies = donnees.envies || [];
+  dessinerActivites();
+}
+
+// Ce que la base garde : rien pour un « non ». Le defaut se lit ici.
+function avisDe(participant, activite) {
+  const ligne = (etat.envies || []).find(
+    (e) => e.participant_id === participant && e.activite_id === activite
+  );
+  return ligne ? ligne.avis : "non";
+}
+
+function comptesDe(activite) {
+  const gens = etat.participants || [];
+  const oui = gens.filter((p) => avisDe(p.id, activite.id) === "oui").length;
+  const peutEtre = gens.filter((p) => avisDe(p.id, activite.id) === "peut_etre").length;
+  return { oui, peutEtre, non: gens.length - oui - peutEtre };
+}
+
+function dessinerActivites() {
+  const activites = etat.activites || [];
+  compteurActivites.textContent = activites.length ? `${activites.length} idée(s)` : "";
+
+  // ---- La liste, et le bouton qui retire ----
+  listeActivites.textContent = "";
+  if (!activites.length) {
+    const rien = document.createElement("p");
+    rien.className = "note";
+    rien.textContent =
+      "Aucune idée pour l'instant. Pose-en une ci-dessus, ou attends " +
+      "que la famille s'en charge.";
+    listeActivites.appendChild(rien);
+  }
+
+  for (const activite of activites) {
+    const compte = comptesDe(activite);
+
+    const bloc = document.createElement("div");
+    bloc.className = "activite";
+    bloc.dataset.activite = activite.id;
+
+    const tete = document.createElement("div");
+    tete.className = "activite-tete";
+    tete.appendChild(fort(activite.titre));
+
+    const retirer = document.createElement("button");
+    retirer.type = "button";
+    retirer.className = "retirer";
+    retirer.textContent = "Retirer";
+    retirer.title = `Retirer « ${activite.titre} » et les réponses de tous`;
+    retirer.addEventListener("click", () => retirerActivite(activite, compte));
+    tete.appendChild(retirer);
+    bloc.appendChild(tete);
+
+    if (activite.description) {
+      const precision = document.createElement("p");
+      precision.className = "note";
+      precision.textContent = activite.description;
+      bloc.appendChild(precision);
+    }
+
+    const etiquettes = span("", "etiquettes");
+    etiquettes.append(
+      span(`${compte.oui} oui`, "etiquette ok"),
+      span(`${compte.peutEtre} pourquoi pas`, "etiquette"),
+      span(`${compte.non} non`, "etiquette")
+    );
+
+    const bas = document.createElement("div");
+    bas.className = "activite-bas";
+    bas.appendChild(etiquettes);
+    // `propose_par` est vide quand l'idee vient d'ici -- ou quand celui qui
+    // l'a proposee a quitte la liste depuis. On ne dit donc rien plutot que
+    // d'affirmer l'un pour l'autre.
+    const propose = activite.propose_par && parId(activite.propose_par);
+    if (propose) bas.appendChild(span(`proposé par ${propose.prenom}`, "discret-inline"));
+    bloc.appendChild(bas);
+
+    listeActivites.appendChild(bloc);
+  }
+
+  dessinerAvis();
+}
+
+// Une ligne par personne, une colonne par idee. C'est la vue qu'on veut
+// quand on cherche qui manque a l'appel d'une sortie.
+function dessinerAvis() {
+  const activites = etat.activites || [];
+  const gens = etat.participants || [];
+
+  const repondants = new Set((etat.envies || []).map((e) => e.participant_id)).size;
+  compteurAvis.textContent = activites.length
+    ? `${repondants} personne(s) ont répondu`
+    : "";
+
+  tableauActivites.textContent = "";
+  if (!activites.length || !gens.length) {
+    const rien = document.createElement("p");
+    rien.className = "note";
+    rien.textContent = activites.length
+      ? "Aucun participant : rien à montrer ici."
+      : "Aucune idée : rien à montrer ici.";
+    tableauActivites.appendChild(rien);
+    return;
+  }
+
+  const cadre = document.createElement("div");
+  cadre.className = "tableau-large";
+  const table = document.createElement("table");
+
+  const tete = document.createElement("thead");
+  const rangee = document.createElement("tr");
+  const vide = document.createElement("th");
+  vide.textContent = "Personne";
+  rangee.appendChild(vide);
+  for (const activite of activites) {
+    const th = document.createElement("th");
+    th.textContent = activite.titre;
+    rangee.appendChild(th);
+  }
+  tete.appendChild(rangee);
+  table.appendChild(tete);
+
+  const corps = document.createElement("tbody");
+  for (const personne of gens) {
+    const tr = document.createElement("tr");
+    const nom = document.createElement("th");
+    nom.scope = "row";
+    nom.append(personne.prenom);
+    if (personne.famille && personne.famille !== personne.prenom) {
+      nom.append(span(` (${personne.famille})`, "precision"));
+    }
+    tr.appendChild(nom);
+
+    for (const activite of activites) {
+      const avis = avisDe(personne.id, activite.id);
+      const td = document.createElement("td");
+      // Un « non » deduit du silence ne doit pas peser autant qu'un « oui »
+      // ecrit : il se lit en gris, comme un zero dans la facture.
+      if (avis === "non") td.className = "rien";
+      td.textContent = (AVIS_ACTIVITE.find(([v]) => v === avis) || [])[1] || avis;
+      tr.appendChild(td);
+    }
+    corps.appendChild(tr);
+  }
+
+  // La somme sous chaque colonne : c'est elle qu'on lit pour trancher.
+  const somme = document.createElement("tr");
+  somme.className = "sous-total";
+  const titre = document.createElement("th");
+  titre.scope = "row";
+  titre.textContent = "Oui / pourquoi pas";
+  somme.appendChild(titre);
+  for (const activite of activites) {
+    const compte = comptesDe(activite);
+    const td = document.createElement("td");
+    td.textContent = `${compte.oui} / ${compte.peutEtre}`;
+    somme.appendChild(td);
+  }
+  corps.appendChild(somme);
+
+  table.appendChild(corps);
+  cadre.appendChild(table);
+  tableauActivites.appendChild(cadre);
+}
+
+const champActiviteTitre = document.getElementById("activite-titre");
+const champActiviteDescription = document.getElementById("activite-description");
+
+document.getElementById("activite-ajouter").addEventListener("click", async () => {
+  messageActivites.className = "";
+  messageActivites.textContent = "Enregistrement…";
+  try {
+    await rpc("admin_activite_ajouter", {
+      p_code: etat.code,
+      p_titre: champActiviteTitre.value,
+      p_description: champActiviteDescription.value,
+    });
+    champActiviteTitre.value = "";
+    champActiviteDescription.value = "";
+    await rechargerActivites();
+    messageActivites.className = "ok";
+    messageActivites.textContent = "Idée ajoutée.";
+  } catch (erreur) {
+    messageActivites.className = "erreur";
+    messageActivites.textContent = erreur.message;
+  }
+});
+
+// Le nombre de reponses emportees se dit AVANT, avec ce qu'on a deja sous
+// la main : « supprimer 14 réponses » ne se decouvre pas apres coup.
+async function retirerActivite(activite, compte) {
+  const donnees = compte.oui + compte.peutEtre;
+  const question =
+    `Retirer « ${activite.titre} » ?\n\n` +
+    (donnees
+      ? `${donnees} réponse(s) partent avec, sans retour.`
+      : "Personne n'y a répondu : rien d'autre ne part avec.");
+  if (!confirm(question)) return;
+
+  messageActivites.className = "";
+  messageActivites.textContent = "Suppression…";
+  try {
+    await rpc("admin_activite_retirer", { p_code: etat.code, p_id: activite.id });
+    await rechargerActivites();
+    messageActivites.className = "ok";
+    messageActivites.textContent = `« ${activite.titre} » est retirée.`;
+  } catch (erreur) {
+    messageActivites.className = "erreur";
+    messageActivites.textContent = erreur.message;
+  }
+}
 
 // ------------------------------------------------------ les logements
 //
@@ -2858,6 +3106,15 @@ const COMPARABLES = [
     cle: ["participant_id", "jour"],
     ignorer: ["id", "maj_le"],
   },
+  // Les envies se comptent comme le reste : une ligne par personne et par
+  // idee. Les « non » n'y sont pas -- ils ne s'ecrivent pas -- donc « 3 ->
+  // 5 » se lit « trois idees retenues, puis cinq ».
+  {
+    clef: "envies",
+    nom: "Activités",
+    cle: ["participant_id", "activite_id"],
+    ignorer: ["id", "maj_le"],
+  },
 ];
 
 const CHAMPS_PARTICIPANT = [
@@ -2997,7 +3254,12 @@ function comparerEtats(avant, apres) {
     ? comparerParId(avant.logements, apres.logements, CHAMPS_LOGEMENT)
     : null;
 
-  const tables = COMPARABLES.map((def) => {
+  // Une table apparue APRES la copie n'y figure pas, et le silence n'est
+  // pas « il n'y avait rien » -- c'est le raisonnement tenu juste au-dessus
+  // pour l'inventaire. Sans ce filtre, une copie d'avant les activites
+  // annoncerait « quarante ajouts » pour des lignes qu'une restauration
+  // laisserait en place.
+  const tables = COMPARABLES.filter((def) => avant[def.clef] !== undefined).map((def) => {
     const r = comparerTable(avant[def.clef], apres[def.clef], def);
     for (const g of r.personnes) g.prenom = noms.get(g.pid) || "(inconnu)";
     // Le meme ordre que partout ailleurs. Qui n'est plus dans la liste --

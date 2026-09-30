@@ -28,6 +28,7 @@ PAGES = {
     "dates.html": "dates.js",
     "lieux.html": "lieux.js",
     "regimes.html": "regimes.js",
+    "activites.html": "activites.js",
     "admin.html": "admin.js",
 }
 
@@ -37,7 +38,13 @@ ACCUEIL = "index.html"
 
 # Les pages qui portent le menu commun. Une page ajoutée sans lui serait un
 # cul-de-sac, et les pages déjà là n'y mèneraient pas.
-FAMILIALES = ("dates.html", "lieux.html", "presences.html", "regimes.html")
+FAMILIALES = (
+    "dates.html",
+    "lieux.html",
+    "presences.html",
+    "regimes.html",
+    "activites.html",
+)
 
 
 def identifiants(html: str) -> set[str]:

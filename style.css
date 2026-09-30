@@ -256,6 +256,48 @@ td.rien { color: var(--doux); }
 .cases-regime { display: flex; flex-wrap: wrap; gap: 4px 22px; }
 .cases-regime .interrupteur { margin: 6px 0 0; }
 
+/* ---------- Les activites ---------- */
+/* Une idee, une reponse. L'intitule et la liste deroulante sur la meme
+   ligne : c'est la paire qu'on lit, et sur un telephone elle se replie
+   l'une sous l'autre plutot que de se tasser. */
+.activite {
+  border: 1px solid var(--trait);
+  border-radius: 10px;
+  padding: 12px 14px;
+  margin-bottom: 10px;
+}
+.activite-tete {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px 14px;
+}
+/* La liste deroulante prend toute la largeur par defaut, comme les autres
+   champs. Ici elle ne porte que trois mots : elle se serre. */
+.activite-tete select { width: auto; min-width: 9.5em; }
+.activite .note { margin: 6px 0 0; }
+.activite-bas {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 10px;
+  margin-top: 8px;
+}
+.activite-bas .etiquettes { margin-left: 0; }
+
+/* Les noms, derriere un pli. Depliee, la liste des « non » fait soixante
+   prenoms sous chaque idee, et la page ne montre plus les idees. */
+details.qui-a-dit { margin-top: 8px; }
+details.qui-a-dit > summary {
+  font-size: 0.83rem;
+  color: var(--doux);
+  cursor: pointer;
+  border-radius: 6px;
+}
+details.qui-a-dit > summary:hover { color: var(--accent); }
+details.qui-a-dit .note { margin: 6px 0 0; }
+
 /* Dans le tableau de l'organisateur, la case se centre sous sa colonne
    comme un chiffre le ferait. */
 td .interrupteur { margin: 0; justify-content: center; }
