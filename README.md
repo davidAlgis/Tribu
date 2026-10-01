@@ -70,10 +70,12 @@ refuse.
 Le geste peut commencer dans la marge autour de la carte : le sens du tracé
 se décide au premier département rencontré, pas à l'appui.
 
-Le pinceau couvre un disque de deux ou trois départements : un balayage de
-la Manche aux Ardennes en peint six d'un geste. Une quinzaine de **villes repères**
-situent le trait — on sait si l'on peint au-dessus ou au-dessous
-de Lyon.
+Le pinceau couvre à peu près **un département moyen**. Il en couvrait deux
+ou trois : commode pour peindre une région entière, trop large pour en
+désigner un seul — on débordait sur le voisin à chaque fois. Un balayage
+reste le geste naturel pour une région, il demande seulement un passage de
+plus. Une quinzaine de **villes repères** situent le trait — on sait si l'on
+peint au-dessus ou au-dessous de Lyon.
 
 Le département comme unité plutôt qu'un dessin libre, pour trois raisons :
 la donnée tient en quelques codes, le croisement est un simple comptage,

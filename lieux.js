@@ -251,9 +251,12 @@ const boutonEnregistrer = document.getElementById("enregistrer");
 const boutonTous = document.getElementById("appliquer-tous");
 const portee = document.getElementById("portee-saisie");
 
-// En unites du viewBox (large de 1000) : de quoi couvrir deux ou trois
-// departements d'un coup sans deborder sur la region voisine.
-const RAYON_PINCEAU = 38;
+// En unites du viewBox (large de 1000). Il couvrait deux ou trois
+// departements d'un coup -- commode pour peindre une region entiere, trop
+// large pour en designer un seul : on debordait sur le voisin a chaque
+// fois. Divise par deux et demi, il tient dans un departement moyen et se
+// promene encore assez vite pour couvrir une region en quelques passages.
+const RAYON_PINCEAU = 15.2;
 
 const formes = new Map(); // code -> <path>
 let pinceau = null;
