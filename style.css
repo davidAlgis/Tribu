@@ -709,36 +709,36 @@ fieldset.panneau-saisie {
   box-shadow: 0 1px 4px rgba(0, 0, 0, 0.07);
 }
 
-fieldset.panneau-resultat {
+/* Le bandeau des resultats. C'est un `details` depuis qu'il se plie : le
+   `summary` remplace le `legend`, et le `float` qui empechait ce dernier de
+   mordre la bordure n'a plus lieu d'etre. */
+details.panneau-resultat {
   background: var(--bandeau);
   border: 0;
   border-top: 4px solid var(--accent);
   border-radius: 0;
-  margin-top: 28px;
+  margin: 28px 0 20px;
   padding: 16px 20px 20px;
 }
-/* `float` et non le placement par defaut : un legend s'assoit SUR la bordure
-   et la coupe en deux. Sur un trait de 4 px, le titre a l'air de mordre
-   dedans. Flotte sur toute la largeur, il devient un simple titre pose sous
-   la barre, qui reste entiere. */
-fieldset.panneau-resultat legend {
-  float: left;
-  width: 100%;
-  padding: 0;
-  margin: 0 0 12px;
+details.panneau-resultat > summary {
   text-transform: uppercase;
   letter-spacing: 0.07em;
   font-size: 0.78rem;
+  font-weight: 600;
   color: var(--doux);
+  cursor: pointer;
+  border-radius: 6px;
 }
+details.panneau-resultat > summary:hover { color: var(--accent); }
+details.panneau-resultat[open] > summary { margin-bottom: 12px; }
 /* Le decompte reste une phrase : les capitales du titre ne l'atteignent pas. */
-fieldset.panneau-resultat legend .discret-inline {
+details.panneau-resultat > summary .discret-inline {
   text-transform: none;
   letter-spacing: 0;
 }
 /* Sur l'aplat du bandeau, une note grise sur gris se brouille : on lui
    retire son fond et on ne garde que le lisere. */
-fieldset.panneau-resultat .note {
+details.panneau-resultat .note {
   background: transparent;
 }
 

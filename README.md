@@ -26,8 +26,14 @@ Six pages pour la famille, une pour toi :
 | [`admin.html`](admin.html) | toi | dates du séjour, participants, préférences alimentaires, **activités**, logements et plan de couchage, tarifs, facture, hôtel, week-ends, résultat de la carte, retour en arrière |
 
 Le code se donne **une fois**, sur la page d'accueil : il est retenu sur
-l'appareil, et les étapes suivantes le reprennent toutes seules — elles ne
-redemandent que le prénom, qui leur sert à savoir pour qui l'on répond.
+l'appareil, et les étapes suivantes le reprennent toutes seules. **Le prénom
+aussi** — celui qui vient de dire qui il est sur les dates n'a pas à le
+redire sur les présences. Une page le reprend si la personne est toujours
+dans la liste et que la base sert ses données ; sinon elle redemande, et
+oublie ce qu'elle gardait plutôt que d'échouer page après page.
+«&nbsp;Changer de personne&nbsp;» l'oublie, et «&nbsp;oublier le code sur cet
+appareil&nbsp;» emporte les deux — sur un téléphone qui circule, laisser le
+prénom derrière ferait reprendre la saisie sous le nom du précédent.
 Entrer directement sur l'une d'elles marche aussi : elle demandera le code.
 
 Les pages familiales portent le même menu en tête — **Accueil**, **Le
@@ -865,10 +871,14 @@ le module `statistics` de Python.
 **Chacun lit sa note**, sur [`facture.html`](facture.html) : la sienne et
 celle des gens dont il remplit les présences — la règle de
 `personnes_modifiables`, comme partout ailleurs. Les mêmes trois tableaux
-que les tiens, au même format, parce que c'est le **même module** qui les
-dessine ([`tableaux.js`](tableaux.js)) à partir du **même calcul**
+que les tiens, parce que c'est le **même module** qui les dessine
+([`tableaux.js`](tableaux.js)) à partir du **même calcul**
 ([`facture.js`](facture.js)) : celui qui demande l'argent et celui qui le
-paie doivent lire la même chose. La page ne porte ni champ ni bouton
+paie doivent lire la même chose. Avec une différence assumée : le
+récapitulatif familial n'a que **hébergement, repas, total**. Les colonnes
+*par nuitée* et *par repas* servent à comparer soixante séjours de longueurs
+différentes — sur sa propre note, elles ne font qu'un tableau de plus à
+déchiffrer. La page ne porte ni champ ni bouton
 d'enregistrement ; pour changer un montant, on change ce qu'il compte, sur
 **Les présences**.
 

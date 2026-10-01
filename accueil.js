@@ -57,9 +57,14 @@ function ecrireMemoire(valeur) {
   }
 }
 
+// LES DEUX ENSEMBLE. Les pages retiennent aussi le prenom de celui qui
+// repond ; le laisser derriere ferait reprendre la saisie sous le nom du
+// precedent des qu'un code est redonne -- sur un telephone qui circule,
+// c'est exactement ce qu'on ne veut pas.
 function oublierMemoire() {
   try {
     localStorage.removeItem(MEMOIRE);
+    localStorage.removeItem("tribu.moi");
   } catch {
     /* idem */
   }

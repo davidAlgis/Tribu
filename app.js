@@ -182,6 +182,69 @@ function ecrireMemoire(valeur) {
   }
 }
 
+// ET LE PRENOM AVEC. Le code entrait une fois pour toutes ; le prenom, lui,
+// se redemandait a chaque page. Celui qui vient de dire qui il est sur les
+// dates n'a pas a le redire sur les presences.
+//
+// On garde l'identifiant, le prenom et la famille -- de quoi retrouver la
+// personne dans l'annuaire, et de quoi s'apercevoir qu'elle n'y est plus.
+const MOI = "tribu.moi";
+
+function lireMoi() {
+  try {
+    return JSON.parse(localStorage.getItem(MOI) || "null");
+  } catch {
+    return null;
+  }
+}
+
+function ecrireMoi(personne) {
+  try {
+    localStorage.setItem(
+      MOI,
+      JSON.stringify({
+        id: personne.id,
+        prenom: personne.prenom,
+        famille: personne.famille,
+      })
+    );
+  } catch {
+    /* navigation privee : sans importance */
+  }
+}
+
+function oublierMoi() {
+  try {
+    localStorage.removeItem(MOI);
+  } catch {
+    /* navigation privee : sans importance */
+  }
+}
+
+// Reprendre la personne retenue, si elle tient encore debout. Trois raisons
+// de ne pas la reprendre, et chacune ramene simplement a l'etape du prenom :
+// rien n'a ete retenu, la personne a quitte la liste depuis, ou la base
+// refuse de servir ses donnees.
+async function reprendrePersonne() {
+  const garde = lireMoi();
+  if (!garde || !garde.id) return false;
+
+  const trouve = annuaire.find((p) => p.id === garde.id);
+  if (!trouve) {
+    oublierMoi();
+    return false;
+  }
+
+  await choisirPersonne(trouve);
+  // `choisirPersonne` affiche son refus au lieu de le lever : si le message
+  // est rouge, l'etape n'a pas bouge et il faut redemander.
+  if (messagePrenom.className === "erreur") {
+    oublierMoi();
+    return false;
+  }
+  return true;
+}
+
 // ---------------------------------------------------------------- dates
 
 // Surtout pas toISOString() : il convertit minuit local en UTC, ce qui
@@ -231,8 +294,12 @@ document.getElementById("form-code").addEventListener("submit", async (e) => {
     ecrireMemoire(code);
     messageCode.textContent = "";
     preparerAutocompletion(participants);
-    montrer("etape-prenom");
-    document.getElementById("prenom").focus();
+    // Le prenom retenu nous saute l'etape suivante -- sauf s'il ne vaut
+    // plus, auquel cas on la montre comme avant.
+    if (!(await reprendrePersonne())) {
+      montrer("etape-prenom");
+      document.getElementById("prenom").focus();
+    }
   } catch (erreur) {
     messageCode.className = "erreur";
     messageCode.textContent = erreur.message;
@@ -327,6 +394,9 @@ async function choisirPersonne(personne) {
     });
     messagePrenom.textContent = "";
     listeSuggestions.innerHTML = "";
+    // Apres l'appel, et pas avant : on ne retient pas une personne dont la
+    // base vient de refuser les donnees.
+    ecrireMoi(personne);
     construireSaisie();
     montrer("etape-saisie");
     await montrerCouchage();
@@ -675,6 +745,9 @@ La saisie déjà faite de ${ecrases.map((p) => p.prenom).join(", ")} ` +
 });
 
 document.getElementById("changer").addEventListener("click", () => {
+  // Changer de personne, c'est dire que celle qu'on retenait n'etait pas la
+  // bonne : on l'oublie, sinon la page suivante la reprendrait.
+  oublierMoi();
   champPrenom.value = "";
   listeSuggestions.innerHTML = "";
   montrer("etape-prenom");

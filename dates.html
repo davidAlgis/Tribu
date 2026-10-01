@@ -20,7 +20,16 @@
   </nav>
 
   <h1>Quand partons-nous&nbsp;?</h1>
-  <p class="sous-titre" id="sous-titre">Dis quels week-ends t'arrangent. Rien n'est encore décidé.</p>
+  <!--
+    UNE LIGNE, ET ELLE DIT DEUX CHOSES : pourquoi on est là, et ce qu'il
+    faut faire. Une page qui ne dit que la première laisse chercher ; une
+    qui ne dit que la seconde laisse se demander à quoi ça sert.
+  -->
+  <p class="sous-titre" id="sous-titre">
+    <strong>Pour trouver le week-end qui réunit le plus de monde</strong>&nbsp;:
+    réponds <strong>Oui</strong> ou <strong>Non</strong> à chaque proposition,
+    et laisse vide celles dont tu n'es pas sûr.
+  </p>
 
   <!-- Reste affiché une fois le code accepté : c'est le signe que la page
        a bougé, là où deux champs de texte au même endroit ne le disent
@@ -79,8 +88,18 @@
       </p>
     </fieldset>
 
-    <fieldset class="panneau-resultat">
-      <legend>Résultat des choix <span id="participation" class="discret-inline"></span></legend>
+    <!--
+      PLIÉ PAR DÉFAUT. On vient ici pour répondre, pas pour consulter : le
+      classement de toute la famille sous ses propres réponses donnait à la
+      page un air de tableau de bord. Le résumé porte la participation, de
+      quoi savoir s'il vaut la peine d'ouvrir.
+
+      `<details>` plutôt qu'un bouton et une classe : le pli est natif, il
+      marche sans script, et le lecteur d'écran l'annonce sans qu'on ait à
+      le lui dire.
+    -->
+    <details class="panneau-resultat" id="bloc-resultats">
+      <summary>Résultat des choix <span id="participation" class="discret-inline"></span></summary>
       <p id="verdict" class="note" role="status" aria-live="polite"></p>
       <ol id="classement" class="classement"></ol>
       <p class="note">
@@ -89,7 +108,7 @@
         de monde passe devant. Ce sont les totaux de la famille — jamais les
         noms, et rien de plus que ce que chacun voit déjà.
       </p>
-    </fieldset>
+    </details>
 
     <div class="actions">
       <button type="button" id="enregistrer">Enregistrer</button>

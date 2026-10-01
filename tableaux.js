@@ -211,36 +211,54 @@ window.TABLEAUX = (function () {
   // toujours celui qui est reste le plus longtemps, ce qu'on savait deja.
   const arrondi = (v) => Math.round(v * 100) / 100;
 
+  // LES RAPPORTS NE SONT PAS POUR TOUT LE MONDE. L'organisateur compare
+  // soixante personnes qui ne sont pas restees aussi longtemps : ramener
+  // chaque somme a ce qu'elle achete est le seul moyen de les lire
+  // ensemble. La famille, elle, regarde trois lignes et veut savoir ce
+  // qu'elle doit -- quatre colonnes de plus ne lui apprennent rien et lui
+  // donnent un tableau a dechiffrer.
   const colonnes = {
-    resume: () => [
-      {
-        libelle: "Hébergement (taxe comprise)",
-        valeur: (l) => arrondi(l.hebergement + l.taxe),
-      },
-      {
-        libelle: "Par nuitée",
-        rapport: { haut: (l) => arrondi(l.hebergement + l.taxe), bas: (l) => l.nuits },
-      },
-      { libelle: "Repas", valeur: (l) => l.repas },
-      {
-        libelle: "Par repas",
-        rapport: { haut: (l) => l.repas, bas: (l) => window.FACTURE.repasFactures(l) },
-      },
-      { libelle: "Total", valeur: (l) => l.total, total: true },
-      {
-        libelle: "Total par nuitée",
-        rapport: { haut: (l) => l.total, bas: (l) => l.nuits },
-        total: true,
-      },
-      {
-        libelle: "Total par nuitée + repas",
-        rapport: {
-          haut: (l) => l.total,
-          bas: (l) => l.nuits + window.FACTURE.repasFactures(l),
+    resume: (options) => {
+      const rapports = !options || options.rapports !== false;
+      const lignes = [
+        {
+          libelle: "Hébergement (taxe comprise)",
+          valeur: (l) => arrondi(l.hebergement + l.taxe),
         },
-        total: true,
-      },
-    ],
+      ];
+      if (rapports) {
+        lignes.push({
+          libelle: "Par nuitée",
+          rapport: { haut: (l) => arrondi(l.hebergement + l.taxe), bas: (l) => l.nuits },
+        });
+      }
+      lignes.push({ libelle: "Repas", valeur: (l) => l.repas });
+      if (rapports) {
+        lignes.push({
+          libelle: "Par repas",
+          rapport: { haut: (l) => l.repas, bas: (l) => window.FACTURE.repasFactures(l) },
+        });
+      }
+      lignes.push({ libelle: "Total", valeur: (l) => l.total, total: true });
+      if (rapports) {
+        lignes.push(
+          {
+            libelle: "Total par nuitée",
+            rapport: { haut: (l) => l.total, bas: (l) => l.nuits },
+            total: true,
+          },
+          {
+            libelle: "Total par nuitée + repas",
+            rapport: {
+              haut: (l) => l.total,
+              bas: (l) => l.nuits + window.FACTURE.repasFactures(l),
+            },
+            total: true,
+          }
+        );
+      }
+      return lignes;
+    },
 
     nuits: (calcul) => [
       ...calcul.nuits.map((jour) => ({
