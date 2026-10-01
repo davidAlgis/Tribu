@@ -21,9 +21,7 @@
 
   <h1>Qu'est-ce qu'on fait&nbsp;?</h1>
   <p class="sous-titre" id="sous-titre">
-    Une liste d'idées, et trois réponses possibles. Ce que personne ne
-    choisit n'aura pas lieu&nbsp;— et ce qui manque à la liste, tu peux
-    l'ajouter.
+    Cette page te permet de définir à quelle activité tu souhaites participer.
   </p>
 
   <!-- Reste affiché une fois le code accepté : c'est le signe que la page
@@ -90,23 +88,18 @@
         <div>
           <label for="titre">Intitulé</label>
           <input type="text" id="titre" maxlength="80" autocomplete="off"
-                 placeholder="ex. randonnée au phare">
+                 placeholder="ex. laser game">
         </div>
         <div>
           <label for="description">Précision (facultatif)</label>
           <input type="text" id="description" maxlength="200" autocomplete="off"
-                 placeholder="ex. trois heures, chaussures de marche">
+                 placeholder="ex. à 15 min de l'hôtel en voiture">
         </div>
       </div>
       <div class="actions">
         <button type="button" id="proposer">Ajouter à la liste</button>
       </div>
       <p id="message-proposer" role="status" aria-live="polite"></p>
-      <p class="note">
-        Une idée proposée apparaît chez tout le monde, et chacun répond ce
-        qu'il veut. Seul l'organisateur peut en retirer une&nbsp;: l'effacer
-        emporterait les réponses des autres.
-      </p>
     </details>
 
     <fieldset class="panneau-saisie">
@@ -118,13 +111,6 @@
         <button type="button" id="changer" class="discret">Changer de personne</button>
       </div>
       <p id="message" role="status" aria-live="polite"></p>
-
-      <p class="note">
-        Chaque réponse part toute seule&nbsp;: il n'y a rien à enregistrer.
-        <strong>Non</strong> est la réponse par défaut&nbsp;— tant que
-        personne n'a rien dit, tout le monde y est. Ce n'est pas un vote
-        qui tranche&nbsp;: c'est de quoi voir ce qui rassemble.
-      </p>
     </fieldset>
   </section>
 </main>
