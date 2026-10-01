@@ -80,7 +80,7 @@
       <button type="button" role="tab" id="onglet-lieu"
               aria-controls="volet-lieu" aria-selected="false" tabindex="-1">Lieu</button>
       <button type="button" role="tab" id="onglet-sauvegardes"
-              aria-controls="volet-sauvegardes" aria-selected="false" tabindex="-1">Sauvegardes</button>
+              aria-controls="volet-sauvegardes" aria-selected="false" tabindex="-1">Historique</button>
     </div>
 
     <!-- ---- Séjour ---------------------------------------------- -->
@@ -864,21 +864,86 @@
 
     <!-- ---- Sauvegardes ----------------------------------------- -->
     <div class="volet" id="volet-sauvegardes" role="tabpanel" aria-labelledby="onglet-sauvegardes" tabindex="0" hidden>
+
+      <!--
+        TOUT CE QUI A ÉTÉ FAIT, DU PLUS RÉCENT AU PLUS ANCIEN. Un appel
+        est un geste : « Alice enregistre sa grille » est une ligne, pas
+        quarante. Déplier une ligne montre ce qu'elle a changé, champ par
+        champ ; « Annuler » réécrit l'avant, et cette annulation est
+        elle-même un geste — elle se reprend comme le reste.
+      -->
       <fieldset>
-        <legend>Revenir en arrière <span id="compteur-sauvegardes" class="discret-inline"></span></legend>
+        <legend>Tout ce qui a été fait <span id="compteur-sauvegardes" class="discret-inline"></span></legend>
+
         <div id="liste-sauvegardes"></div>
         <div id="comparaison"></div>
-        <div class="actions">
-          <button type="button" id="sauver-maintenant" class="discret">Sauvegarder maintenant</button>
-        </div>
-        <p class="note">
-          Une copie part toute seule à la première modification de chaque semaine,
-          prise juste avant celle-ci. «&nbsp;Comparer&nbsp;» montre ce qui a changé
-          depuis&nbsp;; «&nbsp;Restaurer&nbsp;» remet toute la base dans cet état — et
-          prend d'abord une copie de l'état actuel, pour que ce geste-là s'annule
-          aussi.
-        </p>
+
         <p id="message-sauvegardes" role="status" aria-live="polite"></p>
+
+        <p class="note">
+          <strong>Annuler</strong> remet les lignes du geste dans l'état
+          d'avant, et rien d'autre&nbsp;: ce qui a été fait depuis reste. Si
+          une de ces lignes a bougé entre-temps, la page le dit et demande
+          avant d'écraser. Un geste déjà annulé est grisé.
+        </p>
+      </fieldset>
+
+      <fieldset>
+        <legend>Revenir d'un bloc</legend>
+
+        <div class="grille">
+          <div>
+            <label for="annuler-depuis">Annuler tout ce qui suit</label>
+            <input type="datetime-local" id="annuler-depuis">
+          </div>
+          <div class="aligne-bas">
+            <button type="button" id="annuler-depuis-bouton" class="discret">
+              Annuler depuis cette date
+            </button>
+          </div>
+        </div>
+
+        <p class="note">
+          Les gestes postérieurs sont défaits du plus récent au plus
+          ancien, <strong>en une seule fois</strong>&nbsp;— c'est une
+          décision, elle se reprend d'un coup. Et comme elle est elle-même
+          un geste, elle s'annule aussi.
+        </p>
+      </fieldset>
+
+      <fieldset>
+        <legend>Replier l'historique <span id="compteur-repli" class="discret-inline"></span></legend>
+
+        <div class="grille">
+          <div>
+            <label for="compactage-jours">Replier automatiquement au bout de</label>
+            <input type="number" id="compactage-jours" min="0" max="3650" step="1">
+          </div>
+          <div class="aligne-bas">
+            <button type="button" id="compacter-maintenant" class="discret">
+              Replier maintenant
+            </button>
+            <button type="button" id="sauver-maintenant" class="discret">
+              Prendre un jalon
+            </button>
+          </div>
+        </div>
+
+        <p class="note">
+          Replier remplace tous les gestes par <strong>un jalon</strong>&nbsp;:
+          un état complet, qu'on restaure d'un bloc mais qu'on ne détaille
+          plus. C'est ce qui garde la liste lisible. <strong>0 jour</strong>
+          veut dire «&nbsp;jamais&nbsp;»&nbsp;: la liste grandit alors sans
+          fin, ce qui se défend tant que le séjour se prépare.
+        </p>
+
+        <p class="note">
+          <strong>Restaurer un jalon</strong> remplace toute la base par cet
+          état, et <strong>efface l'historique détaillé</strong>&nbsp;— il
+          décrirait des gestes posés sur un état qui n'existe plus. Un jalon
+          de l'état actuel est pris juste avant, pour que ce geste-là
+          s'annule aussi.
+        </p>
       </fieldset>
     </div>
 

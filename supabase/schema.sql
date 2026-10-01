@@ -687,7 +687,7 @@ declare
 begin
   perform private.verifier_code(p_code);
   -- Le premier changement de la semaine emporte une copie de l'avant.
-  perform private.sauver_si_nouvelle_semaine();
+  perform private.geste('Présences', p_acteur);
 
   select * into r from private.reglages;
   if not r.saisie_ouverte then
@@ -920,7 +920,7 @@ begin
   end if;
 
   -- Le premier changement de la semaine emporte une copie de l'avant.
-  perform private.sauver_si_nouvelle_semaine();
+  perform private.geste('Plan de couchage', p_acteur);
 
   if p_logement is null then
     delete from private.couchages
@@ -1036,7 +1036,7 @@ begin
     raise exception 'PAS_A_TOI' using errcode = 'P0001';
   end if;
 
-  perform private.sauver_si_nouvelle_semaine();
+  perform private.geste('Préférences alimentaires', p_acteur);
 
   select * into quiconque from private.participants where id = p_cible;
 
@@ -1206,7 +1206,7 @@ begin
     raise exception 'AVIS_INCONNU' using errcode = 'P0001';
   end if;
 
-  perform private.sauver_si_nouvelle_semaine();
+  perform private.geste('Avis sur une activité', p_acteur);
 
   -- « Non » ne s'ecrit pas : il s'efface.
   if p_avis = 'non' then
@@ -1262,7 +1262,7 @@ begin
     raise exception 'ACTIVITE_EXISTE' using errcode = 'P0001';
   end if;
 
-  perform private.sauver_si_nouvelle_semaine();
+  perform private.geste('Activité proposée', p_acteur);
 
   insert into private.activites (titre, description, propose_par)
   values (propre, nullif(trim(coalesce(p_description, '')), ''), p_acteur)
@@ -1390,7 +1390,7 @@ declare
 begin
   perform private.verifier_code(p_code, 'admin');
   -- Le premier changement de la semaine emporte une copie de l'avant.
-  perform private.sauver_si_nouvelle_semaine();
+  perform private.geste('Participant ajouté');
 
   if coalesce(trim(p_prenom), '') = '' then
     raise exception 'PRENOM_VIDE' using errcode = 'P0001';
@@ -1479,7 +1479,7 @@ declare
 begin
   perform private.verifier_code(p_code, 'admin');
   -- Le premier changement de la semaine emporte une copie de l'avant.
-  perform private.sauver_si_nouvelle_semaine();
+  perform private.geste('Participant corrigé');
 
   select * into avant from private.participants where id = p_id;
   if avant.id is null then
@@ -1555,7 +1555,7 @@ declare
 begin
   perform private.verifier_code(p_code, 'admin');
   -- Le premier changement de la semaine emporte une copie de l'avant.
-  perform private.sauver_si_nouvelle_semaine();
+  perform private.geste('Droits d''un participant');
 
   if p_portee not in ('descendance', 'foyer', 'soi') then
     raise exception 'PORTEE_INCONNUE' using errcode = 'P0001';
@@ -1587,7 +1587,7 @@ declare
 begin
   perform private.verifier_code(p_code, 'admin');
   -- Le premier changement de la semaine emporte une copie de l'avant.
-  perform private.sauver_si_nouvelle_semaine();
+  perform private.geste('Participant retiré');
 
   select * into partant from private.participants where id = p_id;
   if partant.id is null then
@@ -1620,7 +1620,7 @@ declare
 begin
   perform private.verifier_code(p_code, 'admin');
   -- Le premier changement de la semaine emporte une copie de l'avant.
-  perform private.sauver_si_nouvelle_semaine();
+  perform private.geste('Import des participants');
 
   if jsonb_array_length(coalesce(p_participants, '[]'::jsonb)) = 0 then
     raise exception 'LISTE_VIDE' using errcode = 'P0001';
@@ -1690,7 +1690,7 @@ begin
   perform private.verifier_code(p_code, 'admin');
 
   -- Le premier changement de la semaine emporte une copie de l'avant.
-  perform private.sauver_si_nouvelle_semaine();
+  perform private.geste('Import des présences');
 
   select * into r from private.reglages;
 
@@ -1873,7 +1873,7 @@ declare
 begin
   perform private.verifier_code(p_code, 'admin');
   -- Le premier changement de la semaine emporte une copie de l'avant.
-  perform private.sauver_si_nouvelle_semaine();
+  perform private.geste('Dates du séjour');
 
   if p_debut is null or p_fin is null then
     raise exception 'DATES_MANQUANTES' using errcode = 'P0001';
@@ -1941,6 +1941,7 @@ language plpgsql security definer
 set search_path = private, pg_temp as $fn$
 begin
   perform private.verifier_code(p_code, 'admin');
+  perform private.geste('Ouverture d''une page');
 
   if p_ouvert is null then
     raise exception 'DEMANDE_INVALIDE' using errcode = 'P0001';
@@ -2003,7 +2004,7 @@ declare
 begin
   perform private.verifier_code(p_code, 'admin');
   -- Le premier changement de la semaine emporte une copie de l'avant.
-  perform private.sauver_si_nouvelle_semaine();
+  perform private.geste('Dates de naissance');
 
   if jsonb_array_length(coalesce(p_dates, '[]'::jsonb)) = 0 then
     raise exception 'LISTE_VIDE' using errcode = 'P0001';
@@ -2050,7 +2051,7 @@ declare
   changes  jsonb;
 begin
   perform private.verifier_code(p_code, 'admin');
-  perform private.sauver_si_nouvelle_semaine();
+  perform private.geste('Tranches d''âge recalculées');
 
   select * into r from private.reglages;
   if r.id is null then
@@ -2099,7 +2100,7 @@ declare
   quiconque private.participants;
 begin
   perform private.verifier_code(p_code, 'admin');
-  perform private.sauver_si_nouvelle_semaine();
+  perform private.geste('Préférences alimentaires');
 
   select * into quiconque from private.participants where id = p_id;
   if quiconque.id is null then
@@ -2166,7 +2167,7 @@ begin
     raise exception 'ACTIVITE_EXISTE' using errcode = 'P0001';
   end if;
 
-  perform private.sauver_si_nouvelle_semaine();
+  perform private.geste('Activité ajoutée');
 
   -- `propose_par` reste null : elle vient de l'organisateur, et la page
   -- n'affiche un « propose par » que lorsqu'elle a un prenom a mettre.
@@ -2188,7 +2189,7 @@ declare
   perdus integer;
 begin
   perform private.verifier_code(p_code, 'admin');
-  perform private.sauver_si_nouvelle_semaine();
+  perform private.geste('Activité retirée');
 
   select count(*) into perdus from private.envies e where e.activite_id = p_id;
 
@@ -2222,7 +2223,7 @@ language plpgsql security definer
 set search_path = private, pg_temp as $fn$
 begin
   perform private.verifier_code(p_code, 'admin');
-  perform private.sauver_si_nouvelle_semaine();
+  perform private.geste('Bornes d''âge');
 
   if p_bebe is null or p_enfant is null or p_jeune is null
      or p_bebe < 0 or p_enfant < 0 or p_jeune < 0 then
@@ -2401,7 +2402,7 @@ declare
 begin
   perform private.verifier_code(p_code);
   -- Le premier changement de la semaine emporte une copie de l'avant.
-  perform private.sauver_si_nouvelle_semaine();
+  perform private.geste('Réponses aux week-ends', p_acteur);
 
   select * into r from private.reglages;
   if not r.voeux_ouverts then
@@ -2482,7 +2483,7 @@ declare
 begin
   perform private.verifier_code(p_code, 'admin');
   -- Le premier changement de la semaine emporte une copie de l'avant.
-  perform private.sauver_si_nouvelle_semaine();
+  perform private.geste('Week-end proposé');
 
   if coalesce(trim(p_libelle), '') = '' then
     raise exception 'LIBELLE_VIDE' using errcode = 'P0001';
@@ -2506,7 +2507,7 @@ declare
 begin
   perform private.verifier_code(p_code, 'admin');
   -- Le premier changement de la semaine emporte une copie de l'avant.
-  perform private.sauver_si_nouvelle_semaine();
+  perform private.geste('Week-end retiré');
 
   select * into partant from private.options_date where id = p_id;
   if partant.id is null then
@@ -2634,7 +2635,7 @@ declare
 begin
   perform private.verifier_code(p_code);
   -- Le premier changement de la semaine emporte une copie de l'avant.
-  perform private.sauver_si_nouvelle_semaine();
+  perform private.geste('Refus de lieux', p_acteur);
 
   select * into r from private.reglages;
   if not r.lieux_ouverts then
@@ -2962,7 +2963,7 @@ declare
 begin
   perform private.verifier_code(p_code, 'admin');
   -- Le premier changement de la semaine emporte une copie de l'avant.
-  perform private.sauver_si_nouvelle_semaine();
+  perform private.geste('Inventaire des logements');
 
   if p_categorie is null or p_categorie not in ('chambre', 'gite') then
     raise exception 'CATEGORIE_INCONNUE' using errcode = 'P0001';
@@ -3025,7 +3026,7 @@ declare
 begin
   perform private.verifier_code(p_code, 'admin');
   -- Le premier changement de la semaine emporte une copie de l'avant.
-  perform private.sauver_si_nouvelle_semaine();
+  perform private.geste('Inventaire des logements');
 
   select * into avant from private.logements where id = p_id;
   if avant.id is null then
@@ -3079,7 +3080,7 @@ declare
 begin
   perform private.verifier_code(p_code, 'admin');
   -- Le premier changement de la semaine emporte une copie de l'avant.
-  perform private.sauver_si_nouvelle_semaine();
+  perform private.geste('Logement retiré');
 
   select * into partant from private.logements where id = p_id;
   if partant.id is null then
@@ -3115,7 +3116,7 @@ declare
   pose private.logements;
 begin
   perform private.verifier_code(p_code, 'admin');
-  perform private.sauver_si_nouvelle_semaine();
+  perform private.geste('Façon de facturer un logement');
 
   if p_part_logement is null
      or p_part_logement not in ('aucune', 'fixe', 'selon_occupation') then
@@ -3188,7 +3189,7 @@ begin
   perform private.verifier_code(p_code, 'admin');
   -- Le premier changement de la semaine emporte une copie de l'avant : ce
   -- geste touche potentiellement toute la saisie, il doit s'annuler.
-  perform private.sauver_si_nouvelle_semaine();
+  perform private.geste('Présences précisées');
 
   select * into g from private.logements where id = p_logement;
   if g.id is null then
@@ -3409,7 +3410,7 @@ declare
 begin
   perform private.verifier_code(p_code, 'admin');
   -- Le premier changement de la semaine emporte une copie de l'avant.
-  perform private.sauver_si_nouvelle_semaine();
+  perform private.geste('Plan de couchage');
 
   if not exists (select 1 from private.participants where id = p_participant) then
     raise exception 'INCONNU' using errcode = 'P0001';
@@ -3481,7 +3482,7 @@ begin
   perform private.verifier_code(p_code, 'admin');
   -- Le premier changement de la semaine emporte une copie de l'avant.
   -- Celui-ci plus que tout autre : il touche le plan entier d'une nuit.
-  perform private.sauver_si_nouvelle_semaine();
+  perform private.geste('Plan de couchage');
 
   if p_jour is null or jsonb_typeof(p_places) <> 'array' then
     raise exception 'DEMANDE_INVALIDE' using errcode = 'P0001';
@@ -3550,7 +3551,7 @@ begin
   perform private.verifier_code(p_code, 'admin');
   -- Le premier changement de la semaine emporte une copie de l'avant.
   -- Celui-ci en a le plus besoin de tous : il n'ajoute rien, il efface.
-  perform private.sauver_si_nouvelle_semaine();
+  perform private.geste('Plan de couchage vidé');
 
   if p_jour is null then
     raise exception 'DEMANDE_INVALIDE' using errcode = 'P0001';
@@ -3577,7 +3578,7 @@ declare
   nuits  integer;
 begin
   perform private.verifier_code(p_code, 'admin');
-  perform private.sauver_si_nouvelle_semaine();
+  perform private.geste('Plan de couchage reporté');
 
   select * into r from private.reglages;
   if r.id is null then
@@ -3640,7 +3641,7 @@ declare
 begin
   perform private.verifier_code(p_code, 'admin');
   -- Le premier changement de la semaine emporte une copie de l'avant.
-  perform private.sauver_si_nouvelle_semaine();
+  perform private.geste('Présences alignées sur l''inventaire');
 
   if p_jour is null then
     raise exception 'DEMANDE_INVALIDE' using errcode = 'P0001';
@@ -3857,7 +3858,7 @@ declare
 begin
   perform private.verifier_code(p_code, 'admin');
   -- Le premier changement de la semaine emporte une copie de l'avant.
-  perform private.sauver_si_nouvelle_semaine();
+  perform private.geste('Grille des tarifs');
 
   if jsonb_typeof(p_grille) <> 'array' or jsonb_typeof(p_annexes) <> 'array' then
     raise exception 'DEMANDE_INVALIDE' using errcode = 'P0001';
@@ -4318,79 +4319,94 @@ end $fn$;
 grant execute on function public.facture_charger(text, uuid) to anon;
 
 -- ============================================================
---  13. Revenir en arriere
+--  13. L'historique
 -- ============================================================
 --
---  Trois gestes effacent beaucoup d'un coup, et aucun n'est reversible :
---  « Appliquer a tous » sur les trois pages familiales, le retrait d'un
---  participant qui emporte ses saisies, et le reamorcage GEDCOM qui vide
---  la liste. La base ne garde que l'etat courant : ce qui est remplace
---  n'existe plus nulle part.
+--  LA BASE NE GARDE QUE L'ETAT COURANT : ce qui est remplace n'existe plus
+--  nulle part. Il a existe ici une copie par semaine ; elle repondait a
+--  « revenir a lundi », jamais a « defaire ca ».
 --
---  D'ou un instantane par semaine.
+--  L'historique a donc deux etages.
 --
---  QUAND IL EST PRIS
+--  UN GESTE est une transaction, c'est-a-dire UN APPEL. « Alice enregistre
+--  sa grille » est une ligne de l'historique, pas quarante -- et chaque
+--  ligne touchee y garde son AVANT et son APRES. Annuler, c'est reecrire
+--  l'avant : pas de rejeu, pas de recalcul. L'annulation est elle-meme un
+--  geste, comme `git revert` : l'historique ne se reecrit jamais.
 --
---  Pas par un planificateur. pg_cron demanderait une extension a activer
---  a la main, hors du « coller schema.sql et c'est pret », et prendrait
---  des copies identiques les semaines sans activite.
+--  UN JALON est un etat complet. Il se prend a la demande, et surtout par
+--  REPLI : tous les `compactage_jours` (60 par defaut), les gestes
+--  atomiques se replient en un seul jalon, annulable d'un bloc. C'est ce
+--  qui empeche la liste de devenir illisible -- et le poids de deriver,
+--  accessoirement.
 --
---  Il est pris A LA PREMIERE ECRITURE de chaque semaine, juste avant
---  qu'elle ait lieu. L'instantane porte donc l'etat tel qu'il etait avant
---  le premier changement de la semaine : exactement le point de retour
---  qu'on cherche. Une semaine sans aucune modification n'en produit
---  aucun, puisqu'il n'y aurait rien a y sauver.
+--  CE QUI EST TRACE, ET COMMENT. Un declencheur par table, pose en boucle
+--  depuis `private.tracees()` : il n'y a rien a penser au moment d'ecrire
+--  une nouvelle fonction, et rien a oublier. Les fonctions qui ecrivent
+--  posent seulement une ETIQUETTE, en tete -- `private.geste('Présences',
+--  p_acteur)` -- la ou vivait l'appel a la copie hebdomadaire.
 --
---  CE QU'IL CONTIENT
---
---  Les sept tables qui portent de la donnee saisie, dans un seul jsonb.
---  Ce n'est pas la forme la plus compacte ; c'est la plus simple a relire
---  dans cinq semaines, et vingt personnes tiennent en quelques dizaines
---  de kilo-octets.
---
---  La COMPARAISON n'est pas ici : `admin_etat` sert l'etat courant sous
---  la meme forme, et admin.js compare les deux. Meme principe que le
---  reste du projet -- la base sert des faits, les derivees se calculent
---  ailleurs, la ou elles se testent.
+--  CE QUI N'EST PAS TRACE : les codes d'acces. Annuler un changement de
+--  code enfermerait la famille dehors.
 --
 
-create table if not exists private.sauvegardes (
+-- ---- 13a. Les jalons ----
+--
+--  L'ancienne table des sauvegardes, sous son nom d'aujourd'hui : un jalon
+--  n'est plus une copie de sauvegarde, c'est un point de l'histoire. Les
+--  copies hebdomadaires deja prises le deviennent, rien n'est perdu.
+--
+do $mig$
+begin
+  if exists (select 1 from information_schema.tables
+              where table_schema = 'private' and table_name = 'sauvegardes')
+     and not exists (select 1 from information_schema.tables
+              where table_schema = 'private' and table_name = 'jalons') then
+    alter table private.jalons rename to jalons;
+  end if;
+end $mig$;
+
+create table if not exists private.jalons (
   id       uuid primary key default gen_random_uuid(),
   semaine  date not null,             -- le lundi de la semaine couverte
   prise_le timestamptz not null default now(),
-  motif    text not null check (motif in ('hebdomadaire', 'manuelle', 'avant_restauration')),
+  motif    text not null,
   contenu  jsonb not null
 );
 
--- Une seule copie hebdomadaire par semaine ; les manuelles et les
--- « avant_restauration » peuvent se repeter.
-create unique index if not exists sauvegardes_semaine_idx
-  on private.sauvegardes (semaine) where motif = 'hebdomadaire';
+-- Le repli ajoute un motif : la contrainte se repose a chaque recollage,
+-- `create table if not exists` ne la mettant pas a jour.
+alter table private.jalons drop constraint if exists sauvegardes_motif_check;
+alter table private.jalons drop constraint if exists jalons_motif_valide;
+alter table private.jalons add constraint jalons_motif_valide
+  check (motif in ('hebdomadaire', 'manuelle', 'avant_restauration', 'compactage'));
 
-create index if not exists sauvegardes_prise_le_idx
-  on private.sauvegardes (prise_le desc);
+create unique index if not exists jalons_semaine_idx
+  on private.jalons (semaine) where motif = 'hebdomadaire';
+create index if not exists jalons_prise_le_idx on private.jalons (prise_le desc);
 
--- La table nait APRES le `revoke all` de la section 6 : il ne la couvre
--- pas. Elle porte une copie complete de tout ce que la base contient de
--- personnel, donc on la ferme explicitement, comme `voeux` et `refus_lieu`.
--- Seules les fonctions de cette section y touchent, et elles exigent le
--- code organisateur.
-revoke all on private.sauvegardes from anon, authenticated;
+-- La table porte une copie complete de tout ce que la base contient de
+-- personnel : on la ferme explicitement, comme `voeux` et `refus_lieu`.
+revoke all on private.jalons from anon, authenticated;
 
--- Combien de copies on garde, par motif. Douze semaines couvrent large
--- pour un sejour qui se prepare sur un trimestre.
-create or replace function private.sauvegardes_purger()
+-- Combien de jalons on garde, par motif. C'est le seul chiffre qui
+-- pourrait deriver : les gestes, eux, sont bornes par le repli.
+create or replace function private.jalons_purger()
 returns void language sql
 set search_path = private, pg_temp as $fn$
-  delete from private.sauvegardes s
-   where s.id in (
+  delete from private.jalons j
+   where j.id in (
      select id from (
        select id, row_number() over (partition by motif order by prise_le desc) as rang
-         from private.sauvegardes
+         from private.jalons
      ) t
       where t.rang > 12
    )
 $fn$;
+
+-- Tous les combien l'historique se replie. Zero : jamais.
+alter table private.reglages
+  add column if not exists compactage_jours smallint not null default 60;
 
 -- L'etat courant, sous la forme exacte qu'aura l'instantane. Une seule
 -- definition pour les deux : c'est ce qui garantit que comparer une copie
@@ -4420,47 +4436,300 @@ set search_path = private, pg_temp as $fn$
   )
 $fn$;
 
--- Appelee au debut de CHAQUE fonction qui ecrit, apres la verification du
--- code et avant la moindre modification. Ne fait rien si la semaine est
--- deja couverte : le cout normal est un index scan.
+-- ---- 13b. Ce qu'on trace, et par quelle cle on le retrouve ----
+--
+--  Une liste, et une seule. Elle sert a trois choses : poser les
+--  declencheurs, retrouver la ligne a annuler, et refuser de toucher a une
+--  table qui n'y figure pas -- c'est le garde-fou du SQL dynamique plus
+--  bas. Les CODES D'ACCES n'y sont pas : annuler un changement de code
+--  enfermerait la famille dehors.
+--
+create or replace function private.tracees()
+returns table (nom text, cles text[])
+language sql immutable as $fn$
+  select * from (values
+    ('public.presences',           array['id']),
+    ('public.voeux',               array['id']),
+    ('public.refus_lieu',          array['id']),
+    ('private.participants',       array['id']),
+    ('private.options_date',       array['id']),
+    ('private.logements',          array['id']),
+    ('private.couchages',          array['id']),
+    ('private.activites',          array['id']),
+    ('private.envies',             array['id']),
+    ('private.tarifs',             array['logement_id', 'tranche']),
+    ('private.tarifs_annexes',     array['cle', 'tranche']),
+    ('private.tarifs_repas_jour',  array['jour', 'repas', 'tranche']),
+    ('private.reglages',           array['id'])
+  ) as t(nom, cles)
+$fn$;
+
+-- ---- 13c. Un geste par transaction ----
+--
+--  UN APPEL RPC EST UNE TRANSACTION, donc un geste. C'est ce qui rend
+--  l'historique atomique sans rien demander a personne : « Alice
+--  enregistre sa grille » est UNE ligne, pas quarante.
+--
+create table if not exists private.gestes (
+  id        bigserial primary key,
+  fait_le   timestamptz not null default now(),
+  txid      bigint not null,
+  -- Le jalon sur lequel ce geste repose. Nul tant qu'aucun n'a ete pris.
+  jalon_id  uuid references private.jalons(id) on delete set null,
+  -- Le prenom tel qu'il etait, et non une cle etrangere : une personne
+  -- retiree depuis ne doit pas effacer son nom de l'historique.
+  qui       text,
+  quoi      text,
+  -- Non nul quand ce geste est l'annulation d'un autre. L'historique ne se
+  -- reecrit jamais : annuler AJOUTE une ligne, comme `git revert`.
+  annule_id bigint references private.gestes(id) on delete set null
+);
+
+create unique index if not exists gestes_txid_idx on private.gestes (txid);
+create index if not exists gestes_fait_le_idx on private.gestes (fait_le desc);
+
+create table if not exists private.gestes_lignes (
+  id           bigserial primary key,
+  geste_id     bigint not null references private.gestes(id) on delete cascade,
+  table_cible  text not null,
+  -- La cle naturelle, telle que `to_jsonb` de la ligne l'ecrit : c'est ce
+  -- qui permet de retrouver la ligne sans connaitre ses types.
+  cle          jsonb not null,
+  avant        jsonb,   -- nul : la ligne n'existait pas
+  apres        jsonb    -- nul : la ligne a ete supprimee
+);
+
+create index if not exists gestes_lignes_geste_idx on private.gestes_lignes (geste_id);
+
+revoke all on private.gestes, private.gestes_lignes from anon, authenticated;
+
+-- Le geste de CETTE transaction, cree a la premiere ligne touchee. Les
+-- etiquettes viennent de `private.geste`, posee en tete de chaque fonction
+-- qui ecrit ; absentes, la page compose un resume a partir des lignes.
+create or replace function private.geste_courant()
+returns bigint
+language plpgsql
+set search_path = private, pg_temp as $fn$
+declare
+  trouve bigint;
+begin
+  select g.id into trouve from private.gestes g where g.txid = txid_current();
+  if trouve is not null then
+    return trouve;
+  end if;
+
+  insert into private.gestes (txid, qui, quoi, jalon_id)
+  values (
+    txid_current(),
+    nullif(current_setting('tribu.qui', true), ''),
+    nullif(current_setting('tribu.quoi', true), ''),
+    (select j.id from private.jalons j order by j.prise_le desc limit 1)
+  )
+  returning id into trouve;
+  return trouve;
+end $fn$;
+
+-- Le declencheur, pose sur chaque table tracee. UNE LIGNE PAR LIGNE
+-- TOUCHEE : c'est elle qui porte l'avant et l'apres, et c'est ce couple
+-- qui rend l'annulation possible sans rejouer l'histoire.
+create or replace function private.tracer()
+returns trigger
+language plpgsql security definer
+set search_path = private, pg_temp as $fn$
+declare
+  ancienne jsonb := case when TG_OP = 'INSERT' then null else to_jsonb(OLD) end;
+  nouvelle jsonb := case when TG_OP = 'DELETE' then null else to_jsonb(NEW) end;
+  cles     text[];
+begin
+  -- La restauration d'un jalon remplace tout : la tracer ligne a ligne
+  -- ferait un geste de mille lignes, et un geste a moitie faux puisque le
+  -- TRUNCATE qui la precede n'emet aucun declencheur.
+  if coalesce(current_setting('tribu.sans_trace', true), '') = '1' then
+    return null;
+  end if;
+
+  select t.cles into cles from private.tracees() t
+   where t.nom = TG_TABLE_SCHEMA || '.' || TG_TABLE_NAME;
+  if cles is null then
+    return null;
+  end if;
+
+  insert into private.gestes_lignes (geste_id, table_cible, cle, avant, apres)
+  values (
+    private.geste_courant(),
+    TG_TABLE_SCHEMA || '.' || TG_TABLE_NAME,
+    (select jsonb_object_agg(c, coalesce(nouvelle, ancienne) -> c)
+       from unnest(cles) as c),
+    ancienne,
+    nouvelle
+  );
+  return null;
+end $fn$;
+
+-- Les declencheurs se posent en boucle, depuis la meme liste : en ajouter
+-- un a la main le jour ou une table nait est exactement ce qu'on oublie.
+do $pose$
+declare
+  t record;
+begin
+  for t in select nom from private.tracees() loop
+    execute format('drop trigger if exists tracer_les_gestes on %s', t.nom);
+    execute format(
+      'create trigger tracer_les_gestes after insert or update or delete on %s '
+      'for each row execute function private.tracer()', t.nom);
+  end loop;
+end $pose$;
+
+-- ---- 13d. Ce que chaque fonction qui ecrit annonce ----
+--
+--  Posee en tete, apres la verification du code et avant la moindre
+--  modification -- exactement la ou vivait `sauver_si_nouvelle_semaine`,
+--  qu'elle remplace. Elle ne cree rien : elle pose l'etiquette que le
+--  declencheur lira, et replie l'historique quand il est temps.
+--
+create or replace function private.geste(p_quoi text, p_acteur uuid default null)
+returns void
+language plpgsql
+set search_path = private, pg_temp as $fn$
+begin
+  perform set_config('tribu.quoi', coalesce(p_quoi, ''), true);
+  perform set_config(
+    'tribu.qui',
+    coalesce((select p.prenom from private.participants p where p.id = p_acteur), ''),
+    true);
+  -- AVANT l'ecriture : le jalon doit porter l'etat d'avant elle, sans quoi
+  -- le premier geste du nouvel historique serait deja dedans.
+  perform private.compacter_si_du();
+end $fn$;
+
+-- L'ancien nom, garde le temps qu'un vieux script tourne encore. Il ne
+-- pose aucune etiquette : le geste sera resume depuis ses lignes.
 create or replace function private.sauver_si_nouvelle_semaine()
 returns void language plpgsql
 set search_path = private, pg_temp as $fn$
-declare
-  lundi date := date_trunc('week', now() at time zone 'Europe/Paris')::date;
 begin
-  if exists (
-    select 1 from private.sauvegardes
-     where motif = 'hebdomadaire' and semaine = lundi
-  ) then
+  perform private.geste(null, null);
+end $fn$;
+
+-- ---- 13e. Replier l'historique ----
+--
+--  Une fois tous les `compactage_jours`, les gestes atomiques se replient
+--  en UN jalon -- l'etat complet, annulable d'un bloc. L'historique redevient
+--  court, et c'est le seul chiffre qui pourrait deriver : les jalons sont
+--  plafonnes, les gestes le sont par ce repli.
+--
+create or replace function private.compacter()
+returns uuid
+language plpgsql
+set search_path = private, pg_temp as $fn$
+declare
+  nouveau uuid;
+begin
+  insert into private.jalons (semaine, motif, contenu)
+  values (date_trunc('week', now() at time zone 'Europe/Paris')::date,
+          'compactage', private.etat_courant())
+  returning id into nouveau;
+
+  -- Le jalon EST l'etat courant : tout ce qui y menait est redondant.
+  delete from private.gestes_lignes gl where gl.id is not null;
+  delete from private.gestes g where g.id is not null;
+
+  perform private.jalons_purger();
+  return nouveau;
+end $fn$;
+
+create or replace function private.compacter_si_du()
+returns void
+language plpgsql
+set search_path = private, pg_temp as $fn$
+declare
+  jours      smallint;
+  plus_vieux timestamptz;
+begin
+  select r.compactage_jours into jours from private.reglages r;
+  -- Zero : on ne replie jamais. C'est un reglage, pas une fatalite.
+  if coalesce(jours, 0) <= 0 then
     return;
   end if;
 
-  -- `on conflict` et non un simple insert : deux personnes qui enregistrent
-  -- a la meme seconde le lundi matin passeraient toutes les deux le test
-  -- ci-dessus, et la seconde casserait sur l'index unique -- donc sur son
-  -- enregistrement, qui n'y est pour rien.
-  --
-  -- Sans cible : la forme precise serait `on conflict (semaine) where motif
-  -- = 'hebdomadaire'`, qui demande a Postgres d'inferer l'index partiel. Si
-  -- l'inference echouait, elle echouerait a la PREMIERE ECRITURE d'une
-  -- semaine, des mois apres l'installation, sur le dos de quelqu'un qui
-  -- remplit ses vacances. La forme nue ne peut pas echouer, et il n'y a de
-  -- toute facon qu'une seule contrainte a heurter : la cle primaire tire un
-  -- uuid au hasard.
-  insert into private.sauvegardes (semaine, motif, contenu)
-  values (lundi, 'hebdomadaire', private.etat_courant())
-  on conflict do nothing;
+  select min(g.fait_le) into plus_vieux from private.gestes g;
+  if plus_vieux is null or plus_vieux > now() - make_interval(days => jours) then
+    return;
+  end if;
 
-  perform private.sauvegardes_purger();
+  perform private.compacter();
 end $fn$;
 
--- ---- 12a. Ce qu'on a sous la main ----
+-- ---- 13f. Lire l'historique ----
 --
---  Les compteurs, jamais le contenu : douze copies completes feraient
---  plusieurs mega-octets pour une page qui ne veut afficher qu'une liste.
+--  Les gestes du plus recent au plus ancien, et les jalons meles au meme
+--  fil : un jalon est un point de l'histoire comme un autre, et les voir
+--  separement obligerait a comparer deux listes de dates.
 --
-create or replace function public.admin_sauvegardes_lister(p_code text)
+create or replace function public.admin_historique(p_code text, p_limite integer default 200)
+returns jsonb
+language plpgsql stable security definer
+set search_path = private, pg_temp as $fn$
+begin
+  perform private.verifier_code(p_code, 'admin');
+
+  return jsonb_build_object(
+    'compactage_jours', (select r.compactage_jours from private.reglages r),
+    'gestes', coalesce((
+      select jsonb_agg(x.ligne order by x.fait_le desc, x.rang desc)
+        from (
+          select g.fait_le, g.id as rang,
+                 jsonb_build_object(
+                   'type', 'geste',
+                   'id', g.id,
+                   'fait_le', g.fait_le,
+                   'qui', coalesce(g.qui, 'organisateur'),
+                   'quoi', g.quoi,
+                   'annule_id', g.annule_id,
+                   -- Deja annule ? La page le grise au lieu de laisser
+                   -- cliquer deux fois sur le meme retour en arriere.
+                   'annule', exists (select 1 from private.gestes a
+                                      where a.annule_id = g.id),
+                   'lignes', (select count(*) from private.gestes_lignes gl
+                               where gl.geste_id = g.id),
+                   -- De quoi composer un resume quand l'etiquette manque.
+                   'tables', coalesce((
+                     select jsonb_object_agg(y.table_cible, y.n)
+                       from (select gl.table_cible, count(*) as n
+                               from private.gestes_lignes gl
+                              where gl.geste_id = g.id
+                              group by gl.table_cible) y
+                   ), '{}'::jsonb)
+                 ) as ligne
+            from private.gestes g
+           order by g.id desc
+           limit greatest(coalesce(p_limite, 200), 1)
+        ) x
+    ), '[]'::jsonb),
+    'jalons', coalesce((
+      select jsonb_agg(jsonb_build_object(
+               'type', 'jalon',
+               'id', j.id,
+               'fait_le', j.prise_le,
+               'motif', j.motif,
+               'compteurs', jsonb_build_object(
+                 'participants', jsonb_array_length(coalesce(j.contenu->'participants', '[]'::jsonb)),
+                 'presences',    jsonb_array_length(coalesce(j.contenu->'presences', '[]'::jsonb)),
+                 'voeux',        jsonb_array_length(coalesce(j.contenu->'voeux', '[]'::jsonb)),
+                 'refus_lieu',   jsonb_array_length(coalesce(j.contenu->'refus_lieu', '[]'::jsonb)),
+                 'options_date', jsonb_array_length(coalesce(j.contenu->'options_date', '[]'::jsonb)),
+                 'logements',    jsonb_array_length(coalesce(j.contenu->'logements', '[]'::jsonb)),
+                 'couchages',    jsonb_array_length(coalesce(j.contenu->'couchages', '[]'::jsonb))
+               )
+             ) order by j.prise_le desc)
+        from private.jalons j
+    ), '[]'::jsonb)
+  );
+end $fn$;
+
+-- Le detail d'un geste : une ligne par ligne touchee, avec son avant et
+-- son apres. C'est ce que la page deplie sous le resume.
+create or replace function public.admin_geste_lire(p_code text, p_id bigint)
 returns jsonb
 language plpgsql stable security definer
 set search_path = private, pg_temp as $fn$
@@ -4468,29 +4737,212 @@ begin
   perform private.verifier_code(p_code, 'admin');
   return coalesce((
     select jsonb_agg(jsonb_build_object(
-             'id', s.id,
-             'semaine', s.semaine,
-             'prise_le', s.prise_le,
-             'motif', s.motif,
-             'compteurs', jsonb_build_object(
-               'participants', jsonb_array_length(coalesce(s.contenu->'participants', '[]'::jsonb)),
-               'presences',    jsonb_array_length(coalesce(s.contenu->'presences', '[]'::jsonb)),
-               'voeux',        jsonb_array_length(coalesce(s.contenu->'voeux', '[]'::jsonb)),
-               'refus_lieu',   jsonb_array_length(coalesce(s.contenu->'refus_lieu', '[]'::jsonb)),
-               'options_date', jsonb_array_length(coalesce(s.contenu->'options_date', '[]'::jsonb)),
-               'logements',    jsonb_array_length(coalesce(s.contenu->'logements', '[]'::jsonb)),
-               'couchages',    jsonb_array_length(coalesce(s.contenu->'couchages', '[]'::jsonb))
+             'table', gl.table_cible,
+             'cle', gl.cle,
+             'avant', gl.avant,
+             'apres', gl.apres,
+             -- Le prenom de la personne concernee, quand la ligne en
+             -- designe une : « Alice » se lit, un uuid non.
+             'prenom', (
+               select p.prenom from private.participants p
+                where p.id = coalesce(
+                        (coalesce(gl.apres, gl.avant)->>'participant_id')::uuid,
+                        case when gl.table_cible = 'private.participants'
+                             then (coalesce(gl.apres, gl.avant)->>'id')::uuid end)
              )
-           ) order by s.prise_le desc)
-      from private.sauvegardes s
+           ) order by gl.id)
+      from private.gestes_lignes gl
+     where gl.geste_id = p_id
   ), '[]'::jsonb);
 end $fn$;
 
--- ---- 12b. Une copie a la demande ----
+-- ---- 13g. Annuler ----
 --
---  Avant une operation qu'on sent risquee, sans attendre lundi.
+--  ON REECRIT L'AVANT, et c'est tout : pas de rejeu, pas de recalcul. La
+--  ligne se retrouve par sa cle naturelle, comparee en jsonb -- on n'a
+--  donc besoin de connaitre aucun type, et une colonne ajoutee plus tard
+--  ne casse rien.
 --
-create or replace function public.admin_sauvegarde_prendre(p_code text)
+--  LE NOM DE LA TABLE VIENT DE `tracees()`, jamais de l'appelant : c'est
+--  le garde-fou du `format` ci-dessous.
+--
+create or replace function private.ligne_actuelle(p_table text, p_cle jsonb)
+returns jsonb
+language plpgsql stable
+set search_path = private, pg_temp as $fn$
+declare
+  trouvee jsonb;
+begin
+  execute format('select to_jsonb(t) from %s t where to_jsonb(t) @> $1 limit 1', p_table)
+    into trouvee using p_cle;
+  return trouvee;
+end $fn$;
+
+create or replace function private.annuler_geste(p_id bigint, p_forcer boolean)
+returns jsonb
+language plpgsql
+set search_path = private, pg_temp as $fn$
+declare
+  ligne    record;
+  bouges   integer := 0;
+  reposees integer := 0;
+  effacees integer := 0;
+begin
+  if not exists (select 1 from private.gestes g where g.id = p_id) then
+    raise exception 'GESTE_INCONNU' using errcode = 'P0001';
+  end if;
+
+  -- Une ligne qui a bouge depuis : quelqu'un est passe apres. On refuse
+  -- plutot que d'ecraser son travail sans le dire.
+  if not coalesce(p_forcer, false) then
+    select count(*) into bouges
+      from private.gestes_lignes gl
+     where gl.geste_id = p_id
+       and private.ligne_actuelle(gl.table_cible, gl.cle)
+             is distinct from gl.apres;
+    if bouges > 0 then
+      raise exception 'LIGNES_MODIFIEES' using errcode = 'P0001';
+    end if;
+  end if;
+
+  -- A REBOURS : une suppression en cascade a ecrit les lignes filles avant
+  -- la mere ; les reposer dans l'autre sens ferait echouer la cle etrangere.
+  for ligne in
+    select gl.* from private.gestes_lignes gl
+     where gl.geste_id = p_id
+     order by gl.id desc
+  loop
+    if not exists (select 1 from private.tracees() t where t.nom = ligne.table_cible) then
+      raise exception 'TABLE_INCONNUE' using errcode = 'P0001';
+    end if;
+
+    execute format('delete from %s t where to_jsonb(t) @> $1', ligne.table_cible)
+      using ligne.cle;
+
+    if ligne.avant is not null then
+      execute format(
+        'insert into %s select * from jsonb_populate_record(null::%s, $1)',
+        ligne.table_cible, ligne.table_cible) using ligne.avant;
+      reposees := reposees + 1;
+    else
+      effacees := effacees + 1;
+    end if;
+  end loop;
+
+  return jsonb_build_object('reposees', reposees, 'effacees', effacees);
+end $fn$;
+
+create or replace function public.admin_geste_annuler(
+  p_code text, p_id bigint, p_forcer boolean default false
+)
+returns jsonb
+language plpgsql security definer
+set search_path = private, pg_temp as $fn$
+declare
+  vise  private.gestes;
+  bilan jsonb;
+begin
+  perform private.verifier_code(p_code, 'admin');
+  select * into vise from private.gestes g where g.id = p_id;
+  if vise.id is null then
+    raise exception 'GESTE_INCONNU' using errcode = 'P0001';
+  end if;
+
+  -- L'annulation est elle-meme un geste : l'historique ne se reecrit
+  -- jamais, et un retour en arriere se reprend comme le reste.
+  perform private.geste(
+    'Annulation : ' || coalesce(vise.quoi, 'geste n° ' || vise.id::text));
+
+  bilan := private.annuler_geste(p_id, p_forcer);
+
+  update private.gestes g
+     set annule_id = p_id
+   where g.txid = txid_current();
+
+  return bilan || jsonb_build_object('annule', p_id);
+end $fn$;
+
+-- Tout ce qui a ete fait depuis une date, du plus recent au plus ancien.
+-- EN UN SEUL GESTE : c'est une decision, elle se reprend d'un coup.
+create or replace function public.admin_annuler_depuis(
+  p_code text, p_depuis timestamptz, p_forcer boolean default false
+)
+returns jsonb
+language plpgsql security definer
+set search_path = private, pg_temp as $fn$
+declare
+  vise    bigint;
+  combien integer := 0;
+begin
+  perform private.verifier_code(p_code, 'admin');
+  if p_depuis is null then
+    raise exception 'DATE_MANQUANTE' using errcode = 'P0001';
+  end if;
+
+  perform private.geste('Annulation de tout ce qui suit le '
+                        || to_char(p_depuis at time zone 'Europe/Paris', 'DD/MM/YYYY HH24:MI'));
+
+  for vise in
+    select g.id from private.gestes g
+     where g.fait_le >= p_depuis
+       and g.txid <> txid_current()
+     order by g.id desc
+  loop
+    perform private.annuler_geste(vise, p_forcer);
+    combien := combien + 1;
+  end loop;
+
+  return jsonb_build_object('gestes', combien);
+end $fn$;
+
+-- ---- 13h. Prendre un jalon, et y revenir ----
+--
+--  Un etat complet, pris a la demande ou par le repli. Le restaurer
+--  REMPLACE tout -- et EFFACE l'historique atomique, qui ne decrirait plus
+--  rien d'existant. Une copie « avant_restauration » est prise juste
+--  avant : le geste lui-meme reste annulable.
+--
+create or replace function public.admin_compacter(p_code text)
+returns jsonb
+language plpgsql security definer
+set search_path = private, pg_temp as $fn$
+declare
+  combien integer;
+  nouveau uuid;
+begin
+  perform private.verifier_code(p_code, 'admin');
+  select count(*) into combien from private.gestes;
+  nouveau := private.compacter();
+  return jsonb_build_object('id', nouveau, 'gestes_replies', combien);
+end $fn$;
+
+create or replace function public.admin_compactage_regler(p_code text, p_jours integer)
+returns jsonb
+language plpgsql security definer
+set search_path = private, pg_temp as $fn$
+begin
+  perform private.verifier_code(p_code, 'admin');
+  perform private.geste('Repli de l''historique réglé');
+  if p_jours is null or p_jours < 0 or p_jours > 3650 then
+    raise exception 'DELAI_INVALIDE' using errcode = 'P0001';
+  end if;
+  update private.reglages set compactage_jours = p_jours where id;
+  return jsonb_build_object('compactage_jours', p_jours);
+end $fn$;
+
+grant execute on function public.admin_historique(text, integer)            to anon;
+grant execute on function public.admin_geste_lire(text, bigint)             to anon;
+grant execute on function public.admin_geste_annuler(text, bigint, boolean) to anon;
+grant execute on function public.admin_annuler_depuis(text, timestamptz, boolean) to anon;
+grant execute on function public.admin_compacter(text)                      to anon;
+grant execute on function public.admin_compactage_regler(text, integer)     to anon;
+
+drop function if exists public.admin_sauvegardes_lister(text);
+drop function if exists public.admin_sauvegarde_prendre(text);
+drop function if exists public.admin_sauvegarde_lire(text, uuid);
+drop function if exists public.admin_sauvegarde_restaurer(text, uuid);
+
+create or replace function public.admin_jalon_prendre(p_code text)
 returns jsonb
 language plpgsql security definer
 set search_path = private, pg_temp as $fn$
@@ -4498,21 +4950,15 @@ declare
   nouveau uuid;
 begin
   perform private.verifier_code(p_code, 'admin');
-
-  insert into private.sauvegardes (semaine, motif, contenu)
+  insert into private.jalons (semaine, motif, contenu)
   values (date_trunc('week', now() at time zone 'Europe/Paris')::date,
           'manuelle', private.etat_courant())
   returning id into nouveau;
-
-  perform private.sauvegardes_purger();
+  perform private.jalons_purger();
   return jsonb_build_object('id', nouveau);
 end $fn$;
 
--- ---- 12c. Le contenu d'une copie, et celui du present ----
---
---  Meme forme, pour que le navigateur puisse les comparer champ a champ.
---
-create or replace function public.admin_sauvegarde_lire(p_code text, p_id uuid)
+create or replace function public.admin_jalon_lire(p_code text, p_id uuid)
 returns jsonb
 language plpgsql stable security definer
 set search_path = private, pg_temp as $fn$
@@ -4520,9 +4966,9 @@ declare
   trouve jsonb;
 begin
   perform private.verifier_code(p_code, 'admin');
-  select s.contenu into trouve from private.sauvegardes s where s.id = p_id;
+  select j.contenu into trouve from private.jalons j where j.id = p_id;
   if trouve is null then
-    raise exception 'SAUVEGARDE_INCONNUE' using errcode = 'P0001';
+    raise exception 'JALON_INCONNU' using errcode = 'P0001';
   end if;
   return trouve;
 end $fn$;
@@ -4536,21 +4982,7 @@ begin
   return private.etat_courant();
 end $fn$;
 
--- ---- 12d. Revenir dessus ----
---
---  Remplacement complet : apres l'appel, la base est celle de la copie.
---  Tout ce qui a ete saisi depuis disparait -- d'ou la copie
---  « avant_restauration » prise juste avant, qui rend le geste lui-meme
---  annulable. Se tromper de ligne dans la liste ne doit pas etre la
---  derniere erreur possible.
---
---  Les tables sont citees ensemble dans le TRUNCATE parce qu'elles se
---  referencent : Postgres refuse de vider seule une table dont une autre
---  depend. Les participants sont reinseres en premier, et leurs liens
---  croises (parent, conjoint) passent parce que les cles etrangeres ne
---  sont verifiees qu'en fin d'instruction.
---
-create or replace function public.admin_sauvegarde_restaurer(p_code text, p_id uuid)
+create or replace function public.admin_jalon_restaurer(p_code text, p_id uuid)
 returns jsonb
 language plpgsql security definer
 set search_path = private, pg_temp as $fn$
@@ -4572,14 +5004,25 @@ declare
 begin
   perform private.verifier_code(p_code, 'admin');
 
-  select s.contenu into c from private.sauvegardes s where s.id = p_id;
+  select s.contenu into c from private.jalons s where s.id = p_id;
   if c is null then
-    raise exception 'SAUVEGARDE_INCONNUE' using errcode = 'P0001';
+    raise exception 'JALON_INCONNU' using errcode = 'P0001';
   end if;
 
-  insert into private.sauvegardes (semaine, motif, contenu)
+  insert into private.jalons (semaine, motif, contenu)
   values (date_trunc('week', now() at time zone 'Europe/Paris')::date,
           'avant_restauration', private.etat_courant());
+
+  -- ON NE TRACE PAS UNE RESTAURATION. Le TRUNCATE ci-dessous n'emet aucun
+  -- declencheur de ligne : le geste ne porterait que les reinsertions, et
+  -- l'annuler effacerait tout sans rien reposer. Pire qu'un geste absent.
+  perform set_config('tribu.sans_trace', '1', true);
+
+  -- Et l'historique atomique s'efface : il decrit des gestes poses sur un
+  -- etat qui n'existe plus. Le jalon « avant_restauration » qu'on vient de
+  -- prendre est la pour revenir sur ce geste-ci.
+  delete from private.gestes_lignes gl where gl.id is not null;
+  delete from private.gestes g where g.id is not null;
 
   -- Une copie anterieure au plan de couchage n'en dit rien, et le silence
   -- n'est pas « il n'y en avait aucun ». Mais `couchages` reference
@@ -4790,7 +5233,7 @@ begin
     -- `n_couchages` reste null : rien n'a ete RESTAURE, seulement conserve.
   end if;
 
-  perform private.sauvegardes_purger();
+  perform private.jalons_purger();
 
   return jsonb_build_object(
     'participants', n_participants,
@@ -4805,11 +5248,10 @@ begin
   );
 end $fn$;
 
-grant execute on function public.admin_sauvegardes_lister(text)          to anon;
-grant execute on function public.admin_sauvegarde_prendre(text)          to anon;
-grant execute on function public.admin_sauvegarde_lire(text, uuid)       to anon;
-grant execute on function public.admin_etat(text)                        to anon;
-grant execute on function public.admin_sauvegarde_restaurer(text, uuid)  to anon;
+grant execute on function public.admin_jalon_prendre(text)          to anon;
+grant execute on function public.admin_jalon_lire(text, uuid)       to anon;
+grant execute on function public.admin_etat(text)                   to anon;
+grant execute on function public.admin_jalon_restaurer(text, uuid)  to anon;
 
 -- ============================================================
 --  14. Etat de la base apres execution
@@ -4829,7 +5271,8 @@ grant execute on function public.admin_sauvegarde_restaurer(text, uuid)  to anon
 --    couchages      qui dort ou, nuit par nuit
 --    activites      les sorties proposees, par la famille ou l'organisateur
 --    envies         les « oui » et les « pourquoi pas » -- jamais les « non »
---    sauvegardes    0 tant que personne n'a rien modifie cette semaine
+--    jalons         les etats complets : repli, copie manuelle, avant retour
+--    gestes         l'historique atomique, un par appel qui a ecrit
 --
 select
   (select count(*) from private.participants) as participants,
@@ -4844,4 +5287,5 @@ select
   (select count(*) from private.couchages)    as couchages,
   (select count(*) from private.activites)    as activites,
   (select count(*) from private.envies)       as envies,
-  (select count(*) from private.sauvegardes)  as sauvegardes;
+  (select count(*) from private.jalons)       as jalons,
+  (select count(*) from private.gestes)       as gestes;

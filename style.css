@@ -256,6 +256,54 @@ td.rien { color: var(--doux); }
 .cases-regime { display: flex; flex-wrap: wrap; gap: 4px 22px; }
 .cases-regime .interrupteur { margin: 6px 0 0; }
 
+/* ---------- L'historique ---------- */
+/* Une ligne par geste, du plus recent au plus ancien, et le detail sous le
+   pli. Les lignes se suivent de pres : c'est une liste qu'on parcourt, pas
+   un formulaire qu'on remplit. */
+details.geste {
+  border: 1px solid var(--trait);
+  border-radius: 8px;
+  padding: 8px 12px;
+  margin-bottom: 6px;
+}
+details.geste > summary {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 4px 10px;
+  cursor: pointer;
+  border-radius: 6px;
+}
+details.geste > summary:hover { color: var(--accent); }
+details.geste .quand { color: var(--doux); font-size: 0.82rem; }
+details.geste .quoi { font-weight: 600; }
+/* Un geste deja annule se lit encore -- c'est l'historique -- mais il ne
+   se repropose pas. */
+details.geste.annule > summary .quoi { text-decoration: line-through; opacity: 0.6; }
+
+/* Un jalon n'est pas un geste : c'est un socle. Le trait plein le detache
+   de la liste qu'il ferme. */
+.jalon {
+  border: 1px solid var(--trait);
+  border-left: 4px solid var(--accent);
+  border-radius: 8px;
+  padding: 8px 12px;
+  margin-bottom: 6px;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px 10px;
+}
+
+/* Le detail d'un geste : « diner : non -> oui », une ligne par champ. */
+.changement { font-size: 0.86rem; margin: 4px 0 0; }
+.changement .champ { color: var(--doux); }
+.changement .fleche { color: var(--doux); margin: 0 4px; }
+
+/* Un bouton qui doit s'aligner sur le bas d'un champ voisin, et non sur
+   le haut de son etiquette. */
+.aligne-bas { display: flex; align-items: flex-end; gap: 8px; flex-wrap: wrap; }
+
 /* ---------- Comment un type se facture ---------- */
 /* Les trois questions, juste au-dessus du tableau de prix dont elles
    commandent les colonnes. Une bande discrete : c'est un reglage qu'on

@@ -231,3 +231,76 @@ def test_aucune_variable_ne_porte_le_nom_d_un_alias_de_table():
         "variable PL/pgSQL et alias de table de même nom — Postgres refusera "
         "l'appel : " + " | ".join(fautives)
     )
+
+# --- Tout ce qui ecrit entre dans l'historique ---------------------------
+
+# Les fonctions de l'historique lui-même : elles écrivent, et elles n'ont
+# rien à y annoncer. `annuler_geste` est appelée par une fonction qui a
+# déjà posé son étiquette ; la restauration d'un jalon coupe la trace
+# exprès, le TRUNCATE qui la précède n'émettant aucun déclencheur.
+SANS_GESTE = {
+    "private.tracer",
+    "private.geste_courant",
+    "private.geste",
+    "private.compacter",
+    "private.compacter_si_du",
+    "private.jalons_purger",
+    "private.annuler_geste",
+    "private.sauver_si_nouvelle_semaine",
+    "public.admin_jalon_prendre",
+    "public.admin_jalon_restaurer",
+    "public.admin_compacter",
+}
+
+# Les tables dont une écriture doit se retrouver dans l'historique. La même
+# liste que `private.tracees()`, côté SQL — et c'est le premier test qui
+# vérifie qu'elles ne se séparent pas.
+ECRITURE = re.compile(
+    r"\b(?:insert\s+into|update|delete\s+from)\s+((?:private|public)\.\w+)", re.I
+)
+
+
+def test_la_liste_des_tables_tracees_ne_ment_pas():
+    """`private.tracees()` pose les déclencheurs ET sert de garde-fou au SQL
+    dynamique de l'annulation. Une table qui y figure sans exister ferait
+    échouer le collage ; une qui existe sans y figurer serait invisible
+    dans l'historique, en silence."""
+    bloc = re.search(r"function private\.tracees\(\)(.*?)\$fn\$;", SCHEMA, re.S)
+    assert bloc, "private.tracees() a disparu"
+    tracees = set(re.findall(r"\('((?:private|public)\.\w+)'", bloc.group(1)))
+    assert tracees, "aucune table tracée : le test ne sert à rien"
+
+    posees = set(
+        re.findall(r"^create table if not exists ((?:private|public)\.\w+)", SCHEMA, re.I | re.M)
+    )
+    manquantes = sorted(tracees - posees)
+    assert manquantes == [], f"tracées mais jamais créées : {manquantes}"
+
+
+def test_chaque_fonction_qui_ecrit_annonce_son_geste():
+    """Le déclencheur sait QUELLES lignes ont bougé, jamais pourquoi.
+
+    L'étiquette est la seule part qui ne s'automatise pas : sans elle,
+    l'historique dit « présences : 12 lignes » là où il pourrait dire
+    « Alice — Présences ». Une fonction d'écriture qui l'oublie ne casse
+    rien et ne se voit pas — d'où ce test.
+    """
+    bloc = re.search(r"function private\.tracees\(\)(.*?)\$fn\$;", SCHEMA, re.S)
+    tracees = set(re.findall(r"\('((?:private|public)\.\w+)'", bloc.group(1)))
+
+    muettes = []
+    for fonction in CORPS.finditer(SCHEMA):
+        nom, corps = fonction.group(1), fonction.group(2)
+        if nom in SANS_GESTE:
+            continue
+        # Les commentaires en parlent, et doivent pouvoir continuer.
+        code = "\n".join(l for l in corps.splitlines() if not l.lstrip().startswith("--"))
+        if not (set(ECRITURE.findall(code)) & tracees):
+            continue
+        if "private.geste(" not in code:
+            muettes.append(nom)
+
+    assert muettes == [], (
+        "ces fonctions écrivent sans annoncer leur geste — l'historique les "
+        "montrera sans savoir les nommer : " + ", ".join(sorted(muettes))
+    )

@@ -3313,9 +3313,37 @@ const messageSauvegardes = document.getElementById("message-sauvegardes");
 
 const MOTIFS = {
   hebdomadaire: "début de semaine",
-  manuelle: "prise à la demande",
-  avant_restauration: "prise avant une restauration",
+  manuelle: "pris à la demande",
+  avant_restauration: "pris avant un retour en arrière",
+  compactage: "repli de l'historique",
 };
+
+// Les noms de tables ne sortent pas de la base : « refus_lieu » ne veut
+// rien dire pour qui lit la page.
+const NOMS_TABLES = {
+  "public.presences": "présences",
+  "public.voeux": "réponses aux week-ends",
+  "public.refus_lieu": "refus de lieux",
+  "private.participants": "participants",
+  "private.options_date": "week-ends proposés",
+  "private.logements": "logements",
+  "private.couchages": "plan de couchage",
+  "private.activites": "activités",
+  "private.envies": "avis sur les activités",
+  "private.tarifs": "tarifs",
+  "private.tarifs_annexes": "suppléments et réductions",
+  "private.tarifs_repas_jour": "repas qui font exception",
+  "private.reglages": "réglages du séjour",
+};
+
+const champCompactage = document.getElementById("compactage-jours");
+const champDepuis = document.getElementById("annuler-depuis");
+const compteurRepli = document.getElementById("compteur-repli");
+
+// Ce qu'on ne montre pas dans un changement : l'identifiant ne dit rien, et
+// l'horodatage bouge a chaque enregistrement meme quand la valeur ne bouge
+// pas -- l'afficher ferait croire a un changement partout.
+const CHAMPS_MUETS = new Set(["id", "maj_le", "cree_le", "prise_le"]);
 
 function afficherInstant(iso) {
   return new Date(iso).toLocaleString("fr-FR", {
@@ -3327,60 +3355,322 @@ function afficherInstant(iso) {
   });
 }
 
+// Un resume quand la fonction n'a pas pose d'etiquette : « présences,
+// plan de couchage » vaut mieux que rien, et dit deja de quoi il s'agit.
+function resumerGeste(geste) {
+  if (geste.quoi) return geste.quoi;
+  const noms = Object.keys(geste.tables || {}).map((t) => NOMS_TABLES[t] || t);
+  return noms.length ? noms.join(", ") : "aucune ligne touchée";
+}
+
+// « diner : non → oui ». Une ligne par champ qui a bouge, et rien pour les
+// autres : un enregistrement touche quinze colonnes pour en changer une.
+function champsChanges(avant, apres) {
+  const clefs = new Set([
+    ...Object.keys(avant || {}),
+    ...Object.keys(apres || {}),
+  ]);
+  const changes = [];
+  for (const c of [...clefs].sort()) {
+    if (CHAMPS_MUETS.has(c)) continue;
+    const a = avant ? avant[c] : undefined;
+    const b = apres ? apres[c] : undefined;
+    if (JSON.stringify(a ?? null) === JSON.stringify(b ?? null)) continue;
+    changes.push({ champ: c, avant: a, apres: b });
+  }
+  return changes;
+}
+
+function direValeur(v) {
+  if (v === null || v === undefined) return "—";
+  if (v === true) return "oui";
+  if (v === false) return "non";
+  return String(v);
+}
+
+function ligneChangement(detail) {
+  const bloc = document.createElement("p");
+  bloc.className = "changement";
+
+  const quoi = NOMS_TABLES[detail.table] || detail.table;
+  bloc.append(span(quoi, "etiquette"));
+  if (detail.prenom) bloc.append(" ", fort(detail.prenom));
+
+  const changes = champsChanges(detail.avant, detail.apres);
+  if (!detail.avant) {
+    bloc.append(" ", span("ajouté", "champ"));
+  } else if (!detail.apres) {
+    bloc.append(" ", span("supprimé", "champ"));
+  }
+
+  for (const c of changes) {
+    // Une ligne ajoutee ou supprimee : le detail de ses quinze colonnes
+    // n'apprend rien, c'est la ligne entiere qui bouge.
+    if (!detail.avant || !detail.apres) break;
+    bloc.append(
+      " ",
+      span(`${NOMS_CHAMPS[c.champ] || c.champ} :`, "champ"),
+      ` ${direValeur(c.avant)}`,
+      span("→", "fleche"),
+      `${direValeur(c.apres)}`
+    );
+  }
+  return bloc;
+}
+
+async function montrerGeste(geste, pli) {
+  if (pli.dataset.charge === "1") return;
+  pli.dataset.charge = "1";
+  const corps = document.createElement("div");
+  corps.textContent = "Chargement…";
+  pli.appendChild(corps);
+  try {
+    const lignes = await rpc("admin_geste_lire", { p_code: etat.code, p_id: geste.id });
+    corps.textContent = "";
+    if (!lignes.length) {
+      const rien = document.createElement("p");
+      rien.className = "note";
+      rien.textContent = "Ce geste n'a touché aucune ligne.";
+      corps.appendChild(rien);
+      return;
+    }
+    for (const detail of lignes) corps.appendChild(ligneChangement(detail));
+  } catch (erreur) {
+    corps.textContent = erreur.message;
+    corps.className = "erreur";
+    pli.dataset.charge = "";
+  }
+}
+
+function dessinerGeste(geste) {
+  const pli = document.createElement("details");
+  pli.className = "geste" + (geste.annule ? " annule" : "");
+  pli.dataset.geste = geste.id;
+
+  const resume = document.createElement("summary");
+  resume.append(
+    span(afficherInstant(geste.fait_le), "quand"),
+    span(geste.qui, "etiquette"),
+    span(resumerGeste(geste), "quoi"),
+    span(`${geste.lignes} ligne(s)`, "lien")
+  );
+  if (geste.annule) resume.append(span("déjà annulé", "etiquette alerte"));
+  if (geste.annule_id) resume.append(span("annulation", "etiquette"));
+  pli.appendChild(resume);
+
+  pli.addEventListener("toggle", () => {
+    if (pli.open) montrerGeste(geste, pli);
+  });
+
+  if (!geste.annule && geste.lignes > 0) {
+    const actions = document.createElement("div");
+    actions.className = "actions";
+    const bouton = document.createElement("button");
+    bouton.type = "button";
+    bouton.className = "discret";
+    bouton.textContent = "Annuler ce geste";
+    bouton.addEventListener("click", () => annulerGeste(geste));
+    actions.appendChild(bouton);
+    pli.appendChild(actions);
+  }
+  return pli;
+}
+
+function dessinerJalon(jalon) {
+  const c = jalon.compteurs;
+  const bloc = document.createElement("div");
+  bloc.className = "jalon";
+
+  const gauche = document.createElement("div");
+  gauche.append(
+    fort(afficherInstant(jalon.fait_le)),
+    span(MOTIFS[jalon.motif] || jalon.motif, "lien")
+  );
+  const etiquettes = span("", "etiquettes");
+  etiquettes.append(
+    span(`${c.participants} personnes`, "etiquette"),
+    span(`${c.presences} jours`, "etiquette"),
+    span(`${c.voeux} réponses`, "etiquette"),
+    span(`${c.refus_lieu} refus`, "etiquette")
+  );
+  gauche.append(etiquettes);
+
+  const comparer = document.createElement("button");
+  comparer.type = "button";
+  comparer.className = "discret";
+  comparer.textContent = "Comparer";
+  comparer.addEventListener("click", () => montrerComparaison(jalon));
+
+  const restaurer_ = document.createElement("button");
+  restaurer_.type = "button";
+  restaurer_.className = "discret";
+  restaurer_.textContent = "Restaurer";
+  restaurer_.addEventListener("click", () => restaurer(jalon));
+
+  bloc.append(gauche, comparer, restaurer_);
+  return bloc;
+}
+
 async function rechargerSauvegardes() {
-  const liste = await rpc("admin_sauvegardes_lister", { p_code: etat.code });
-  compteurSauvegardes.textContent = liste.length
-    ? `${liste.length} copie(s)`
-    : "aucune copie";
+  const d = await rpc("admin_historique", { p_code: etat.code, p_limite: 200 });
+  const gestes = d.gestes || [];
+  const jalons = d.jalons || [];
+
+  compteurSauvegardes.textContent = gestes.length
+    ? `${gestes.length} geste(s), ${jalons.length} jalon(s)`
+    : `aucun geste, ${jalons.length} jalon(s)`;
+
+  champCompactage.value = String(d.compactage_jours ?? 60);
+  compteurRepli.textContent = d.compactage_jours
+    ? `repli automatique tous les ${d.compactage_jours} jours`
+    : "repli automatique désactivé";
 
   zoneSauvegardes.textContent = "";
   zoneComparaison.textContent = "";
 
-  if (!liste.length) {
+  if (!gestes.length && !jalons.length) {
     const vide = document.createElement("p");
     vide.className = "note";
     vide.textContent =
-      "Aucune copie pour l'instant. La première part toute seule, " +
-      "à la première modification de la semaine.";
+      "Rien pour l'instant. La première ligne apparaîtra à la première " +
+      "modification, quelle qu'elle soit.";
     zoneSauvegardes.appendChild(vide);
     return;
   }
 
-  for (const copie of liste) {
-    const c = copie.compteurs;
-    const etiquettes = span("", "etiquettes");
-    etiquettes.append(
-      span(`${c.participants} personnes`, "etiquette"),
-      span(`${c.presences} jours`, "etiquette"),
-      span(`${c.voeux} réponses`, "etiquette"),
-      span(`${c.refus_lieu} refus`, "etiquette")
-    );
+  // LES DEUX AU MEME FIL : un jalon est un point de l'histoire comme un
+  // autre, et les separer obligerait a comparer deux listes de dates.
+  const tout = [
+    ...gestes.map((g) => ({ quand: g.fait_le, noeud: () => dessinerGeste(g) })),
+    ...jalons.map((j) => ({ quand: j.fait_le, noeud: () => dessinerJalon(j) })),
+  ].sort((a, b) => (a.quand < b.quand ? 1 : a.quand > b.quand ? -1 : 0));
 
-    const gauche = document.createElement("div");
-    gauche.append(
-      fort(afficherInstant(copie.prise_le)),
-      etiquettes,
-      span(MOTIFS[copie.motif] || copie.motif, "lien")
-    );
+  for (const ligne of tout) zoneSauvegardes.appendChild(ligne.noeud());
+}
 
-    const boutonComparer = document.createElement("button");
-    boutonComparer.type = "button";
-    boutonComparer.className = "discret";
-    boutonComparer.textContent = "Comparer";
-    boutonComparer.addEventListener("click", () => montrerComparaison(copie));
-
-    const boutonRestaurer = document.createElement("button");
-    boutonRestaurer.type = "button";
-    boutonRestaurer.className = "discret";
-    boutonRestaurer.textContent = "Restaurer";
-    boutonRestaurer.addEventListener("click", () => restaurer(copie));
-
-    const ligne = document.createElement("div");
-    ligne.className = "personne";
-    ligne.append(gauche, boutonComparer, boutonRestaurer);
-    zoneSauvegardes.appendChild(ligne);
+// Une ligne a bouge depuis : la base refuse plutot que d'ecraser le
+// travail de quelqu'un sans le dire. On repose la question, une fois.
+async function avecForce(appel, nom, question) {
+  try {
+    return await appel(false);
+  } catch (erreur) {
+    if (!/LIGNES_MODIFIEES/.test(erreur.message)) throw erreur;
+    if (!confirm(question)) return null;
+    return appel(true);
   }
 }
+
+async function annulerGeste(geste) {
+  const quoi = resumerGeste(geste);
+  if (!confirm(`Annuler « ${quoi} » du ${afficherInstant(geste.fait_le)} ?\n\n` +
+               `${geste.lignes} ligne(s) reprennent leur état d'avant. Ce qui a été ` +
+               `fait depuis reste en place, et cette annulation s'annule elle aussi.`)) {
+    return;
+  }
+
+  messageSauvegardes.className = "";
+  messageSauvegardes.textContent = "Annulation…";
+  try {
+    const r = await avecForce(
+      (forcer) =>
+        rpc("admin_geste_annuler", { p_code: etat.code, p_id: geste.id, p_forcer: forcer }),
+      "geste",
+      "Des lignes de ce geste ont changé depuis : les remettre en arrière " +
+        "écraserait ce qui a été fait après.\n\nForcer quand même ?"
+    );
+    if (r === null) {
+      messageSauvegardes.textContent = "";
+      return;
+    }
+    await recharger();
+    messageSauvegardes.className = "ok";
+    messageSauvegardes.textContent =
+      `« ${quoi} » annulé : ${r.reposees} ligne(s) reposée(s), ${r.effacees} effacée(s).`;
+  } catch (erreur) {
+    messageSauvegardes.className = "erreur";
+    messageSauvegardes.textContent = erreur.message;
+  }
+}
+
+document.getElementById("annuler-depuis-bouton").addEventListener("click", async () => {
+  if (!champDepuis.value) {
+    messageSauvegardes.className = "erreur";
+    messageSauvegardes.textContent = "Choisis d'abord une date.";
+    return;
+  }
+  const depuis = new Date(champDepuis.value);
+  if (!confirm(`Annuler tout ce qui a été fait après le ${afficherInstant(depuis)} ?\n\n` +
+               "Les gestes sont défaits du plus récent au plus ancien, en une " +
+               "seule fois — et cette annulation s'annule elle aussi.")) {
+    return;
+  }
+
+  messageSauvegardes.className = "";
+  messageSauvegardes.textContent = "Annulation…";
+  try {
+    const r = await avecForce(
+      (forcer) =>
+        rpc("admin_annuler_depuis", {
+          p_code: etat.code,
+          p_depuis: depuis.toISOString(),
+          p_forcer: forcer,
+        }),
+      "depuis",
+      "Des lignes ont changé depuis : les remettre en arrière écraserait ce " +
+        "qui a été fait après.\n\nForcer quand même ?"
+    );
+    if (r === null) {
+      messageSauvegardes.textContent = "";
+      return;
+    }
+    await recharger();
+    messageSauvegardes.className = "ok";
+    messageSauvegardes.textContent = `${r.gestes} geste(s) annulé(s).`;
+  } catch (erreur) {
+    messageSauvegardes.className = "erreur";
+    messageSauvegardes.textContent = erreur.message;
+  }
+});
+
+document.getElementById("compacter-maintenant").addEventListener("click", async () => {
+  if (!confirm("Replier l'historique maintenant ?\n\nTous les gestes " +
+               "disparaissent au profit d'un jalon — un état complet, qu'on " +
+               "restaure d'un bloc mais qu'on ne détaille plus.")) {
+    return;
+  }
+  messageSauvegardes.className = "";
+  messageSauvegardes.textContent = "Repli…";
+  try {
+    const r = await rpc("admin_compacter", { p_code: etat.code });
+    await rechargerSauvegardes();
+    messageSauvegardes.className = "ok";
+    messageSauvegardes.textContent =
+      `${r.gestes_replies} geste(s) repliés en un jalon.`;
+  } catch (erreur) {
+    messageSauvegardes.className = "erreur";
+    messageSauvegardes.textContent = erreur.message;
+  }
+});
+
+champCompactage.addEventListener("change", async () => {
+  messageSauvegardes.className = "";
+  messageSauvegardes.textContent = "Enregistrement…";
+  try {
+    await rpc("admin_compactage_regler", {
+      p_code: etat.code,
+      p_jours: Number(champCompactage.value) || 0,
+    });
+    await rechargerSauvegardes();
+    messageSauvegardes.className = "ok";
+    messageSauvegardes.textContent = Number(champCompactage.value)
+      ? `L'historique se repliera tous les ${Number(champCompactage.value)} jours.`
+      : "L'historique ne se repliera plus tout seul.";
+  } catch (erreur) {
+    messageSauvegardes.className = "erreur";
+    messageSauvegardes.textContent = erreur.message;
+    await rechargerSauvegardes();
+  }
+});
 
 function sousTitre(texte) {
   const t = document.createElement("p");
@@ -3401,13 +3691,13 @@ function dessinerComparaison(copie, d) {
 
   const titre = document.createElement("p");
   titre.className = "note";
-  titre.textContent = `Ce qui a changé depuis la copie du ${afficherInstant(copie.prise_le)}.`;
+  titre.textContent = `Ce qui a changé depuis le jalon du ${afficherInstant(copie.fait_le)}.`;
   zoneComparaison.appendChild(titre);
 
   if (d.identique) {
     const rien = document.createElement("p");
     rien.className = "note";
-    rien.textContent = "Rien. La base est exactement dans l'état de cette copie.";
+    rien.textContent = "Rien. La base est exactement dans l'état de ce jalon.";
     zoneComparaison.appendChild(rien);
     return;
   }
@@ -3466,7 +3756,7 @@ async function montrerComparaison(copie) {
     // L'etat courant est relu a chaque fois : comparer contre une version
     // chargee il y a dix minutes dirait le faux.
     const [avant, apres] = await Promise.all([
-      rpc("admin_sauvegarde_lire", { p_code: etat.code, p_id: copie.id }),
+      rpc("admin_jalon_lire", { p_code: etat.code, p_id: copie.id }),
       rpc("admin_etat", { p_code: etat.code }),
     ]);
     dessinerComparaison(copie, comparerEtats(avant, apres));
@@ -3480,19 +3770,20 @@ async function montrerComparaison(copie) {
 async function restaurer(copie) {
   const c = copie.compteurs;
   const question =
-    `Revenir à la copie du ${afficherInstant(copie.prise_le)} ?\n\n` +
+    `Revenir au jalon du ${afficherInstant(copie.fait_le)} ?\n\n` +
     `Toute la base est remplacée : ${c.participants} participants, ` +
     `${c.presences} jours de présence, ${c.voeux} réponses de dates et ` +
     `${c.refus_lieu} refus de lieux reprennent leur état d'alors. Ce qui a ` +
-    `été saisi depuis disparaît.\n\n` +
-    `Une copie de l'état actuel est prise juste avant, pour que ce geste-ci ` +
+    `été saisi depuis disparaît, ET L'HISTORIQUE DÉTAILLÉ AVEC — il décrirait ` +
+    `des gestes posés sur un état qui n'existe plus.\n\n` +
+    `Un jalon de l'état actuel est pris juste avant, pour que ce geste-ci ` +
     `soit lui aussi annulable.`;
   if (!confirm(question)) return;
 
   messageSauvegardes.className = "";
   messageSauvegardes.textContent = "Restauration…";
   try {
-    const r = await rpc("admin_sauvegarde_restaurer", {
+    const r = await rpc("admin_jalon_restaurer", {
       p_code: etat.code,
       p_id: copie.id,
     });
@@ -3511,10 +3802,10 @@ document.getElementById("sauver-maintenant").addEventListener("click", async () 
   messageSauvegardes.className = "";
   messageSauvegardes.textContent = "Copie en cours…";
   try {
-    await rpc("admin_sauvegarde_prendre", { p_code: etat.code });
+    await rpc("admin_jalon_prendre", { p_code: etat.code });
     await rechargerSauvegardes();
     messageSauvegardes.className = "ok";
-    messageSauvegardes.textContent = "Copie prise.";
+    messageSauvegardes.textContent = "Jalon pris.";
   } catch (erreur) {
     messageSauvegardes.className = "erreur";
     messageSauvegardes.textContent = erreur.message;

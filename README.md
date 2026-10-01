@@ -38,8 +38,9 @@ L'accueil, lui, ne porte pas ce menu : il **est** le menu.
 `admin.html` n'y figure pas : elle ne s'ouvre pas avec le code famille, et
 l'annoncer à toute la famille ne ferait qu'inviter à la pousser.
 
-Elle a ses propres **onglets** — Séjour, Participants, Logements, Week-ends,
-Lieu, Sauvegardes. Six sujets sans rapport se suivaient auparavant dans une
+Elle a ses propres **onglets** — Séjour, Participants, Préférences
+alimentaires, Activités, Logements, Tarifs, Facture, Hôtel, Week-ends,
+Lieu, Historique. Onze sujets sans rapport se suivaient auparavant dans une
 seule colonne : pour ouvrir la carte, il fallait dérouler la liste entière
 des participants. Les flèches ← → passent d'un onglet à l'autre.
 
@@ -630,66 +631,77 @@ Sa saisie de présences part avec elle.
 
 ## Revenir en arrière
 
-Trois gestes effacent beaucoup d'un coup, et aucun n'était réversible :
-« Appliquer à tous » sur les trois pages familiales, le retrait d'un
-participant qui emporte ses saisies, et le réamorçage GEDCOM qui vide la
-liste. La base ne garde que l'état courant — ce qui est remplacé n'existe
-plus nulle part.
+La base ne garde que l'état courant : ce qui est remplacé n'existe plus
+nulle part. Il a existé ici une copie par semaine ; elle répondait à
+« revenir à lundi », jamais à « défaire ça ».
 
-Une copie part donc **à la première écriture de chaque semaine**, prise
-juste avant celle-ci. Elle porte l'état tel qu'il était avant le premier
-changement de la semaine : exactement le point de retour qu'on cherche.
+L'historique a donc **deux étages**.
 
-Pas de planificateur. `pg_cron` demanderait une extension à activer à la
-main, hors du « coller `schema.sql` et c'est prêt », et prendrait des
-copies identiques les semaines sans activité. Une semaine sans aucune
-modification ne produit aucune copie, puisqu'il n'y aurait rien à y sauver.
-Le bouton **Sauvegarder maintenant** couvre le cas où l'on sent venir une
-opération risquée.
+### Les gestes
 
-### Comparer
-
-**Comparer** montre ce qui a changé depuis une copie, dans le vocabulaire
-de la page et pas dans celui de la base :
+**Un geste est un appel**, c'est-à-dire une transaction : « Alice
+enregistre sa grille » est **une** ligne de l'historique, pas quarante.
+L'onglet **Historique** les montre du plus récent au plus ancien — date,
+qui, quoi, combien de lignes :
 
 ```
-Participants : 20 → 21
-  ajouté    Chloe
-  retiré    Bruno
-  modifié   Lea — prénom, âge
-
-Présences : 140 → 96
-  modifié   Alice — 8 → 8
-  effacé    Bruno — 4 → 0
+jeudi 1 octobre 14:32  Alice          Présences              12 ligne(s)  [Annuler]
+jeudi 1 octobre 09:10  organisateur   Grille des tarifs      28 ligne(s)  [Annuler]
+mercredi 30 sept 18:00 Bruno          Refus de lieux   déjà annulé
+◆ jalon du 29 septembre · repli de l'historique          [Comparer] [Restaurer]
 ```
 
-Seules les personnes qui ont bougé sont listées. Deux nombres plutôt qu'un :
-combien de lignes avant, combien après.
+Déplier une ligne montre **ce qu'elle a changé**, champ par champ —
+« dîner : non → oui », « capacité : 2 → 3 » — et non un bloc de JSON.
+L'identifiant et l'horodatage n'y figurent pas : ils bougent à chaque
+enregistrement, même quand la valeur ne bouge pas.
 
-La comparaison se fait **sur la clé naturelle** — la personne et le jour,
-la personne et le week-end, la personne et le département — jamais sur
-l'identifiant de ligne. Enregistrer une grille efface les lignes et les
-réécrit : leurs identifiants changent à chaque fois, même quand la réponse
-est identique au caractère près. Comparer dessus signalerait tout comme
-« retiré puis ajouté », à chaque fois, et ne dirait plus rien. Les
-horodatages sont ignorés pour la même raison.
+**Annuler** réécrit l'avant, et rien d'autre : ce qui a été fait depuis
+reste. L'annulation est **elle-même un geste**, comme `git revert` —
+l'historique ne se réécrit jamais, et un retour en arrière se reprend
+comme le reste. Si une des lignes a bougé entre-temps, la base refuse et la
+page demande avant d'écraser.
 
-Le calcul vit dans `admin.js`, pas en SQL : la base sert des faits et
-laisse les dérivées au reste du projet, et une fonction JavaScript se met
-sur un banc d'essai — ce qu'une fonction PL/pgSQL ne fait pas sans une
-vraie base sous la main.
+**Annuler tout ce qui suit une date** défait les gestes du plus récent au
+plus ancien, **en une seule fois** : c'est une décision, elle se reprend
+d'un coup.
 
-### Restaurer
+### Comment c'est capturé
 
-**Restaurer** remet les cinq tables dans l'état de la copie. Tout ce qui a
-été saisi depuis disparaît, et la confirmation le dit avec les chiffres.
+Un **déclencheur par table**, posé en boucle depuis `private.tracees()` :
+chaque ligne touchée y laisse son **avant** et son **après**, et c'est ce
+couple qui rend l'annulation possible sans rejouer l'histoire. Rien à
+penser au moment d'écrire une nouvelle fonction, rien à oublier.
 
-Le geste s'annule : une copie de l'état actuel est prise **avant** la
-restauration. Se tromper de ligne dans la liste ne doit pas être la
-dernière erreur possible.
+Les fonctions qui écrivent posent seulement une **étiquette**, en tête —
+`private.geste('Présences', p_acteur)` — là où vivait l'appel à la copie
+hebdomadaire. C'est la seule part qui ne s'automatise pas : le déclencheur
+sait *quelles* lignes ont bougé, jamais pourquoi. Une fonction qui
+l'oublierait ne casserait rien et ne se verrait pas — d'où un test qui
+croise les écritures et les étiquettes.
 
-Douze copies sont gardées par motif, ce qui couvre un trimestre de
-préparation.
+**Ce qui n'est pas tracé** : les codes d'accès. Annuler un changement de
+code enfermerait la famille dehors.
+
+### Les jalons, et le repli
+
+Un **jalon** est un état complet. Il se prend à la demande, et surtout par
+**repli** : tous les `compactage_jours` (60 par défaut, réglable, **0 pour
+jamais**), les gestes atomiques se replient en un seul jalon — annulable
+d'un bloc, mais qu'on ne détaille plus. C'est ce qui garde la liste
+lisible ; accessoirement, c'est ce qui borne le poids.
+
+**Restaurer un jalon** remplace toute la base par cet état **et efface
+l'historique détaillé** : il décrirait des gestes posés sur un état qui
+n'existe plus. Un jalon de l'état actuel est pris juste avant, pour que ce
+geste-là s'annule aussi. Et la restauration **ne se trace pas** : le
+`TRUNCATE` qui la précède n'émet aucun déclencheur de ligne, le geste ne
+porterait donc que les réinsertions — et l'annuler effacerait tout sans
+rien reposer. Pire qu'un geste absent.
+
+**Comparer** un jalon à maintenant montre ce qui a changé depuis, par
+personne et par table. Le calcul se fait dans le navigateur, et non en SQL :
+la base sert des faits, les dérivées se calculent là où elles s'éprouvent.
 
 ## Confidentialité
 
@@ -927,8 +939,8 @@ ont déjà une ne bougent pas — même d'une autre taille : quelqu'un qui a
 choisi « chambre 3 pers. » l'a choisi, et un bouton de rattrapage n'a pas à
 le contredire. La vue mer sépare, c'est une autre ligne d'inventaire et un
 autre tarif. Le bloc disparaît dès qu'il n'y a plus rien à préciser, et une
-copie de sauvegarde part avant : le geste touche potentiellement toute la
-saisie.
+il entre dans l'historique comme un seul geste : il touche
+potentiellement toute la saisie, et se défait d'un clic.
 
 `hebergement` reste renseigné dans tous les cas et garde la facture : **le
 type précise, il ne remplace pas**.
