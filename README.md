@@ -923,7 +923,7 @@ argent que l'onglet Facture, regroupé autrement ; un test exige que les deux
 façons de compter tombent sur le même total. Puis combien d'exemplaires
 de chaque type de couchage sont occupés nuit par nuit, et combien de
 couverts à chaque repas — par tranche d'âge, avec le compte des végétariens,
-vegans, sans gluten et non buveurs attablés. **Aucun nom n'y figure** :
+vegans, sans gluten et sans alcool attablés. **Aucun nom n'y figure** :
 l'hôtel n'a pas besoin de savoir qui, et ce qui ne sort pas ne se perd pas.
 
 **Les cinq pages familiales s'ouvrent et se ferment depuis un seul

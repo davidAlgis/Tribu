@@ -1008,7 +1008,9 @@ begin
                'prenom', p.prenom,
                'famille', p.famille,
                -- Ce que la page grise : un mineur ne decoche pas
-               -- « non buveur ».
+               -- « sans alcool ». La COLONNE garde son nom -- `non_buveur`
+               -- est une clef, pas un mot : elle voyage dans les exports,
+               -- les imports et les tests. Seul le libelle a change.
                'mineur', p.categorie_age <> 'adulte',
                'non_buveur', p.non_buveur,
                'vegetarien', p.vegetarien,

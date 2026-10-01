@@ -865,7 +865,8 @@ document.getElementById("tout-ouvrir").addEventListener("click", () => toutes(tr
 // qui attend un bouton est une case qu'on croit cochee.
 
 const CASES_REGIME = [
-  ["non_buveur", "Non buveur"],
+  // La clef reste `non_buveur` ; seul le mot change.
+  ["non_buveur", "Sans alcool"],
   ["vegetarien", "Végétarien"],
   ["vegan", "Vegan"],
   ["sans_gluten", "Sans gluten"],
@@ -965,7 +966,7 @@ async function enregistrerRegime(personne, rangee) {
       p_id: personne.id,
       p_regimes: regimes,
     });
-    // La base tranche sur « non buveur » : on reprend ce qu'elle rend.
+    // La base tranche sur « sans alcool » : on reprend ce qu'elle rend.
     Object.assign(personne, regimes, { non_buveur: r.non_buveur });
     dessinerRegimes();
     messageRegimes.className = "ok";
@@ -2553,7 +2554,7 @@ const PREFERENCES_HOTEL = [
   ["vegetarien", "Végétariens"],
   ["vegan", "Vegans"],
   ["sans_gluten", "Sans gluten"],
-  ["non_buveur", "Non buveurs"],
+  ["non_buveur", "Sans alcool"],
 ];
 
 const zoneHotelDetail = document.getElementById("hotel-detail");

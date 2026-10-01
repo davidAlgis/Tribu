@@ -18,7 +18,10 @@ const { SUPABASE_URL, SUPABASE_ANON_KEY } = window.CONFIG;
 // L'ordre dans lequel on les pose a l'ecran. Le boire d'abord, le manger
 // ensuite : c'est l'ordre dans lequel on commande.
 const CASES = [
-  ["non_buveur", "Non buveur"],
+  // La CLEF reste `non_buveur` : elle voyage dans les exports et les
+  // imports. Seul le mot change -- « sans alcool » dit ce qu'on commande,
+  // la ou « non buveur » disait ce qu'on est.
+  ["non_buveur", "Sans alcool"],
   ["vegetarien", "Végétarien"],
   ["vegan", "Vegan"],
   ["sans_gluten", "Sans gluten"],
