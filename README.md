@@ -662,6 +662,30 @@ l'historique ne se réécrit jamais, et un retour en arrière se reprend
 comme le reste. Si une des lignes a bougé entre-temps, la base refuse et la
 page demande avant d'écraser.
 
+**Trois passes, et dans cet ordre** — un seul parcours ne suffit pas :
+
+1. les lignes que le geste a **créées** s'effacent, **enfants avant
+   parents** (par rang décroissant) ;
+2. les lignes qu'il a **supprimées** se reposent, **parents avant
+   enfants** — une présence ne peut pas revenir avant la personne qu'elle
+   désigne ;
+3. les lignes qu'il a **modifiées** reprennent leur valeur par un
+   `UPDATE`.
+
+Le point 3 n'est pas un détail de style. Il a d'abord été écrit comme un
+`delete` suivi d'un `insert` — et sur `participants`, le `delete` emportait
+par **cascade** les présences, les couchages, les vœux et les refus de la
+personne, puis l'`insert` reposait une personne nue. **Annuler « végétarien :
+non → oui » effaçait un séjour entier.** Un test l'interdit désormais, et un
+autre vérifie que le rang des tables s'accorde avec les clés étrangères
+déclarées — les deux sont écrits à deux endroits, et leur désaccord ne se
+verrait que le jour où l'on en a le plus besoin.
+
+Une exception assumée : annuler un geste qui a **créé** quelque chose le
+supprime, et supprime avec lui ce qui en dépendait. Ces suppressions-là
+**entrent dans l'historique** comme le reste, ligne par ligne : l'annulation
+de l'annulation les repose toutes.
+
 **Annuler tout ce qui suit une date** défait les gestes du plus récent au
 plus ancien, **en une seule fois** : c'est une décision, elle se reprend
 d'un coup.

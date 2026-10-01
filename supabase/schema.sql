@@ -4447,24 +4447,32 @@ $fn$;
 --  bas. Les CODES D'ACCES n'y sont pas : annuler un changement de code
 --  enfermerait la famille dehors.
 --
+--  LE RANG RANGE LES PARENTS AVANT LEURS ENFANTS. Il ne sert qu'a une
+--  chose, et elle compte : quand l'annulation repose des lignes, une
+--  presence ne peut pas revenir avant la personne qu'elle designe -- la
+--  cle etrangere la refuserait. On repose donc par rang croissant, et on
+--  efface par rang decroissant.
 create or replace function private.tracees()
-returns table (nom text, cles text[])
+returns table (nom text, cles text[], rang smallint)
 language sql immutable as $fn$
   select * from (values
-    ('public.presences'::text,     array['id']::text[]),
-    ('public.voeux',               array['id']),
-    ('public.refus_lieu',          array['id']),
-    ('private.participants',       array['id']),
-    ('private.options_date',       array['id']),
-    ('private.logements',          array['id']),
-    ('private.couchages',          array['id']),
-    ('private.activites',          array['id']),
-    ('private.envies',             array['id']),
-    ('private.tarifs',             array['logement_id', 'tranche']),
-    ('private.tarifs_annexes',     array['cle', 'tranche']),
-    ('private.tarifs_repas_jour',  array['jour', 'repas', 'tranche']),
-    ('private.reglages',           array['id'])
-  ) as t(nom, cles)
+    -- Ce qui ne depend de personne.
+    ('private.reglages'::text,     array['id']::text[],               1::smallint),
+    ('private.tarifs_annexes',     array['cle', 'tranche'],           1),
+    ('private.tarifs_repas_jour',  array['jour', 'repas', 'tranche'], 1),
+    -- Ce dont le reste depend.
+    ('private.participants',       array['id'],                       2),
+    ('private.options_date',       array['id'],                       2),
+    ('private.logements',          array['id'],                       2),
+    ('private.activites',          array['id'],                       3),
+    -- Et ce qui les designe.
+    ('private.tarifs',             array['logement_id', 'tranche'],   4),
+    ('public.presences',           array['id'],                       4),
+    ('private.couchages',          array['id'],                       4),
+    ('public.voeux',               array['id'],                       4),
+    ('public.refus_lieu',          array['id'],                       4),
+    ('private.envies',             array['id'],                       4)
+  ) as t(nom, cles, rang)
 $fn$;
 
 -- ---- 13c. Un geste par transaction ----
@@ -4781,15 +4789,33 @@ begin
   return trouvee;
 end $fn$;
 
+-- Les colonnes d'une table, dans l'ordre, pretes a entrer dans un
+-- `update ... set (a, b, c) = (select a, b, c from ...)`. On les demande au
+-- catalogue plutot qu'aux clefs du jsonb : une colonne ajoutee depuis la
+-- prise du geste existe dans la table et manque dans la copie, et c'est le
+-- `jsonb_populate_record` qui lui donnera sa valeur par defaut.
+create or replace function private.colonnes_de(p_table text)
+returns text
+language sql stable
+set search_path = private, pg_temp as $fn$
+  select string_agg(quote_ident(a.attname), ', ' order by a.attnum)
+    from pg_attribute a
+   where a.attrelid = p_table::regclass
+     and a.attnum > 0
+     and not a.attisdropped
+$fn$;
+
 create or replace function private.annuler_geste(p_id bigint, p_forcer boolean)
 returns jsonb
 language plpgsql
 set search_path = private, pg_temp as $fn$
 declare
   ligne    record;
+  colonnes text;
   bouges   integer := 0;
   reposees integer := 0;
   effacees integer := 0;
+  remises  integer := 0;
 begin
   if not exists (select 1 from private.gestes g where g.id = p_id) then
     raise exception 'GESTE_INCONNU' using errcode = 'P0001';
@@ -4797,42 +4823,96 @@ begin
 
   -- Une ligne qui a bouge depuis : quelqu'un est passe apres. On refuse
   -- plutot que d'ecraser son travail sans le dire.
+  --
+  -- ON COMPARE A L'ETAT NET DU GESTE, et non a chacune de ses etapes. Un
+  -- meme geste peut toucher deux fois la meme ligne -- une annulation qui
+  -- efface une personne puis la repose en ecrit deux -- et seule la
+  -- derniere dit ce que la base porte apres lui. Comparer les deux ferait
+  -- crier au conflit sur un geste que personne n'a touche.
   if not coalesce(p_forcer, false) then
     select count(*) into bouges
-      from private.gestes_lignes gl
-     where gl.geste_id = p_id
-       and private.ligne_actuelle(gl.table_cible, gl.cle)
-             is distinct from gl.apres;
+      from (
+        select distinct on (gl.table_cible, gl.cle)
+               gl.table_cible, gl.cle, gl.apres
+          from private.gestes_lignes gl
+         where gl.geste_id = p_id
+         order by gl.table_cible, gl.cle, gl.id desc
+      ) net
+     where private.ligne_actuelle(net.table_cible, net.cle)
+             is distinct from net.apres;
     if bouges > 0 then
       raise exception 'LIGNES_MODIFIEES' using errcode = 'P0001';
     end if;
   end if;
 
-  -- A REBOURS : une suppression en cascade a ecrit les lignes filles avant
-  -- la mere ; les reposer dans l'autre sens ferait echouer la cle etrangere.
-  for ligne in
-    select gl.* from private.gestes_lignes gl
+  if exists (
+    select 1 from private.gestes_lignes gl
      where gl.geste_id = p_id
-     order by gl.id desc
-  loop
-    if not exists (select 1 from private.tracees() t where t.nom = ligne.table_cible) then
-      raise exception 'TABLE_INCONNUE' using errcode = 'P0001';
-    end if;
+       and not exists (select 1 from private.tracees() t where t.nom = gl.table_cible)
+  ) then
+    raise exception 'TABLE_INCONNUE' using errcode = 'P0001';
+  end if;
 
+  -- TROIS PASSES, ET DANS CET ORDRE. Un seul parcours ne suffit pas : ce
+  -- qu'on efface libere la place de ce qu'on repose, et ce qu'on repose
+  -- doit exister avant que la ligne qui le designe reprenne sa valeur.
+
+  -- 1. Les lignes CREEES par le geste s'effacent. Par rang decroissant :
+  --    les enfants avant les parents, sans quoi la cle etrangere refuse.
+  for ligne in
+    select gl.*, t.rang from private.gestes_lignes gl
+      join private.tracees() t on t.nom = gl.table_cible
+     where gl.geste_id = p_id and gl.avant is null
+     order by t.rang desc, gl.id desc
+  loop
     execute format('delete from %s t where to_jsonb(t) @> $1', ligne.table_cible)
       using ligne.cle;
-
-    if ligne.avant is not null then
-      execute format(
-        'insert into %s select * from jsonb_populate_record(null::%s, $1)',
-        ligne.table_cible, ligne.table_cible) using ligne.avant;
-      reposees := reposees + 1;
-    else
-      effacees := effacees + 1;
-    end if;
+    effacees := effacees + 1;
   end loop;
 
-  return jsonb_build_object('reposees', reposees, 'effacees', effacees);
+  -- 2. Les lignes SUPPRIMEES se reposent. Par rang croissant cette fois :
+  --    une presence ne revient pas avant la personne qu'elle designe.
+  for ligne in
+    select gl.*, t.rang from private.gestes_lignes gl
+      join private.tracees() t on t.nom = gl.table_cible
+     where gl.geste_id = p_id and gl.avant is not null and gl.apres is null
+     order by t.rang, gl.id
+  loop
+    execute format(
+      'insert into %s select * from jsonb_populate_record(null::%s, $1)',
+      ligne.table_cible, ligne.table_cible) using ligne.avant;
+    reposees := reposees + 1;
+  end loop;
+
+  -- 3. Les lignes MODIFIEES reprennent leur valeur d'avant.
+  --
+  --    UN `UPDATE`, ET NON UN `DELETE` SUIVI D'UN `INSERT`. C'est tout le
+  --    defaut qu'on repare ici : effacer la ligne emportait par CASCADE
+  --    tout ce qui la designe. Annuler « vegetarien : non -> oui » sur une
+  --    personne effacait ses presences, ses couchages, ses voeux et ses
+  --    refus de lieu -- puis reposait une personne nue. Une correction
+  --    d'une case faisait disparaitre un sejour entier.
+  --
+  --    La clef ne bouge pas dans une modification : `to_jsonb(t) @> cle`
+  --    retrouve donc la bonne ligne, et toutes les colonnes reprennent la
+  --    valeur qu'elles avaient.
+  for ligne in
+    select gl.*, t.rang from private.gestes_lignes gl
+      join private.tracees() t on t.nom = gl.table_cible
+     where gl.geste_id = p_id and gl.avant is not null and gl.apres is not null
+     order by t.rang, gl.id
+  loop
+    colonnes := private.colonnes_de(ligne.table_cible);
+    execute format(
+      'update %1$s t set (%2$s) = '
+      '(select %2$s from jsonb_populate_record(null::%1$s, $1)) '
+      'where to_jsonb(t) @> $2',
+      ligne.table_cible, colonnes) using ligne.avant, ligne.cle;
+    remises := remises + 1;
+  end loop;
+
+  return jsonb_build_object(
+    'reposees', reposees, 'effacees', effacees, 'remises', remises);
 end $fn$;
 
 create or replace function public.admin_geste_annuler(

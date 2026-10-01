@@ -347,3 +347,81 @@ def test_une_migration_cherche_la_table_qu_elle_renomme():
         "ces renommages portent sur une table que leur garde ne cherche "
         "pas : " + ", ".join(manquants)
     )
+
+# --- Annuler ne doit rien detruire d'autre ------------------------------
+
+
+def rangs_traces() -> dict:
+    """Le rang de chaque table tracée, tel que `private.tracees()` le pose."""
+    bloc = re.search(r"function private\.tracees\(\)(.*?)\$fn\$;", SCHEMA, re.S)
+    assert bloc, "private.tracees() a disparu"
+    rangs = {}
+    for nom, rang in re.findall(
+        r"\('((?:private|public)\.\w+)'(?:::text)?,[^)]*?(\d+)(?:::smallint)?\)",
+        bloc.group(1),
+    ):
+        rangs[nom] = int(rang)
+    return rangs
+
+
+def test_les_parents_passent_avant_leurs_enfants():
+    """L'annulation repose les lignes par rang croissant : une présence ne
+    peut pas revenir avant la personne qu'elle désigne.
+
+    Ce rang est écrit à la main dans `private.tracees()`. Les clés
+    étrangères, elles, sont écrites dans les `create table`. Que les deux
+    se contredisent ne se verrait qu'au moment d'annuler un geste qui a
+    supprimé une personne — c'est-à-dire le jour où l'on en a le plus
+    besoin.
+    """
+    rangs = rangs_traces()
+    assert len(rangs) > 10, f"rangs mal relus : {rangs}"
+
+    fautifs = []
+    for table, corps in re.findall(
+        r"create table if not exists ((?:private|public)\.\w+)\s*\((.*?)\n\);",
+        SCHEMA, re.S,
+    ):
+        if table not in rangs:
+            continue
+        for parent in re.findall(r"references\s+((?:private|public)\.\w+)", corps):
+            if parent == table or parent not in rangs:
+                continue  # une table qui se désigne elle-même ne s'ordonne pas
+            if rangs[parent] >= rangs[table]:
+                fautifs.append(f"{table} ({rangs[table]}) désigne {parent} ({rangs[parent]})")
+
+    assert fautifs == [], (
+        "ces tables sont rangées avant ce dont elles dépendent — l'annulation "
+        "reposera l'enfant avant le parent : " + " | ".join(fautifs)
+    )
+
+
+def test_une_ligne_modifiee_se_reprend_par_un_update():
+    """Le défaut qui a coûté un séjour.
+
+    Une ligne modifiée était remise en place par un `delete` suivi d'un
+    `insert`. Sur `participants`, le `delete` emportait par CASCADE les
+    présences, les couchages, les vœux et les refus de la personne — et
+    l'`insert` reposait une personne nue. Annuler « végétarien : non →
+    oui » effaçait tout ce que la personne avait déclaré.
+
+    Le `delete` reste légitime pour une ligne que le geste a CRÉÉE : là,
+    il n'y a rien à perdre. C'est sur la ligne modifiée qu'il ment.
+    """
+    corps = re.search(
+        r"function private\.annuler_geste\(.*?\$fn\$(.*?)\$fn\$;", SCHEMA, re.S
+    )
+    assert corps, "private.annuler_geste a disparu"
+
+    passe = re.search(
+        r"gl\.avant is not null and gl\.apres is not null(.*?)end loop;",
+        corps.group(1), re.S,
+    )
+    assert passe, "la passe des lignes modifiées a disparu"
+
+    fait = passe.group(1)
+    assert "'update" in fait, "une ligne modifiée doit se reprendre par un UPDATE"
+    assert "'delete" not in fait, (
+        "un DELETE sur une ligne modifiée emporte par cascade tout ce qui la "
+        "désigne : c'est le défaut qui a effacé les présences d'une personne"
+    )

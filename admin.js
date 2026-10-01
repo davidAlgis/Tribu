@@ -3617,8 +3617,17 @@ async function annulerGeste(geste) {
     }
     await recharger();
     messageSauvegardes.className = "ok";
+    // Trois sortes, et on ne nomme que celles qui ont servi : « 1 remise en
+    // état » se lit, « 1 remise, 0 reposée, 0 effacée » se dechiffre.
+    const faits = [
+      [r.remises, "remise(s) en état"],
+      [r.reposees, "reposée(s)"],
+      [r.effacees, "effacée(s)"],
+    ]
+      .filter(([combien]) => combien)
+      .map(([combien, mot]) => `${combien} ${mot}`);
     messageSauvegardes.textContent =
-      `« ${quoi} » annulé : ${r.reposees} ligne(s) reposée(s), ${r.effacees} effacée(s).`;
+      `« ${quoi} » annulé : ${faits.join(", ") || "rien à reprendre"}.`;
   } catch (erreur) {
     messageSauvegardes.className = "erreur";
     messageSauvegardes.textContent = erreur.message;
