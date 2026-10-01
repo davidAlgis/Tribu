@@ -232,13 +232,24 @@ week-ends ; c'est devenu le refuge de qui ne voulait pas trancher, et le
 dépouillement héritait de l'indécision. Une réponse binaire oblige à se
 prononcer, et rend le résultat lisible sans pondération à expliquer.
 
-Chacun voit les totaux de la famille, **jamais les noms**.
-
 Sous les week-ends, **« Résultat des choix »** donne l'état courant, et
-il est visible de tous : le classement, une barre par week-end — vert pour
-les oui, rouge pour les non, gris pour ceux qui n'ont rien dit — et le nombre
-de gens qui se sont prononcés. Le classement suit le nombre de **oui** :
-combien de personnes peuvent venir.
+il est visible de tous. C'est un **panneau pliable**, replié par défaut : on
+vient répondre, pas consulter — et son résumé porte la participation, de
+quoi savoir s'il vaut la peine d'ouvrir. Dedans : le classement, une barre
+par week-end — vert pour les oui, rouge pour les non, gris pour ceux qui
+n'ont rien dit — et le nombre de gens qui se sont prononcés. Le classement
+suit le nombre de **oui** : combien de personnes peuvent venir.
+
+**Et qui a répondu quoi**, sous un second pli, week-end par week-end. Les
+noms étaient tus au début — savoir qui a dit non ne regarde personne — et
+ce silence se défendait mal : on choisit une date en sachant qui pourra
+venir, et c'est souvent la vraie question. La page des activités dit déjà
+« qui a dit quoi » pour exactement cette raison. Ce qui reste réservé n'a
+jamais été les réponses, c'est ce que mange le cousin.
+
+Les trois groupes se forment dans la page : la base sert les réponses
+brutes, et **« sans réponse » n'est pas une donnée** — c'est le reste de la
+famille.
 
 Ce résultat était réservé à `admin.html`. Le réserver ne protégeait rien : il
 se déduit des compteurs que la page affichait déjà. Ce qui lui manquait,

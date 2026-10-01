@@ -2354,9 +2354,32 @@ begin
     'participants', (select count(*) from private.participants),
     'repondants', (select count(distinct participant_id) from public.voeux),
 
-    -- Les totaux sont renvoyes a tout le monde, mais jamais les noms : voir
-    -- que le premier week-end tient la corde aide a se decider, savoir qui
-    -- a dit non ne regarde personne.
+    -- LES NOMS SONT SERVIS AVEC LES TOTAUX, depuis qu'on peut deplier le
+    -- resultat. Le silence d'avant se defendait -- savoir qui a dit non ne
+    -- regarde personne -- mais il se defendait mal : on choisit une date
+    -- en sachant qui pourra venir, et la page des activites dit deja
+    -- « qui a dit quoi » pour exactement cette raison. Ce qui reste cache
+    -- n'a jamais ete les reponses, c'est ce que mange le cousin.
+    --
+    -- Les noms partent BRUTS, et les trois groupes se forment dans la
+    -- page : « sans reponse » n'est pas une donnee, c'est le reste.
+    'tous', coalesce((
+      select jsonb_agg(jsonb_build_object(
+               'id', p.id, 'prenom', p.prenom, 'famille', p.famille
+             ) order by o.rang)
+      from private.participants p
+      join private.ordre_familial() o on o.id = p.id
+    ), '[]'::jsonb),
+
+    'reponses', coalesce((
+      select jsonb_agg(jsonb_build_object(
+               'participant_id', v.participant_id,
+               'option_id', v.option_id,
+               'choix', v.choix
+             ) order by v.participant_id, v.option_id)
+      from public.voeux v
+    ), '[]'::jsonb),
+
     'options', coalesce((
       select jsonb_agg(jsonb_build_object(
                'id', o.id,

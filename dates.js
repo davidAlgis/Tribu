@@ -262,6 +262,11 @@ async function choisirPersonne(personne) {
 const zonePersonnes = document.getElementById("personnes");
 const zoneOptions = document.getElementById("options");
 const zoneClassement = document.getElementById("classement");
+
+// Les plis « qui a repondu quoi » qu'on a ouverts. Le rapport se redessine
+// a chaque enregistrement : sans cette memoire, le panneau se refermerait
+// sous le doigt.
+const deplies = new Set();
 const verdict = document.getElementById("verdict");
 const participation = document.getElementById("participation");
 const legende = document.getElementById("legende-voeux");
@@ -653,6 +658,73 @@ function barre(ligne, base) {
   return b;
 }
 
+
+// QUI A DIT QUOI, derriere un pli. Les totaux repondent a « ce week-end
+// tient-il la corde » ; les noms repondent a « est-ce que mon frere peut
+// venir », et c'est souvent la vraie question.
+//
+// Les trois groupes se forment ici : « sans reponse » n'est pas une donnee,
+// c'est le reste de la famille. La base sert les reponses brutes.
+const NOMS_CHOIX = [
+  ["oui", "Oui"],
+  ["non", "Non"],
+  ["muet", "Sans réponse"],
+];
+
+// Les prenoms se repetent dans une famille de quatre-vingts personnes. On
+// n'ajoute la precision que lorsqu'elle sert : « Alice (Bernard) » partout
+// alourdirait une liste ou la moitie des prenoms sont uniques.
+function nommerRepondant(personne) {
+  const tous = (etat.donnees && etat.donnees.tous) || [];
+  const homonymes = tous.filter((p) => p.prenom === personne.prenom).length > 1;
+  return homonymes && personne.famille && personne.famille !== personne.prenom
+    ? `${personne.prenom} (${personne.famille})`
+    : personne.prenom;
+}
+
+function grouperReponses(optionId) {
+  const reponses = (etat.donnees && etat.donnees.reponses) || [];
+  const dit = new Map(
+    reponses
+      .filter((r) => r.option_id === optionId)
+      .map((r) => [r.participant_id, r.choix])
+  );
+  const groupes = { oui: [], non: [], muet: [] };
+  for (const personne of (etat.donnees && etat.donnees.tous) || []) {
+    groupes[dit.get(personne.id) || "muet"].push(personne);
+  }
+  return groupes;
+}
+
+function quiADitQuoi(ligne) {
+  const groupes = grouperReponses(ligne.id);
+
+  const pli = document.createElement("details");
+  pli.className = "qui-a-dit";
+  // Rouvrir ce qu'on avait ouvert : la liste se redessine a chaque
+  // enregistrement, et un panneau qui se referme sous le doigt agace.
+  pli.open = deplies.has(ligne.id);
+  pli.addEventListener("toggle", () => {
+    if (pli.open) deplies.add(ligne.id);
+    else deplies.delete(ligne.id);
+  });
+
+  const resume = document.createElement("summary");
+  resume.textContent = "Qui a répondu quoi";
+  pli.appendChild(resume);
+
+  for (const [cle, libelle] of NOMS_CHOIX) {
+    const bloc = document.createElement("p");
+    bloc.className = "note";
+    bloc.append(fort(libelle), " — ");
+    bloc.append(
+      groupes[cle].length ? groupes[cle].map(nommerRepondant).join(", ") : "personne"
+    );
+    pli.appendChild(bloc);
+  }
+  return pli;
+}
+
 function dessinerRapport() {
   const donnees = etat.donnees;
   const classement = classer(donnees.options, donnees.participants);
@@ -685,6 +757,7 @@ function dessinerRapport() {
       (ligne.muets ? ` · ${ligne.muets} sans réponse` : "");
 
     item.append(titre, barre(ligne, donnees.participants || ligne.repondu || 1), chiffres);
+    item.appendChild(quiADitQuoi(ligne));
     zoneClassement.appendChild(item);
   }
 }
