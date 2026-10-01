@@ -4362,7 +4362,7 @@ begin
               where table_schema = 'private' and table_name = 'sauvegardes')
      and not exists (select 1 from information_schema.tables
               where table_schema = 'private' and table_name = 'jalons') then
-    alter table private.jalons rename to jalons;
+    alter table private.sauvegardes rename to jalons;
   end if;
 end $mig$;
 
@@ -4380,6 +4380,9 @@ alter table private.jalons drop constraint if exists sauvegardes_motif_check;
 alter table private.jalons drop constraint if exists jalons_motif_valide;
 alter table private.jalons add constraint jalons_motif_valide
   check (motif in ('hebdomadaire', 'manuelle', 'avant_restauration', 'compactage'));
+
+drop index if exists private.sauvegardes_semaine_idx;
+drop index if exists private.sauvegardes_prise_le_idx;
 
 create unique index if not exists jalons_semaine_idx
   on private.jalons (semaine) where motif = 'hebdomadaire';
@@ -4448,7 +4451,7 @@ create or replace function private.tracees()
 returns table (nom text, cles text[])
 language sql immutable as $fn$
   select * from (values
-    ('public.presences',           array['id']),
+    ('public.presences'::text,     array['id']::text[]),
     ('public.voeux',               array['id']),
     ('public.refus_lieu',          array['id']),
     ('private.participants',       array['id']),

@@ -304,3 +304,46 @@ def test_chaque_fonction_qui_ecrit_annonce_son_geste():
         "ces fonctions écrivent sans annoncer leur geste — l'historique les "
         "montrera sans savoir les nommer : " + ", ".join(sorted(muettes))
     )
+
+def test_aucun_renommage_ne_vise_son_propre_nom():
+    """`alter table private.jalons rename to jalons` : la table de départ
+    n'existe plus sous ce nom, et le collage s'arrête là.
+
+    C'est arrivé. Le renommage avait été écrit juste, puis un
+    remplacement global `private.sauvegardes` → `private.jalons` l'a
+    rattrapé au passage — y compris dans l'instruction dont le sens était
+    précisément de nommer l'ANCIENNE table. Rien ne le signalait :
+    `parse_sql` lit la phrase sans broncher, elle n'échoue qu'au collage,
+    et seulement sur une base qui porte encore l'ancien nom.
+    """
+    fautifs = [
+        f"{ancien} -> {neuf}"
+        for ancien, neuf in re.findall(
+            r"alter table ([\w.]+) rename to (\w+)", SCHEMA, re.I
+        )
+        if ancien.split(".")[-1] == neuf
+    ]
+    assert fautifs == [], (
+        "ces renommages visent la table qu'ils prétendent créer — Postgres "
+        "refusera au collage : " + ", ".join(fautifs)
+    )
+
+
+def test_une_migration_cherche_la_table_qu_elle_renomme():
+    """Le garde et le geste doivent parler de la même table.
+
+    Un bloc qui vérifie l'existence de `sauvegardes` puis renomme autre
+    chose passe le garde et échoue sur l'instruction — exactement le cas
+    du test précédent, vu de l'autre bout.
+    """
+    manquants = []
+    for bloc in re.findall(r"do \$mig\$(.*?)\$mig\$;", SCHEMA, re.S):
+        for ancien, _ in re.findall(
+            r"alter table (?:\w+\.)?(\w+) rename to (\w+)", bloc, re.I
+        ):
+            if f"'{ancien}'" not in bloc:
+                manquants.append(ancien)
+    assert manquants == [], (
+        "ces renommages portent sur une table que leur garde ne cherche "
+        "pas : " + ", ".join(manquants)
+    )
