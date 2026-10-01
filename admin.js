@@ -3482,6 +3482,7 @@ function dessinerJalon(jalon) {
   bloc.className = "jalon";
 
   const gauche = document.createElement("div");
+  gauche.className = "jalon-quoi";
   gauche.append(
     fort(afficherInstant(jalon.fait_le)),
     span(MOTIFS[jalon.motif] || jalon.motif, "lien")
@@ -3507,8 +3508,40 @@ function dessinerJalon(jalon) {
   restaurer_.textContent = "Restaurer";
   restaurer_.addEventListener("click", () => restaurer(jalon));
 
-  bloc.append(gauche, comparer, restaurer_);
+  // Le retrait est a part : c'est le seul des trois qui ne se defait pas.
+  const retirer = document.createElement("button");
+  retirer.type = "button";
+  retirer.className = "retirer";
+  retirer.textContent = "✕";
+  retirer.title = `Supprimer le jalon du ${afficherInstant(jalon.fait_le)}`;
+  retirer.setAttribute("aria-label", retirer.title);
+  retirer.addEventListener("click", () => retirerJalon(jalon));
+
+  bloc.append(gauche, comparer, restaurer_, retirer);
   return bloc;
+}
+
+// Supprimer un jalon ne se defait pas : il n'y a pas d'historique de
+// l'historique. La question le dit, et dit aussi ce qu'on ne perd pas --
+// les gestes restent, eux.
+async function retirerJalon(jalon) {
+  if (!confirm(`Supprimer le jalon du ${afficherInstant(jalon.fait_le)} ?\n\n` +
+               "Cet état complet disparaît, et ce geste-là ne s'annule pas. " +
+               "Les gestes de l'historique, eux, restent.")) {
+    return;
+  }
+
+  messageSauvegardes.className = "";
+  messageSauvegardes.textContent = "Suppression…";
+  try {
+    await rpc("admin_jalon_retirer", { p_code: etat.code, p_id: jalon.id });
+    await rechargerSauvegardes();
+    messageSauvegardes.className = "ok";
+    messageSauvegardes.textContent = "Jalon supprimé.";
+  } catch (erreur) {
+    messageSauvegardes.className = "erreur";
+    messageSauvegardes.textContent = erreur.message;
+  }
 }
 
 async function rechargerSauvegardes() {

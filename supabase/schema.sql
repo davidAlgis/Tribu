@@ -4976,6 +4976,25 @@ begin
   return trouve;
 end $fn$;
 
+-- Un jalon se retire. Rien ne s'y rattache qu'on perdrait : les gestes qui
+-- s'appuyaient dessus gardent leur detail, ils cessent seulement de pointer
+-- vers lui. Ce qu'on perd, c'est l'etat complet lui-meme -- et c'est bien
+-- ce qu'on veut quand la liste se remplit de copies qui ne servent plus.
+create or replace function public.admin_jalon_retirer(p_code text, p_id uuid)
+returns jsonb
+language plpgsql security definer
+set search_path = private, pg_temp as $fn$
+begin
+  perform private.verifier_code(p_code, 'admin');
+
+  delete from private.jalons j where j.id = p_id;
+  if not found then
+    raise exception 'JALON_INCONNU' using errcode = 'P0001';
+  end if;
+
+  return jsonb_build_object('retire', true);
+end $fn$;
+
 create or replace function public.admin_etat(p_code text)
 returns jsonb
 language plpgsql stable security definer
@@ -5253,6 +5272,7 @@ end $fn$;
 
 grant execute on function public.admin_jalon_prendre(text)          to anon;
 grant execute on function public.admin_jalon_lire(text, uuid)       to anon;
+grant execute on function public.admin_jalon_retirer(text, uuid)    to anon;
 grant execute on function public.admin_etat(text)                   to anon;
 grant execute on function public.admin_jalon_restaurer(text, uuid)  to anon;
 

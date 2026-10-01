@@ -294,6 +294,16 @@ details.geste.annule > summary .quoi { text-decoration: line-through; opacity: 0
   align-items: center;
   gap: 6px 10px;
 }
+/* La date, le motif et les compteurs sur une ligne, et les boutons au
+   bout de la meme : sans cette part flexible, le bloc de gauche prenait
+   toute la largeur et renvoyait les boutons a la ligne suivante. */
+.jalon-quoi {
+  flex: 1 1 16em;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 2px 8px;
+}
 
 /* Le detail d'un geste : « diner : non -> oui », une ligne par champ. */
 .changement { font-size: 0.86rem; margin: 4px 0 0; }
