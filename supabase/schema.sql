@@ -376,6 +376,12 @@ $fn$;
 --  une boucle de parente ferait tourner la recursion sans fin, et une
 --  liste qui ne rend jamais la main est pire qu'une liste mal triee.
 --
+-- `create or replace` REFUSE DE CHANGER LE TYPE DE RETOUR, et celui d'une
+-- fonction `returns table (...)` comprend le nom et le type de chaque
+-- colonne. Lui en ajouter une arrete le collage -- sur une base deja en
+-- place, et seulement sur elle. On l'efface donc d'abord.
+drop function if exists private.ordre_familial();
+
 create or replace function private.ordre_familial()
 returns table (id uuid, rang integer)
 language sql stable
@@ -521,6 +527,12 @@ create index if not exists presences_jour_idx on public.presences (jour);
 --  `union` (et non `union all`) : indispensable, sinon deux conjoints
 --  qui se pointent mutuellement feraient boucler la recursion.
 --
+-- `create or replace` REFUSE DE CHANGER LE TYPE DE RETOUR, et celui d'une
+-- fonction `returns table (...)` comprend le nom et le type de chaque
+-- colonne. Lui en ajouter une arrete le collage -- sur une base deja en
+-- place, et seulement sur elle. On l'efface donc d'abord.
+drop function if exists private.personnes_modifiables(uuid);
+
 create or replace function private.personnes_modifiables(p_acteur uuid)
 returns table (id uuid)
 language sql stable
@@ -577,6 +589,11 @@ revoke all on all tables in schema private from anon;
 --  Les prenoms sont des donnees personnelles : le code est exige
 --  avant de les servir.
 --
+-- Elle rend une TABLE : son type de retour comprend le nom et le type de
+-- chaque colonne, et `create or replace` refuse de le changer. On l'efface
+-- donc d'abord -- le `grant` qui suit la rouvre.
+drop function if exists public.participants_lister(text);
+
 create or replace function public.participants_lister(p_code text)
 returns table (id uuid, prenom text, famille text)
 language plpgsql stable security definer
@@ -4452,6 +4469,12 @@ $fn$;
 --  presence ne peut pas revenir avant la personne qu'elle designe -- la
 --  cle etrangere la refuserait. On repose donc par rang croissant, et on
 --  efface par rang decroissant.
+-- `create or replace` REFUSE DE CHANGER LE TYPE DE RETOUR, et celui d'une
+-- fonction `returns table (...)` comprend le nom et le type de chaque
+-- colonne. Lui en ajouter une arrete le collage -- sur une base deja en
+-- place, et seulement sur elle. On l'efface donc d'abord.
+drop function if exists private.tracees();
+
 create or replace function private.tracees()
 returns table (nom text, cles text[], rang smallint)
 language sql immutable as $fn$

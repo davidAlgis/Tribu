@@ -425,3 +425,36 @@ def test_une_ligne_modifiee_se_reprend_par_un_update():
         "un DELETE sur une ligne modifiée emporte par cascade tout ce qui la "
         "désigne : c'est le défaut qui a effacé les présences d'une personne"
     )
+
+def test_une_fonction_qui_rend_une_table_s_efface_avant_de_se_reposer():
+    """`create or replace` refuse de changer le type de retour.
+
+    Le type de retour d'une fonction `returns table (...)` comprend le
+    **nom et le type de chaque colonne**. Lui en ajouter une — un rang, un
+    libellé — fait échouer le collage :
+
+        cannot change return type of existing function
+        Row type defined by OUT parameters is different.
+
+    Et seulement sur une base déjà en place : sur une base neuve, tout
+    passe. C'est arrivé en ajoutant un rang à `private.tracees()`.
+
+    Le remède tient en une ligne, posée une fois pour toutes devant chacune
+    de ces fonctions : `drop function if exists`. Elles vivent dans
+    `private`, donc sans `grant` à reposer, et aucune vue ne les désigne —
+    un corps de fonction est du texte, pas une dépendance.
+    """
+    manquantes = []
+    for trouve in re.finditer(
+        r"create or replace function\s+([\w.]+)\(([^)]*)\)\s*\r?\n?returns table",
+        SCHEMA, re.I,
+    ):
+        nom = trouve.group(1)
+        avant = SCHEMA[: trouve.start()]
+        if f"drop function if exists {nom}(" not in avant:
+            manquantes.append(nom)
+
+    assert manquantes == [], (
+        "ces fonctions rendent une table sans s'effacer d'abord — ajouter une "
+        "colonne arrêtera le collage : " + ", ".join(manquantes)
+    )
