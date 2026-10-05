@@ -1405,7 +1405,13 @@ set search_path = private, pg_temp as $fn$
 declare
   nouveau  uuid := gen_random_uuid();
   rattache private.participants;
-  famille  text;
+  -- `branche` et non `famille` : la table en a une colonne de ce nom,
+  -- et une variable qui la double rend ambigue toute reference non
+  -- qualifiee. Elle ne gene pas ici -- les colonnes d'un `insert` ne
+  -- sont pas visibles dans son `values` -- mais la fonction interroge
+  -- la table juste au-dessus, et une seule reference ajoutee plus tard
+  -- suffirait.
+  branche  text;
 begin
   perform private.verifier_code(p_code, 'admin');
   -- Le premier changement de la semaine emporte une copie de l'avant.
@@ -1431,7 +1437,7 @@ begin
     raise exception 'CONJOINT_DEJA_PRIS' using errcode = 'P0001';
   end if;
 
-  famille := coalesce(
+  branche := coalesce(
     nullif(trim(coalesce(p_famille, '')), ''),
     rattache.famille,
     case when p_invite then 'Invites' else 'Sans famille' end
@@ -1442,7 +1448,7 @@ begin
   values (
     nouveau,
     trim(p_prenom),
-    famille,
+    branche,
     p_age,
     case
       -- Un conjoint entre dans le meme foyer que son partenaire : il se
@@ -1459,7 +1465,7 @@ begin
     update private.participants set conjoint_id = nouveau where id = p_conjoint_de;
   end if;
 
-  return jsonb_build_object('id', nouveau, 'famille', famille);
+  return jsonb_build_object('id', nouveau, 'famille', branche);
 end $fn$;
 
 -- ---- 8c. Corriger une faute de frappe ou un age ----
@@ -2249,7 +2255,11 @@ set search_path = private, pg_temp as $fn$
 declare
   ligne      jsonb;
   reponse    jsonb;
-  titre      text;
+  -- `intitule` et non `titre` : `private.activites` a une colonne de ce
+  -- nom, et une variable qui la double rend toute reference ambigue --
+  -- « column reference "titre" is ambiguous ». La fonction se pose sans
+  -- broncher et n'echoue qu'au premier appel.
+  intitule   text;
   vise       uuid;
   creees     integer := 0;
   poses      integer := 0;
@@ -2264,8 +2274,8 @@ begin
   end if;
 
   for ligne in select * from jsonb_array_elements(p_lignes) loop
-    titre := trim(coalesce(ligne->>'titre', ''));
-    if titre = '' then
+    intitule := trim(coalesce(ligne->>'titre', ''));
+    if intitule = '' then
       raise exception 'TITRE_VIDE' using errcode = 'P0001';
     end if;
 
@@ -2273,11 +2283,11 @@ begin
     -- la casse ou les accents sont la meme sortie.
     select a.id into vise
       from private.activites a
-     where private.normaliser_code(a.titre) = private.normaliser_code(titre)
+     where private.normaliser_code(a.titre) = private.normaliser_code(intitule)
      limit 1;
 
     if vise is null then
-      insert into private.activites (titre) values (titre) returning id into vise;
+      insert into private.activites (titre) values (intitule) returning id into vise;
       creees := creees + 1;
     end if;
 

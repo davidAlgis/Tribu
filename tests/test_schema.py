@@ -458,3 +458,66 @@ def test_une_fonction_qui_rend_une_table_s_efface_avant_de_se_reposer():
         "ces fonctions rendent une table sans s'effacer d'abord — ajouter une "
         "colonne arrêtera le collage : " + ", ".join(manquantes)
     )
+
+# --- ...ni le nom d'une colonne qu'elle interroge ------------------------
+
+
+def colonnes_par_table() -> dict:
+    """Les colonnes de chaque table, lues dans son `create table`."""
+    tables = {}
+    for nom, corps in re.findall(
+        r"create table if not exists ((?:private|public)\.\w+)\s*\((.*?)\n\);",
+        SCHEMA, re.S,
+    ):
+        colonnes = set()
+        for ligne in corps.splitlines():
+            ligne = ligne.split("--")[0].strip()
+            trouve = re.match(r"([a-z_]\w*)\s+[a-z]", ligne, re.I)
+            if trouve and trouve.group(1).lower() not in {
+                "primary", "unique", "check", "constraint", "foreign", "exclude",
+            }:
+                colonnes.add(trouve.group(1).lower())
+        tables[nom] = colonnes
+    return tables
+
+
+# `from private.activites`, `insert into public.presences`, `update x`…
+TABLES_CITEES = re.compile(
+    r"\b(?:from|join|into|update|delete\s+from)\s+((?:private|public)\.\w+)", re.I
+)
+
+
+def test_aucune_variable_ne_porte_le_nom_d_une_colonne_interrogee():
+    """Le miroir du test précédent, et il a coûté un import.
+
+    Une variable PL/pgSQL qui porte le nom d'une **colonne** d'une table
+    que la fonction interroge rend toute référence non qualifiée
+    ambiguë — exactement comme un alias :
+
+        column reference "titre" is ambiguous
+        It could refer to either a PL/pgSQL variable or a table column.
+
+    `admin_activites_importer` déclarait `titre` et interrogeait
+    `private.activites`, qui a une colonne `titre`. La fonction se pose
+    sans broncher — l'analyseur ne résout pas les noms — et n'échoue
+    qu'au premier appel, c'est-à-dire au premier import.
+
+    Le test ne regarde que les tables que la fonction CITE : une variable
+    `avant` ne gêne pas tant qu'on ne touche pas à la table qui a une
+    colonne de ce nom.
+    """
+    tables = colonnes_par_table()
+
+    fautives = []
+    for fonction in CORPS.finditer(SCHEMA):
+        nom, corps = fonction.group(1), fonction.group(2)
+        citees = {t for t in TABLES_CITEES.findall(corps) if t in tables}
+        interdits = set().union(*(tables[t] for t in citees)) if citees else set()
+        partages = sorted(variables_declarees(corps) & interdits)
+        if partages:
+            fautives.append(f"{nom} : {', '.join(partages)}")
+
+    assert fautives == [], (
+        "variable PL/pgSQL et colonne de même nom — Postgres refusera "
+        "l'appel : " + " | ".join(fautives)
+    )
