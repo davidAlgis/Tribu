@@ -15,6 +15,8 @@ importer_presences.py
 tests/test_import_presences.py
 importer_tarifs.py
 tests/test_import_tarifs.py
+importer_activites.py
+tests/test_import_activites.py
 
 # Le tableur des presences porte les vrais prenoms, comme le GEDCOM ; ceux
 # des prix portent les tarifs reellement negocies avec l'hotel. Les

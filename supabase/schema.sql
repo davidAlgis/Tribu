@@ -2224,6 +2224,101 @@ grant execute on function public.admin_activites(text)                    to ano
 grant execute on function public.admin_activite_ajouter(text, text, text) to anon;
 grant execute on function public.admin_activite_retirer(text, uuid)       to anon;
 
+-- ---- 8n. Verser un sondage entier ----
+--
+--  Le sondage des activites a d'abord vecu dans un tableur. Le ressaisir
+--  a la main -- quarante-six personnes, six sorties -- serait long et
+--  fautif. `importer_activites.py` le verse d'un coup.
+--
+--  EN UNE SEULE TRANSACTION, et c'est tout l'interet d'avoir une fonction
+--  plutot que trois cents appels a `activites_voter` : l'historique y voit
+--  UN geste, pas deux cent soixante-seize. Un import qui remplirait la
+--  liste des gestes la rendrait illisible, et c'est justement ce qu'elle
+--  devait eviter.
+--
+--  CE QU'ELLE ECRASE : les avis des personnes citees, sur les activites
+--  citees, et rien d'autre. Une personne absente du fichier garde les
+--  siens. Le script, lui, n'envoie que les lignes qui portent au moins une
+--  reponse -- une ligne vide ne dit pas « non a tout », elle dit « pas
+--  encore repondu ».
+--
+create or replace function public.admin_activites_importer(p_code text, p_lignes jsonb)
+returns jsonb
+language plpgsql security definer
+set search_path = private, pg_temp as $fn$
+declare
+  ligne      jsonb;
+  reponse    jsonb;
+  titre      text;
+  vise       uuid;
+  creees     integer := 0;
+  poses      integer := 0;
+  effaces    integer := 0;
+  inconnus   integer := 0;
+begin
+  perform private.verifier_code(p_code, 'admin');
+  perform private.geste('Import des activités');
+
+  if jsonb_typeof(coalesce(p_lignes, 'null'::jsonb)) <> 'array' then
+    raise exception 'LISTE_VIDE' using errcode = 'P0001';
+  end if;
+
+  for ligne in select * from jsonb_array_elements(p_lignes) loop
+    titre := trim(coalesce(ligne->>'titre', ''));
+    if titre = '' then
+      raise exception 'TITRE_VIDE' using errcode = 'P0001';
+    end if;
+
+    -- La meme regle que partout : deux intitules qui ne different que par
+    -- la casse ou les accents sont la meme sortie.
+    select a.id into vise
+      from private.activites a
+     where private.normaliser_code(a.titre) = private.normaliser_code(titre)
+     limit 1;
+
+    if vise is null then
+      insert into private.activites (titre) values (titre) returning id into vise;
+      creees := creees + 1;
+    end if;
+
+    for reponse in select * from jsonb_array_elements(coalesce(ligne->'avis', '[]'::jsonb))
+    loop
+      if not exists (
+        select 1 from private.participants p
+         where p.id = (reponse->>'participant_id')::uuid
+      ) then
+        inconnus := inconnus + 1;
+        continue;
+      end if;
+
+      if coalesce(reponse->>'avis', 'non') = 'non' then
+        -- « Non » ne s'ecrit pas : il s'efface.
+        delete from private.envies e
+         where e.participant_id = (reponse->>'participant_id')::uuid
+           and e.activite_id = vise;
+        effaces := effaces + 1;
+      elsif reponse->>'avis' in ('oui', 'peut_etre') then
+        insert into private.envies (participant_id, activite_id, avis)
+        values ((reponse->>'participant_id')::uuid, vise, reponse->>'avis')
+        on conflict (participant_id, activite_id)
+          do update set avis = excluded.avis, maj_le = now();
+        poses := poses + 1;
+      else
+        raise exception 'AVIS_INCONNU' using errcode = 'P0001';
+      end if;
+    end loop;
+  end loop;
+
+  return jsonb_build_object(
+    'activites_creees', creees,
+    'avis_poses', poses,
+    'avis_effaces', effaces,
+    'participants_inconnus', inconnus
+  );
+end $fn$;
+
+grant execute on function public.admin_activites_importer(text, jsonb) to anon;
+
 -- ---- 8j. Les bornes d'age ----
 --
 --  Elles viennent de l'hotel, pas de la famille : chaque etablissement
