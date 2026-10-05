@@ -256,6 +256,18 @@ td.rien { color: var(--doux); }
 .cases-regime { display: flex; flex-wrap: wrap; gap: 4px 22px; }
 .cases-regime .interrupteur { margin: 6px 0 0; }
 
+/* Une page fermee par l'organisateur. En haut, pleine largeur, et avant
+   tout le reste : le message qui vivait sous le bouton d'enregistrement
+   arrivait apres qu'on avait rempli la grille. */
+.bandeau-ferme {
+  margin: 0 0 20px;
+  padding: 12px 16px;
+  border: 1px solid var(--erreur);
+  border-left: 4px solid var(--erreur);
+  border-radius: 8px;
+  background: #fff;
+}
+
 /* ---------- L'historique ---------- */
 /* Une ligne par geste, du plus recent au plus ancien, et le detail sous le
    pli. Les lignes se suivent de pres : c'est une liste qu'on parcourt, pas

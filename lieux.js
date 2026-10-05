@@ -167,6 +167,13 @@ const listeSuggestions = document.getElementById("suggestions");
 const messagePrenom = document.getElementById("message-prenom");
 let annuaire = [];
 
+// L'organisateur peut fermer cette page. Les mots sont les memes sur les
+// cinq : c'est la meme serrure, vue de cinq endroits.
+function signalerFermeture(ouverte) {
+  const bandeau = document.getElementById("page-fermee");
+  if (bandeau) bandeau.hidden = !!ouverte;
+}
+
 // ---------------------------------------------------------------- noeuds
 
 // Prenoms, familles et intitules viennent de la base, et la base tient ce
@@ -551,6 +558,7 @@ function construire() {
     zonePersonnes.appendChild(pastille);
   }
 
+  signalerFermeture(etat.donnees.lieux_ouverts);
   if (!etat.donnees.lieux_ouverts) {
     boutonEnregistrer.disabled = boutonTous.disabled = true;
     message.className = "erreur";

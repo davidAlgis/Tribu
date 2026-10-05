@@ -140,6 +140,13 @@ async function reprendrePersonne() {
   return true;
 }
 
+// L'organisateur peut fermer cette page. Les mots sont les memes sur les
+// cinq : c'est la meme serrure, vue de cinq endroits.
+function signalerFermeture(ouverte) {
+  const bandeau = document.getElementById("page-fermee");
+  if (bandeau) bandeau.hidden = !!ouverte;
+}
+
 // ---------------------------------------------------------------- noeuds
 
 // Prenoms et familles viennent de la base, et la base tient ce que le
@@ -265,6 +272,7 @@ async function recharger() {
   });
   etat.gens = d.gens || [];
   etat.ouverte = d.ouverte;
+  signalerFermeture(d.ouverte);
   dessiner();
 }
 

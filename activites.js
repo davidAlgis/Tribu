@@ -154,6 +154,13 @@ async function reprendrePersonne() {
   return true;
 }
 
+// L'organisateur peut fermer cette page. Les mots sont les memes sur les
+// cinq : c'est la meme serrure, vue de cinq endroits.
+function signalerFermeture(ouverte) {
+  const bandeau = document.getElementById("page-fermee");
+  if (bandeau) bandeau.hidden = !!ouverte;
+}
+
 // ---------------------------------------------------------------- noeuds
 
 // Prenoms, familles et intitules viennent de la base, et la base tient ce
@@ -355,6 +362,7 @@ function repartir(activite) {
 function dessiner() {
   const activites = (etat.donnees && etat.donnees.activites) || [];
   const ouverte = etat.donnees && etat.donnees.ouverte;
+  signalerFermeture(ouverte);
 
   compteur.textContent = activites.length
     ? `${activites.length} idée(s)`

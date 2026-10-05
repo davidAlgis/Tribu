@@ -318,6 +318,13 @@ function preparerAutocompletion(participants) {
   annuaire = participants;
 }
 
+// L'organisateur peut fermer cette page. Les mots sont les memes sur les
+// cinq : c'est la meme serrure, vue de cinq endroits.
+function signalerFermeture(ouverte) {
+  const bandeau = document.getElementById("page-fermee");
+  if (bandeau) bandeau.hidden = !!ouverte;
+}
+
 // ---------------------------------------------------------------- noeuds
 
 // Prenoms, familles et intitules viennent de la base, et la base tient ce
@@ -439,6 +446,7 @@ function construireSaisie() {
     zonePersonnes.appendChild(pastille);
   }
 
+  signalerFermeture(saisie_ouverte);
   if (!saisie_ouverte) {
     // La grille reste consultable : on ferme l'ecriture, pas la lecture.
     boutonEnregistrer.disabled = boutonTous.disabled = true;

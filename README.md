@@ -930,7 +930,13 @@ l'hôtel n'a pas besoin de savoir qui, et ce qui ne sort pas ne se perd pas.
 panneau**, dans l'onglet Séjour : une case par page, plus « tout fermer » et
 « tout rouvrir ». Fermer ne cache rien — la page se lit encore, on voit ce
 qu'on a dit et où en sont les autres, mais plus rien ne s'enregistre. C'est
-la base qui refuse ; la page le montre seulement. Les préférences
+la base qui refuse ; la page le montre seulement.
+
+**Et elle le montre en haut**, dans un bandeau rouge, avant toute saisie :
+« L'organisateur a fermé cette page. Tu peux relire ce que tu as déclaré,
+mais plus le modifier. » Les mêmes mots sur les cinq — c'est la même
+serrure, vue de cinq endroits. Le message existait déjà, sous le bouton
+d'enregistrement : il arrivait après qu'on avait rempli la grille. Les préférences
 alimentaires et les activités ont chacune leur verrou : on ferme les
 présences quand le nombre est arrêté, alors qu'une allergie se déclare
 encore après et qu'une sortie se décide bien avant.

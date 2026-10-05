@@ -131,6 +131,13 @@ async function reprendrePersonne() {
   return true;
 }
 
+// L'organisateur peut fermer cette page. Les mots sont les memes sur les
+// cinq : c'est la meme serrure, vue de cinq endroits.
+function signalerFermeture(ouverte) {
+  const bandeau = document.getElementById("page-fermee");
+  if (bandeau) bandeau.hidden = !!ouverte;
+}
+
 function afficherJour(iso) {
   return new Date(iso + "T00:00:00").toLocaleDateString("fr-FR", {
     weekday: "long",
@@ -277,6 +284,11 @@ const portee = document.getElementById("portee-saisie");
 
 function construire() {
   const { options, modifiables, voeux_ouverts } = etat.donnees;
+
+  // AVANT le retour anticipe du dessous : une page fermee et sans aucun
+  // week-end propose doit le dire aussi, et c'est meme le cas le plus
+  // frequent -- on ferme souvent apres avoir retire les propositions.
+  signalerFermeture(voeux_ouverts);
 
   if (options.length === 0) {
     document.getElementById("sous-titre").textContent =
