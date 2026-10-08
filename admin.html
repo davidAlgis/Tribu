@@ -624,6 +624,49 @@
         <button type="button" id="tarifs-enregistrer">Enregistrer les tarifs</button>
       </div>
       <p id="message-tarifs" role="status" aria-live="polite"></p>
+
+      <!--
+        Les réductions accordées à une personne vivent ICI, avec les prix,
+        et nulle part côté famille : chacun voit la sienne sur sa note,
+        personne ne se l'accorde. Elles s'enregistrent à part — elles ne
+        touchent pas à la grille, et le bouton du dessus non plus.
+      -->
+      <fieldset id="panneau-reductions">
+        <legend>Réductions accordées <span id="compteur-reductions" class="discret-inline"></span></legend>
+        <div class="grille">
+          <div>
+            <label for="reduction-personne">Personne</label>
+            <select id="reduction-personne"></select>
+          </div>
+          <div>
+            <label for="reduction-type">Réduction</label>
+            <select id="reduction-type">
+              <option value="pourcentage">en pourcentage</option>
+              <option value="euros">en euros</option>
+              <option value="">aucune</option>
+            </select>
+          </div>
+          <div>
+            <label for="reduction-valeur">Valeur</label>
+            <input type="number" id="reduction-valeur" min="0.01" step="0.01"
+                   inputmode="decimal" placeholder="ex. 25">
+          </div>
+        </div>
+        <div class="actions">
+          <button type="button" id="reduction-enregistrer">Enregistrer la réduction</button>
+        </div>
+        <p id="message-reduction" role="status" aria-live="polite"></p>
+
+        <div id="liste-reductions"></div>
+
+        <p class="note">
+          Elle porte sur <strong>toute la note</strong> de la personne —
+          hébergement, repas et taxe de séjour. Un montant en euros ne
+          dépasse jamais la note&nbsp;: une réduction ne rend pas d'argent.
+          Le détail envoyé à l'hôtel ne la voit pas&nbsp;: c'est une affaire
+          de famille, pas une remise de l'hôtel.
+        </p>
+      </fieldset>
     </div>
 
     <!-- ---- Facture --------------------------------------------- -->
@@ -668,49 +711,6 @@
           <strong>facturés</strong>&nbsp;: un dîner compris dans une pension
           est déjà payé avec la nuit, et le compter ferait baisser le prix
           moyen d'un repas sans que personne n'ait payé moins.
-        </p>
-      </details>
-
-      <!--
-        Les réductions vivent ICI, à côté du total qu'elles changent, et
-        nulle part côté famille : chacun voit la sienne sur sa note, personne
-        ne se l'accorde.
-      -->
-      <details class="panneau-pliable" id="panneau-reductions">
-        <summary>Réductions accordées <span id="compteur-reductions" class="discret-inline"></span></summary>
-
-        <div class="grille">
-          <div>
-            <label for="reduction-personne">Personne</label>
-            <select id="reduction-personne"></select>
-          </div>
-          <div>
-            <label for="reduction-type">Réduction</label>
-            <select id="reduction-type">
-              <option value="pourcentage">en pourcentage</option>
-              <option value="euros">en euros</option>
-              <option value="">aucune</option>
-            </select>
-          </div>
-          <div>
-            <label for="reduction-valeur">Valeur</label>
-            <input type="number" id="reduction-valeur" min="0.01" step="0.01"
-                   inputmode="decimal" placeholder="ex. 25">
-          </div>
-        </div>
-        <div class="actions">
-          <button type="button" id="reduction-enregistrer">Enregistrer</button>
-        </div>
-        <p id="message-reduction" role="status" aria-live="polite"></p>
-
-        <div id="liste-reductions"></div>
-
-        <p class="note">
-          Elle porte sur <strong>toute la note</strong> de la personne —
-          hébergement, repas et taxe de séjour. Un montant en euros ne
-          dépasse jamais la note&nbsp;: une réduction ne rend pas d'argent.
-          Le détail envoyé à l'hôtel ne la voit pas&nbsp;: c'est une affaire
-          de famille, pas une remise de l'hôtel.
         </p>
       </details>
 

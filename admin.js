@@ -637,6 +637,9 @@ function ouvrirOnglet(onglet) {
   // plus, ce volet ne se saisit pas.
   if (onglet.id === "onglet-facture") rechargerFacture();
   if (onglet.id === "onglet-hotel") rechargerHotel();
+  // Les reductions disent ce qu'elles retirent : c'est un calcul de
+  // facture, refait comme elle a chaque ouverture.
+  if (onglet.id === "onglet-tarifs") rechargerReductions();
 }
 
 onglets.forEach((onglet, i) => {
@@ -2342,6 +2345,8 @@ document.getElementById("tarifs-enregistrer").addEventListener("click", async ()
       p_repas_jour: lireRepasJour(),
     });
     await rechargerTarifs();
+    // Un prix qui change change ce qu'une reduction en pourcentage retire.
+    rechargerReductions();
     messageTarifs.className = "ok";
     messageTarifs.textContent =
       `${r.tarifs} prix enregistré(s), ${r.annexes} réglage(s) annexe(s)` +
@@ -2469,8 +2474,6 @@ function dessinerFacture(calcul) {
     );
   }
 
-  dessinerReductions(calcul);
-
   // --- la synthese : la forme de la depense, et non son montant
   dessinerSynthese(calcul);
 
@@ -2545,8 +2548,9 @@ async function rechargerFacture() {
 // --------------------------------------------------------- reductions
 //
 // Une reduction par personne, sur sa note entiere : en pourcentage ou en
-// euros. Elle se pose ICI et nulle part ailleurs -- aucune fonction
-// familiale n'ecrit ces colonnes. La famille la voit sur sa note.
+// euros. Elle se pose dans l'onglet Tarifs et nulle part ailleurs --
+// aucune fonction familiale n'ecrit ces colonnes. La famille la voit sur
+// sa note, l'organisateur dans le recapitulatif de la facture.
 //
 // LE MONTANT N'EST PAS GARDE. La base retient le type et la valeur ; ce
 // que cela retire se calcule a la lecture, comme le reste de la facture.
@@ -2673,7 +2677,20 @@ async function enregistrerReduction(personne, type, valeur) {
     messageReduction.textContent = type
       ? `Réduction de ${libelleReduction(personne)} pour ${personne.prenom}.`
       : `Plus de réduction pour ${personne.prenom}.`;
-    await rechargerFacture();
+    await rechargerReductions();
+  } catch (erreur) {
+    messageReduction.className = "erreur";
+    messageReduction.textContent = erreur.message;
+  }
+}
+
+// Ce que chacun se voit retirer depend de sa note : il faut les faits et
+// la grille, comme pour la facture. Le calcul est le meme, et seul ce
+// panneau en est dessine.
+async function rechargerReductions() {
+  try {
+    const faits = await rpc("admin_faits", { p_code: etat.code });
+    dessinerReductions(FACTURE.calculer(faits, tarifs));
   } catch (erreur) {
     messageReduction.className = "erreur";
     messageReduction.textContent = erreur.message;

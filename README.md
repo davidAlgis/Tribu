@@ -184,7 +184,7 @@ pas une miette de pension.
 
 ## Accorder une réduction à quelqu'un
 
-Dans l'onglet **Facture**, le panneau **Réductions accordées** : une
+Dans l'onglet **Tarifs**, sous la grille, le bloc **Réductions accordées** : une
 personne, **un pourcentage ou un montant en euros**, et c'est tout. Elle
 porte sur **toute la note** — hébergement, repas, taxe de séjour — et un
 montant plus gros que la note la ramène à zéro, jamais en dessous.
