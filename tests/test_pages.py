@@ -34,7 +34,13 @@ PAGES = {
     # de `presences.html`.
     "facture.html": "note.js",
     "admin.html": "admin.js",
+    # La page des comptes de tout le monde. Elle n'est ni dans le menu ni
+    # sur l'accueil : voir `test_la_page_des_comptes_reste_cachee`.
+    "comptes.html": "comptes.js",
 }
+
+# Ce que l'on n'atteint que par son adresse.
+CACHEE = "comptes.html"
 
 # La porte d'entrée : le code s'y donne, et l'on y choisit. Elle ne porte
 # pas le menu des autres — elle EST le menu.
@@ -131,6 +137,21 @@ def test_l_accueil_mene_partout(pages):
     html, _ = pages[ACCUEIL]
     for cible in FAMILIALES:
         assert f"./{cible}" in html, f"l'accueil ne mène pas à {cible}"
+
+
+def test_la_page_des_comptes_reste_cachee(pages):
+    """Elle montre la note de chacun : on n'y arrive qu'avec son adresse.
+    Un lien posé un jour par commodité — dans le menu, sur l'accueil —
+    l'annoncerait à toute la famille, et c'est précisément ce qu'on ne
+    veut pas. Elle-même ne porte pas le menu : elle n'est pas une étape."""
+    for page, (html, js) in pages.items():
+        if page == CACHEE:
+            continue
+        assert CACHEE not in html, f"{page} renvoie vers la page des comptes"
+        assert CACHEE not in js, f"{page} : son script renvoie vers la page des comptes"
+    html, _ = pages[CACHEE]
+    assert 'class="menu"' not in html
+    assert 'name="robots" content="noindex"' in html
 
 
 def test_l_accueil_ne_porte_pas_le_menu_des_autres(pages):

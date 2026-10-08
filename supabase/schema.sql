@@ -4265,14 +4265,21 @@ grant select on public.v_logements, public.v_tarifs, public.v_tarifs_annexes,
 --
 --  Les presences hors des bornes du sejour sont ecartees : elles ne se
 --  facturent pas, et le panneau du sejour les compte deja a part.
-create or replace function public.admin_faits(p_code text)
+-- LES FAITS DE TOUT LE MONDE, en une seule definition. Deux portes y
+-- menent : `admin_faits`, pour l'organisateur, et `comptes_charger`, pour
+-- la page des comptes que la famille n'atteint que par un lien (12f).
+-- Deux copies du meme `select` finiraient par ne plus compter la meme
+-- chose -- et la difference se lirait sur un total.
+--
+-- PAS DE `security definer`, PAS DE `grant` : seules les fonctions
+-- publiques qui verifient un code l'appellent.
+create or replace function private.faits_tous()
 returns jsonb
-language plpgsql stable security definer
+language plpgsql stable
 set search_path = private, pg_temp as $fn$
 declare
   r private.reglages;
 begin
-  perform private.verifier_code(p_code, 'admin');
   select * into r from private.reglages;
   if r.id is null then
     raise exception 'REGLAGES_ABSENTS' using errcode = 'P0001';
@@ -4325,6 +4332,15 @@ begin
         on g.id = c.logement_id and c.numero <= g.nombre
     ), '[]'::jsonb)
   );
+end $fn$;
+
+create or replace function public.admin_faits(p_code text)
+returns jsonb
+language plpgsql stable security definer
+set search_path = private, pg_temp as $fn$
+begin
+  perform private.verifier_code(p_code, 'admin');
+  return private.faits_tous();
 end $fn$;
 
 grant execute on function public.admin_faits(text) to anon;
@@ -4549,6 +4565,32 @@ begin
 end $fn$;
 
 grant execute on function public.facture_charger(text, uuid) to anon;
+
+-- ---- 12f. Les comptes de tout le monde, derriere un lien ----
+--
+--  La page `comptes.html` montre ce que l'onglet Facture de l'organisateur
+--  montre : la note de CHACUN. Elle n'est annoncee nulle part -- ni menu,
+--  ni accueil -- et ne s'ouvre qu'a qui en a recu l'adresse.
+--
+--  CE N'EST PAS UNE PROTECTION, ET IL FAUT LE SAVOIR. Le depot est public :
+--  la page et le nom de cette fonction s'y lisent, et le code famille
+--  suffit a l'appeler. Qui a le code et fouille le depot voit toutes les
+--  notes. C'est un choix assume de l'organisateur ; la regle « la note des
+--  autres reste reservee » de `facture_faits` vaut pour les pages
+--  annoncees, pas pour celle-ci.
+create or replace function public.comptes_charger(p_code text)
+returns jsonb
+language plpgsql stable security definer
+set search_path = private, pg_temp as $fn$
+begin
+  perform private.verifier_code(p_code);
+  return jsonb_build_object(
+    'faits', private.faits_tous(),
+    'grille', private.grille_tarifs()
+  );
+end $fn$;
+
+grant execute on function public.comptes_charger(text) to anon;
 
 -- ============================================================
 --  13. L'historique

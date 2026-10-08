@@ -1,0 +1,109 @@
+<!doctype html>
+<html lang="fr">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="robots" content="noindex">
+  <title>Tribu — les comptes</title>
+  <link rel="stylesheet" href="./style.css">
+</head>
+<body>
+<main>
+  <!--
+    CETTE PAGE N'EST ANNONCÉE NULLE PART. Ni le menu ni l'accueil n'y
+    mènent : elle ne s'ouvre qu'à qui en a reçu l'adresse. Elle montre la
+    note de CHACUN — ce que l'onglet Facture montre à l'organisateur — et
+    se lit avec le code famille.
+
+    Ce n'est pas un verrou : le dépôt est public, et qui le fouille la
+    trouve. Un test veille seulement à ce qu'aucune page n'y renvoie.
+  -->
+  <p><a href="./index.html">← Accueil</a></p>
+
+  <h1>Les comptes du séjour.</h1>
+  <p class="sous-titre">
+    Ce que chacun paie, famille par famille, et le détail nuit par nuit et
+    repas par repas.
+  </p>
+
+  <p id="fil" class="fil" role="status" hidden>
+    <strong>✓ Code accepté.</strong>
+  </p>
+
+  <!-- ---- Étape 1 : le code ----------------------------------- -->
+  <section id="etape-code">
+    <fieldset>
+      <legend>Le code de la famille</legend>
+      <form id="form-code">
+        <div>
+          <label for="code">Code</label>
+          <input type="text" id="code" required maxlength="40" autocomplete="off"
+                 spellcheck="false">
+        </div>
+        <button type="submit">Entrer</button>
+        <p id="message-code" role="status" aria-live="polite"></p>
+      </form>
+    </fieldset>
+  </section>
+
+  <!-- ---- Étape 2 : les comptes -------------------------------- -->
+  <section id="etape-comptes" hidden>
+    <!--
+      CE QUI REND LE TOTAL FAUX RESTE HORS DES PANNEAUX. Une alerte pliée
+      dans un tiroir n'alerte personne.
+    -->
+    <div id="alerte-facture"></div>
+    <p id="message" role="status" aria-live="polite"></p>
+
+    <!--
+      Les mêmes tableaux que l'onglet Facture de l'organisateur, dessinés
+      par le même module. Le récapitulatif est OUVERT, le reste plié.
+    -->
+    <details class="panneau-pliable" id="panneau-resume" open>
+      <summary>Ce que chacun paie <span id="compteur-facture" class="discret-inline"></span></summary>
+
+      <div id="facture-resume"></div>
+
+      <p class="note">
+        Une ligne par personne, et chaque famille ferme sur sa somme. La
+        colonne <strong>hébergement</strong> comprend la taxe de séjour. Les
+        colonnes <strong>par nuitée</strong> et <strong>par repas</strong>
+        ramènent chaque somme à ce qu'elle achète&nbsp;: elles ne
+        s'additionnent pas.
+      </p>
+    </details>
+
+    <details class="panneau-pliable" id="panneau-synthese">
+      <summary>En résumé <span id="compteur-synthese" class="discret-inline"></span></summary>
+
+      <div id="facture-synthese"></div>
+
+      <p class="note">
+        La <strong>forme</strong> de la dépense&nbsp;: un écart-type proche de
+        zéro dit que tout le monde paie à peu près la même chose&nbsp;; large,
+        il dit que la moyenne ne représente personne.
+      </p>
+    </details>
+
+    <details class="panneau-pliable" id="panneau-nuits">
+      <summary>Les nuits <span id="compteur-nuits" class="discret-inline"></span></summary>
+
+      <div id="facture-hebergement"></div>
+    </details>
+
+    <details class="panneau-pliable" id="panneau-repas">
+      <summary>Les repas hors pension <span id="compteur-repas" class="discret-inline"></span></summary>
+
+      <div id="facture-repas"></div>
+    </details>
+  </section>
+</main>
+
+<script src="./config.js"></script>
+<!-- `facture.js` calcule, `tableaux.js` met en page : les deux mêmes que
+     l'onglet Facture. `comptes.js` ne fait que les brancher. -->
+<script src="./facture.js"></script>
+<script src="./tableaux.js"></script>
+<script src="./comptes.js"></script>
+</body>
+</html>

@@ -182,6 +182,21 @@ compare au centime sur **trois** jeux de données, dont un qui n'exerce que
 ça : deux parts qui s'additionnent, un prix qui dépend de l'occupation, et
 pas une miette de pension.
 
+## Les comptes de tout le monde, derrière un lien
+
+[`comptes.html`](comptes.html) montre ce que montre l'onglet **Facture**
+d'`admin.html` — la note de **chacun**, la synthèse, les nuits, les repas —
+avec le **code famille**. Elle n'est **annoncée nulle part** : ni le menu
+ni l'accueil n'y mènent, et un test y veille. On y arrive en recevant son
+adresse, par exemple `https://<toi>.github.io/Tribu/comptes.html`.
+
+**Ce n'est pas un verrou, et il faut le savoir.** Le dépôt est public : la
+page et la fonction qu'elle appelle (`comptes_charger`) s'y lisent, et le
+code famille suffit. Qui a le code et fouille le dépôt voit toutes les
+notes. C'est un choix : la règle « la note des autres reste réservée » de
+[`facture.html`](facture.html) vaut pour les pages annoncées, pas pour
+celle-ci.
+
 ## Accorder une réduction à quelqu'un
 
 Dans l'onglet **Tarifs**, sous la grille, le bloc **Réductions accordées** : une

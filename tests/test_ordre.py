@@ -171,12 +171,15 @@ def test_toutes_les_listes_s_y_rangent():
         "couchage_charger",
         "admin_lister",
         "admin_couchages",
-        "admin_faits",
+        # `admin_faits` et `comptes_charger` passent tous deux par elle :
+        # c'est donc elle qui doit ranger.
+        "faits_tous",
     )
     sans = []
     for nom in listes:
         corps = re.search(
-            r"create or replace function public\." + nom + r"\(.*?\$fn\$(.*?)\$fn\$",
+            r"create or replace function (?:public|private)\." + nom
+            + r"\(.*?\$fn\$(.*?)\$fn\$",
             SCHEMA,
             re.DOTALL,
         )
