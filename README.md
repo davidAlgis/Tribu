@@ -850,6 +850,19 @@ refabrique un.
 Le code famille, lui, reste en clair et mémorisable : il circule de toute
 façon entre vingt personnes, et doit pouvoir se dicter au téléphone.
 
+**Après avoir modifié un script ou la feuille de style :**
+
+```bash
+python versionner.py
+```
+
+Chaque page charge ses scripts avec l'empreinte de leur contenu —
+`./admin.js?v=3f9c2a71b0`. Sans elle, un navigateur servait la page du jour
+avec le script de la veille, qu'il avait gardé en cache, et un onglet
+cassait sur un élément que la page n'avait plus (« compteurFacture is
+null »). L'adresse change maintenant avec le contenu : une page à jour va
+chercher le script à jour. Un test refuse une empreinte périmée.
+
 **Avant chaque push :**
 
 ```bash

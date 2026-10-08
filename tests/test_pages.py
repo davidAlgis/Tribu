@@ -322,7 +322,9 @@ def test_chaque_module_utilise_est_charge_par_la_page(page, pages):
     manquants = [
         nom
         for nom, fichier in MODULES.items()
-        if re.search(r"\b" + nom + r"\b", code) and f'src="./{fichier}"' not in html
+        if re.search(r"\b" + nom + r"\b", code)
+        # L'empreinte posee par `versionner.py` suit le nom du fichier.
+        and not re.search(r'src="\./' + re.escape(fichier) + r'(\?v=[0-9a-f]+)?"', html)
     ]
     assert manquants == [], f"{page} : {manquants} utilisé(s), script absent de la page"
 
@@ -373,3 +375,20 @@ def test_chaque_export_designe_un_tableau(pages):
         assert vises.count(zone) == 2, f"{zone} : il manque un format"
     for volet in re.findall(r'data-tout="([^"]+)"', html):
         assert volet in ids, f"{volet} : le bouton « tout exporter » vise un volet absent"
+
+
+def test_chaque_page_reclame_ses_scripts_a_jour():
+    """La page et ses scripts se mettent en cache séparément : sans
+    empreinte, un navigateur sert la page d'aujourd'hui avec le script
+    d'hier, et un onglet casse sur un élément que la page n'a plus —
+    « compteurFacture is null ». `./admin.js?v=<empreinte>` change d'adresse
+    dès que le script change, et la page à jour va chercher le script à jour.
+
+    Un script modifié sans relancer `python versionner.py` échoue ici."""
+    import versionner
+
+    assert versionner.perimees() == [], "lancer `python versionner.py`"
+    for page in versionner.pages():
+        html = page.read_text(encoding="utf-8")
+        nues = re.findall(r'(?:src|href)="\./([\w.-]+\.(?:js|css))"', html)
+        assert nues == [], f"{page.name} : sans empreinte : {nues}"
