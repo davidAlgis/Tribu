@@ -297,6 +297,11 @@ alter table private.participants
 alter table private.participants
   add column if not exists sans_gluten boolean not null default false;
 
+-- REMPLACEES PAR LES AJUSTEMENTS (section 12b bis) : ces deux colonnes
+-- restent parce que les jalons deja pris les portent, et se vident au
+-- recollage (`private.reductions_reprendre`). Ce qui suit dit ce qu'elles
+-- etaient.
+--
 -- Une reduction accordee par l'organisateur, sur TOUTE la note de la
 -- personne : un etudiant a qui l'on fait cadeau d'un quart, un oncle qui
 -- a avance cinquante euros. Deux faits, et non un montant calcule : la
@@ -1674,6 +1679,7 @@ language plpgsql security definer
 set search_path = private, pg_temp as $fn$
 declare
   nb integer;
+  couchages_vises jsonb;  -- les ajustements poses sur un couchage
 begin
   perform private.verifier_code(p_code, 'admin');
   -- Le premier changement de la semaine emporte une copie de l'avant.
@@ -1696,8 +1702,17 @@ begin
   --
   -- De toute facon, reamorcer la liste donne de nouveaux identifiants :
   -- tout ce qui designait les anciens ne veut plus rien dire.
+  --
+  -- Les ajustements en sont : ceux d'une personne partent avec elle. Ceux
+  -- d'un couchage ne designent personne, et reviennent.
+  select jsonb_agg(to_jsonb(x)) into couchages_vises
+    from private.ajustements x where x.participant_id is null;
+
   truncate table public.presences, public.voeux, public.refus_lieu,
-                 private.couchages, private.participants;
+                 private.couchages, private.ajustements, private.participants;
+
+  insert into private.ajustements
+  select x.* from jsonb_populate_recordset(null::private.ajustements, couchages_vises) x;
 
   -- Les identifiants viennent du script : cela permet de poser parents et
   -- conjoints dans le meme insert. Les contraintes de cle etrangere n'etant
@@ -2180,52 +2195,6 @@ begin
 end $fn$;
 
 grant execute on function public.admin_regime(text, uuid, jsonb) to anon;
-
--- ---- 8l. Une reduction sur la note de quelqu'un ----
---
---  L'ORGANISATEUR SEUL. Aucune fonction familiale n'ecrit ces colonnes :
---  la famille voit sa reduction sur sa note, elle ne se l'accorde pas.
---
---  `p_type` nul retire la reduction. La contrainte de la table tient la
---  regle ; on la redit ici pour rendre une erreur qu'une page sait lire,
---  plutot que le message brut de Postgres.
-create or replace function public.admin_reduction(
-  p_code   text,
-  p_id     uuid,
-  p_type   text,
-  p_valeur numeric default null
-)
-returns jsonb
-language plpgsql security definer
-set search_path = private, pg_temp as $fn$
-begin
-  perform private.verifier_code(p_code, 'admin');
-  perform private.geste('Réduction');
-
-  if not exists (select 1 from private.participants x where x.id = p_id) then
-    raise exception 'INCONNU' using errcode = 'P0001';
-  end if;
-
-  if p_type is not null and (
-       p_type not in ('pourcentage', 'euros')
-       or p_valeur is null or p_valeur <= 0
-       or (p_type = 'pourcentage' and p_valeur > 100)) then
-    raise exception 'REDUCTION_INVALIDE' using errcode = 'P0001';
-  end if;
-
-  update private.participants x
-     set reduction_type   = p_type,
-         reduction_valeur = case when p_type is null then null
-                                 else round(p_valeur, 2) end
-   where x.id = p_id;
-
-  return (select jsonb_build_object(
-                   'reduction_type', x.reduction_type,
-                   'reduction_valeur', x.reduction_valeur)
-            from private.participants x where x.id = p_id);
-end $fn$;
-
-grant execute on function public.admin_reduction(text, uuid, text, numeric) to anon;
 
 -- ---- 8m. Les activites, cote organisateur ----
 --
@@ -4250,6 +4219,201 @@ grant select on public.v_logements, public.v_tarifs, public.v_tarifs_annexes,
   to service_role;
 
 
+-- ---- 12b bis. Les supplements et reductions specifiques ----
+--
+--  Ce que l'organisateur ajoute ou retire A LA MAIN, au-dela de ce que la
+--  grille des prix calcule : un etudiant a qui l'on fait cadeau d'un quart,
+--  le menage du gite 2 a repartir entre ses occupants, une nuit offerte.
+--
+--  UNE LIGNE PAR AJUSTEMENT, et chacun dit cinq choses :
+--
+--    sens         'reduction' ou 'supplement'
+--    mode/valeur  un pourcentage, ou un montant en euros
+--    cible        UNE PERSONNE, ou UNE CHAMBRE / UN GITE precis -- l'exemplaire
+--                 du plan (« Gîte 2 »), pas le type
+--    jour         un jour du sejour, ou nul : tout le sejour
+--    description  ce qu'on lira en survolant la case, et sur la ligne du
+--                 detail envoye a l'hotel
+--
+--  CE QUE CELA RETIRE OU AJOUTE NE S'ECRIT PAS : la base garde les faits,
+--  la facture applique (`facture.js`, `engine/pricing.py`). « 10 % » d'une
+--  note qui change suit la note.
+--
+--  `on delete cascade` des deux cotes : une personne retiree, un couchage
+--  retire de l'inventaire emportent leurs ajustements -- ils ne
+--  designeraient plus rien.
+--
+create table if not exists private.ajustements (
+  id             uuid primary key default gen_random_uuid(),
+  sens           text not null,
+  mode           text not null,
+  valeur         numeric(10, 2) not null,
+  participant_id uuid references private.participants(id) on delete cascade,
+  logement_id    uuid references private.logements(id) on delete cascade,
+  numero         smallint,
+  jour           date,
+  description    text,
+  cree_le        timestamptz not null default now()
+);
+
+alter table private.ajustements drop constraint if exists ajustements_valide;
+alter table private.ajustements add constraint ajustements_valide check (
+  sens in ('reduction', 'supplement')
+  and mode in ('pourcentage', 'euros')
+  and valeur > 0
+  and (mode <> 'pourcentage' or valeur <= case when sens = 'reduction' then 100 else 1000 end)
+  -- Une cible, et une seule : une personne, ou un exemplaire de couchage.
+  and ((participant_id is not null and logement_id is null and numero is null)
+       or (participant_id is null and logement_id is not null
+           and numero between 1 and 200))
+  and (description is null or length(description) <= 200)
+);
+
+revoke all on private.ajustements from anon, authenticated;
+
+-- Pour l'export : la cle secrete seule, comme le reste.
+create or replace view public.v_ajustements as
+  select id, sens, mode, valeur, participant_id, logement_id, numero, jour, description
+    from private.ajustements;
+
+revoke all on public.v_ajustements from anon, authenticated;
+grant select on public.v_ajustements to service_role;
+
+-- Ce que les pages recoivent, dans l'ordre ou la facture les applique :
+-- les supplements d'abord, puis les reductions -- une reduction se plafonne
+-- a ce qui reste du, et ce qui reste du comprend les supplements.
+create or replace function private.ajustements_liste()
+returns jsonb language sql stable
+set search_path = private, pg_temp as $fn$
+  select coalesce(jsonb_agg(jsonb_build_object(
+           'id', a.id,
+           'sens', a.sens,
+           'mode', a.mode,
+           'valeur', a.valeur,
+           'participant_id', a.participant_id,
+           'logement_id', a.logement_id,
+           'numero', a.numero,
+           'jour', a.jour,
+           'description', a.description
+         ) order by (a.sens = 'reduction'), a.id), '[]'::jsonb)
+    from private.ajustements a
+$fn$;
+
+-- L'ORGANISATEUR SEUL en pose et en retire. Aucune fonction familiale
+-- n'ecrit cette table.
+create or replace function public.admin_ajustement_ajouter(
+  p_code        text,
+  p_sens        text,
+  p_mode        text,
+  p_valeur      numeric,
+  p_participant uuid default null,
+  p_logement    uuid default null,
+  p_numero      integer default null,
+  p_jour        date default null,
+  p_description text default null
+)
+returns jsonb
+language plpgsql security definer
+set search_path = private, pg_temp as $fn$
+declare
+  reg     private.reglages;
+  type_lu private.logements;
+  pose    uuid;
+begin
+  perform private.verifier_code(p_code, 'admin');
+  perform private.geste('Supplément ou réduction');
+
+  if p_sens is null or p_sens not in ('reduction', 'supplement')
+     or p_mode is null or p_mode not in ('pourcentage', 'euros')
+     or p_valeur is null or p_valeur <= 0
+     or (p_mode = 'pourcentage'
+         and p_valeur > case when p_sens = 'reduction' then 100 else 1000 end) then
+    raise exception 'AJUSTEMENT_INVALIDE' using errcode = 'P0001';
+  end if;
+
+  -- Une cible, et une seule.
+  if (p_participant is null) = (p_logement is null) then
+    raise exception 'CIBLE_INVALIDE' using errcode = 'P0001';
+  end if;
+  if p_participant is not null
+     and not exists (select 1 from private.participants x where x.id = p_participant) then
+    raise exception 'INCONNU' using errcode = 'P0001';
+  end if;
+  if p_logement is not null then
+    select * into type_lu from private.logements g where g.id = p_logement;
+    if type_lu.id is null or p_numero is null or p_numero not between 1 and type_lu.nombre then
+      raise exception 'UNITE_INCONNUE' using errcode = 'P0001';
+    end if;
+  end if;
+
+  select * into reg from private.reglages;
+  if p_jour is not null and (reg.id is null or p_jour not between reg.date_debut and reg.date_fin) then
+    raise exception 'JOUR_HORS_SEJOUR' using errcode = 'P0001';
+  end if;
+
+  insert into private.ajustements
+    (sens, mode, valeur, participant_id, logement_id, numero, jour, description)
+  values (p_sens, p_mode, round(p_valeur, 2), p_participant, p_logement,
+          case when p_logement is null then null else p_numero end,
+          p_jour, nullif(left(trim(coalesce(p_description, '')), 200), ''))
+  returning id into pose;
+
+  return jsonb_build_object('id', pose);
+end $fn$;
+
+grant execute on function public.admin_ajustement_ajouter(
+  text, text, text, numeric, uuid, uuid, integer, date, text) to anon;
+
+create or replace function public.admin_ajustement_retirer(p_code text, p_id uuid)
+returns jsonb
+language plpgsql security definer
+set search_path = private, pg_temp as $fn$
+begin
+  perform private.verifier_code(p_code, 'admin');
+  perform private.geste('Supplément ou réduction retiré');
+
+  delete from private.ajustements a where a.id = p_id;
+  if not found then
+    raise exception 'INCONNU' using errcode = 'P0001';
+  end if;
+  return jsonb_build_object('retire', true);
+end $fn$;
+
+grant execute on function public.admin_ajustement_retirer(text, uuid) to anon;
+
+-- L'ANCIENNE REDUCTION PAR PERSONNE devient un ajustement : une reduction,
+-- sur tout le sejour, avec la personne pour cible. Les deux colonnes de
+-- `participants` restent -- les jalons deja pris les portent -- et se
+-- vident une fois reprises. La restauration d'une copie ancienne repasse
+-- par ici.
+--
+-- SANS ETIQUETTE NI JALON : ses appelants s'en chargent, comme pour
+-- `private.vue_mer_fondre`.
+create or replace function private.reductions_reprendre()
+returns integer
+language plpgsql
+set search_path = private, pg_temp as $fn$
+declare
+  reprises integer;
+begin
+  insert into private.ajustements (sens, mode, valeur, participant_id)
+  select 'reduction', p.reduction_type, p.reduction_valeur, p.id
+    from private.participants p
+   where p.reduction_type is not null and p.reduction_valeur > 0;
+  get diagnostics reprises = row_count;
+
+  update private.participants p
+     set reduction_type = null, reduction_valeur = null
+   where p.reduction_type is not null or p.reduction_valeur is not null;
+
+  return reprises;
+end $fn$;
+
+-- L'ancienne porte d'entree. Elle ecrivait des colonnes que plus rien ne
+-- lit : la garder laisserait une page en cache poser des reductions qui ne
+-- compteraient pas.
+drop function if exists public.admin_reduction(text, uuid, text, numeric);
+
 -- ---- 12c. Les faits, pour qui veut recalculer ----
 --
 --  La page montre ce que chacun doit. Pour cela il lui faut savoir qui
@@ -4285,6 +4449,9 @@ begin
   end if;
 
   return jsonb_build_object(
+    -- Les supplements et reductions specifiques : tous, comme le reste.
+    'ajustements', private.ajustements_liste(),
+
     'personnes', coalesce((
       select jsonb_agg(jsonb_build_object(
                'id', p.id,
@@ -4450,8 +4617,31 @@ set search_path = private, pg_temp as $fn$
       join unites u
         on u.jour = c.jour and u.logement_id = c.logement_id and u.numero = c.numero
      where not exists (select 1 from miens m where m.id = c.participant_id)
+  ),
+  -- Les chambres et gites qu'un ajustement vise, et ou l'un des miens a
+  -- dormi. Un montant pose sur un gite se partage entre TOUTES ses nuitees
+  -- d'occupant : pour calculer sa part, il faut savoir combien elles sont
+  -- -- qui dort ou, ce que le plan montre deja a toute la famille. Rien de
+  -- plus : ni age, ni repas, ni ce que paient les autres.
+  cibles as (
+    select distinct a.logement_id, a.numero
+      from private.ajustements a
+      join private.couchages c on c.logement_id = a.logement_id and c.numero = a.numero
+      join miens m on m.id = c.participant_id
   )
   select jsonb_build_object(
+    -- Les ajustements qui me concernent : ceux qui visent l'un des miens,
+    -- et ceux d'un couchage ou l'un des miens a dormi. Ceux des autres ne
+    -- regardent qu'eux.
+    'ajustements', coalesce((
+      select jsonb_agg(t.x order by t.n)
+        from jsonb_array_elements(private.ajustements_liste()) with ordinality as t(x, n)
+       where exists (select 1 from miens m where m.id = (t.x->>'participant_id')::uuid)
+          or exists (select 1 from cibles k
+                      where k.logement_id = (t.x->>'logement_id')::uuid
+                        and k.numero = (t.x->>'numero')::smallint)
+    ), '[]'::jsonb),
+
     -- Seulement les miens : un co-occupant n'a meme pas de ligne ici, et
     -- le calcul s'en passe -- il ne lui demande que d'exister.
     'personnes', coalesce((
@@ -4527,6 +4717,11 @@ set search_path = private, pg_temp as $fn$
             join private.logements g on g.id = c.logement_id and c.numero <= g.nombre
           union
           select v.participant_id, v.jour, v.logement_id, v.numero from voisins v
+          union
+          select c.participant_id, c.jour, c.logement_id, c.numero
+            from private.couchages c
+            join cibles k on k.logement_id = c.logement_id and k.numero = c.numero
+            join private.logements g on g.id = c.logement_id and c.numero <= g.nombre
         ) y
     ), '[]'::jsonb)
   )
@@ -4708,7 +4903,9 @@ set search_path = private, pg_temp as $fn$
     'activites', coalesce(
       (select jsonb_agg(to_jsonb(a) order by a.id) from private.activites a), '[]'::jsonb),
     'envies', coalesce(
-      (select jsonb_agg(to_jsonb(e) order by e.participant_id, e.activite_id) from private.envies e), '[]'::jsonb)
+      (select jsonb_agg(to_jsonb(e) order by e.participant_id, e.activite_id) from private.envies e), '[]'::jsonb),
+    'ajustements', coalesce(
+      (select jsonb_agg(to_jsonb(a) order by a.id) from private.ajustements a), '[]'::jsonb)
   )
 $fn$;
 
@@ -4750,7 +4947,8 @@ language sql immutable as $fn$
     ('private.couchages',          array['id'],                       4),
     ('public.voeux',               array['id'],                       4),
     ('public.refus_lieu',          array['id'],                       4),
-    ('private.envies',             array['id'],                       4)
+    ('private.envies',             array['id'],                       4),
+    ('private.ajustements',        array['id'],                       4)
   ) as t(nom, cles, rang)
 $fn$;
 
@@ -5437,9 +5635,9 @@ begin
   select jsonb_agg(to_jsonb(x)) into tarifs_gardes from private.tarifs x;
 
   truncate table public.presences, public.voeux, public.refus_lieu,
-                 private.couchages, private.tarifs, private.logements,
-                 private.envies, private.activites, private.options_date,
-                 private.participants;
+                 private.couchages, private.tarifs, private.ajustements,
+                 private.logements, private.envies, private.activites,
+                 private.options_date, private.participants;
 
   -- Une copie d'avant les reductions n'en porte pas : `nullif` rend nul ce
   -- qui manque, et la personne revient sans reduction -- ce qu'elle etait.
@@ -5631,6 +5829,25 @@ begin
     from jsonb_populate_recordset(null::private.tarifs, tarifs_gardes) x
    where exists (select 1 from private.logements g where g.id = x.logement_id);
 
+  -- Seuls reviennent ceux dont la cible existe encore.
+  --
+  -- Une copie d'avant les ajustements n'en porte pas, et ce silence-la
+  -- n'est PAS celui des activites : ce qu'ils disent, elle le porte
+  -- autrement -- dans les colonnes de reduction des participants, que
+  -- `reductions_reprendre` convertit juste apres. Garder ceux d'aujourd'hui
+  -- en plus compterait deux fois la meme reduction.
+  insert into private.ajustements
+  select x.*
+    from jsonb_populate_recordset(null::private.ajustements, c->'ajustements') x
+   where (x.participant_id is not null
+          and exists (select 1 from private.participants p where p.id = x.participant_id))
+      or (x.logement_id is not null
+          and exists (select 1 from private.logements g where g.id = x.logement_id));
+
+  -- Une copie d'avant les ajustements porte encore les reductions par
+  -- personne : on les reprend, comme au recollage.
+  perform private.reductions_reprendre();
+
   perform private.jalons_purger();
 
   -- Une copie d'avant la fin de la vue mer en ramene : on la fond aussitot,
@@ -5722,6 +5939,12 @@ begin
              numero = least(200, c.numero + classe.nombre)
        where c.logement_id = mer.id;
 
+      -- Un supplement ou une reduction pose sur l'une d'elles la suit.
+      update private.ajustements a
+         set logement_id = classe.id,
+             numero = least(200, a.numero + classe.nombre)
+       where a.logement_id = mer.id;
+
       update public.presences pr
          set logement_id = classe.id
        where pr.logement_id = mer.id;
@@ -5760,6 +5983,19 @@ begin
   end if;
 end $mig$;
 
+
+-- Les reductions par personne d'avant les ajustements, reprises une fois.
+-- Meme geste que pour la vue mer : un jalon, puis une etiquette.
+do $mig$
+begin
+  if exists (select 1 from private.participants p where p.reduction_type is not null) then
+    insert into private.jalons (semaine, motif, contenu)
+    values (date_trunc('week', now() at time zone 'Europe/Paris')::date,
+            'manuelle', private.etat_courant());
+    perform private.geste('Réductions reprises en ajustements');
+    perform private.reductions_reprendre();
+  end if;
+end $mig$;
 
 -- ============================================================
 --  14. Etat de la base apres execution

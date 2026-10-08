@@ -197,29 +197,54 @@ notes. C'est un choix : la règle « la note des autres reste réservée » de
 [`facture.html`](facture.html) vaut pour les pages annoncées, pas pour
 celle-ci.
 
-## Accorder une réduction à quelqu'un
+## Suppléments et réductions spécifiques
 
-Dans l'onglet **Tarifs**, sous la grille, le bloc **Réductions accordées** : une
-personne, **un pourcentage ou un montant en euros**, et c'est tout. Elle
-porte sur **toute la note** — hébergement, repas, taxe de séjour — et un
-montant plus gros que la note la ramène à zéro, jamais en dessous.
+Dans l'onglet **Tarifs**, sous la grille, le bloc **Suppléments / réductions
+spécifiques** : ce que l'organisateur ajoute ou retire **à la main**, au-delà
+de ce que la grille calcule. Chaque ligne dit :
 
-**L'organisateur seul la pose.** Aucune fonction familiale n'écrit ces
-colonnes ; la famille la voit sur sa propre note, dans une colonne
-« Réduction » écrite en négatif — sans quoi le total ne serait plus la
-somme de ce qui le précède.
+| | |
+|---|---|
+| **nature** | une réduction, ou un supplément |
+| **valeur** | un pourcentage, ou un montant en euros |
+| **appliqué à** | **une personne**, ou **une chambre / un gîte précis** — l'exemplaire du plan, « Gîte 2 », pas le type |
+| **période** | **tout le séjour** (par défaut), ou un jour |
+| **description** | facultative ; elle se lit en survolant la case |
 
-**La base garde le type et la valeur, pas le montant.** « 10 % » d'une
-note qui change suit la note. Les deux colonnes sont nulles par défaut :
-recoller le schéma sur une base remplie ne change aucune facture.
+**Sur une personne**, il porte sur toute sa note — hébergement, repas, taxe
+de séjour — ou, pour un jour, sur la nuit qui commence ce soir-là, sa taxe
+et les repas du jour.
 
-**L'hôtel ne la voit pas.** Le détail par prestation totalise ce que
-l'hôtel facture ; la réduction est une affaire de famille, comme la
-ligne négative « Reduction » qui la porte dans l'export Excel.
+**Sur une chambre ou un gîte**, un pourcentage porte sur ce que chaque
+occupant y paie pour ses nuits ; un montant se partage **à parts égales
+entre toutes les nuitées d'occupant** de la période — trois personnes deux
+nuits, six parts. Il suit donc le plan de couchage, et une chambre vide ne
+coûte rien à personne : la ligne l'affiche à 0.
 
-Le pourcentage se calcule **en centimes entiers**, le demi-centime vers
-le haut : 12,5 % de 180,20 € tombait d'un centime différent en Python et
-en JavaScript, et le test de comparaison l'a vu.
+**Les suppléments passent d'abord, les réductions ensuite** : une réduction
+ne rend jamais d'argent, elle s'arrête à ce que la personne doit encore. Un
+montant retiré sur un seul jour s'arrête à ce que coûte ce jour.
+
+**Où ils se lisent.** Le récapitulatif de la facture — onglet Facture, page
+des comptes, note de chaque famille — gagne une colonne **Suppl. / réd.**,
+signée, dont le survol détaille chaque ligne. Le détail du séjour (onglet
+Hôtel) leur donne **une ligne chacun** : « Réduction — Alice — tout
+le séjour — étudiante ». Son total reste celui de la facture.
+
+**Ce que voit une famille.** Les siens, et ceux d'une chambre ou d'un gîte où
+l'un des siens a dormi — avec, pour diviser un montant, qui d'autre y dort,
+ce que le plan montre déjà. Jamais ceux des autres.
+
+**La base garde la règle, pas le montant.** « 10 % » d'une note qui change
+suit la note. Les pourcentages et les partages se calculent **en centimes
+entiers**, le demi-centime vers le haut : 12,5 % de 180,20 € tombait d'un
+centime différent en Python et en JavaScript, et le test de comparaison l'a
+vu.
+
+**Les réductions d'avant** — une par personne, sur toute la note — sont
+reprises au recollage du schéma : chacune devient une ligne, réduction, tout
+le séjour. Un jalon est pris juste avant, et la reprise entre dans
+l'historique comme un seul geste.
 
 ## Les activités
 

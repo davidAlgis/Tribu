@@ -280,26 +280,107 @@ window.FACTURE = (function () {
     return tout;
   }
 
-  // Ce que l'organisateur retire de la note d'une personne. Le meme calcul
-  // que `_reduction` dans `engine/pricing.py`.
+  // ------------------------------------------- supplements et reductions
   //
-  // Un montant en euros ne depasse jamais la note : une reduction ne rend
-  // pas d'argent.
+  // Ce que l'organisateur ajoute ou retire a la main (onglet Tarifs). Le
+  // meme calcul que `_facturer_ajustements` dans `engine/pricing.py`, et le
+  // test de comparaison les veut d'accord au centime.
   //
   // LE POURCENTAGE SE CALCULE EN CENTIMES ENTIERS. 12,5 % de 180,20 font
   // 22,525 : en virgule flottante, JavaScript arrondit au-dessus et Python
   // au pair -- un centime d'ecart, que le test de comparaison a attrape.
   // En entiers, le demi-centime monte des deux cotes, sans ambiguite.
-  function reductionDe(personne, total) {
-    const valeur = Number(personne && personne.reduction_valeur) || 0;
-    if (!personne || valeur <= 0 || total <= 0) return 0;
-    if (personne.reduction_type === "pourcentage") {
-      const centimes = Math.round(total * 100);
-      const centiemes = Math.round(Math.min(valeur, 100) * 100);
-      return Math.floor((centimes * centiemes + 5000) / 10000) / 100;
+  function pourcent(base, valeur) {
+    if (base <= 0) return 0;
+    const centimes = Math.round(base * 100);
+    const centiemes = Math.round(valeur * 100);
+    return Math.floor((centimes * centiemes + 5000) / 10000) / 100;
+  }
+
+  // Un montant partage en parts egales, en centimes entiers : les premiers
+  // recoivent le centime qui reste. `parts`, plus haut, arrondit en euros
+  // -- et l'arrondi au pair de Python s'en ecarterait sur un demi-centime.
+  function partager(total, combien) {
+    const centimes = Math.round(total * 100);
+    const part = Math.floor(centimes / combien);
+    const reste = centimes - part * combien;
+    return Array.from({ length: combien }, (_, i) => (part + (i < reste ? 1 : 0)) / 100);
+  }
+
+  // Les supplements d'abord, puis les reductions : une reduction se
+  // plafonne a ce qui reste du, et ce qui reste du comprend les
+  // supplements. A sens egal, l'ordre des identifiants -- celui de la base.
+  function ordonnerAjustements(liste) {
+    return [...liste].sort(
+      (a, b) =>
+        (a.sens === "reduction") - (b.sens === "reduction") ||
+        (String(a.id) < String(b.id) ? -1 : String(a.id) > String(b.id) ? 1 : 0)
+    );
+  }
+
+  // Les exemplaires de l'inventaire, nommes comme le plan les nomme :
+  // « Chambre 3 », « Gîte 1 ». Le rang se compte par categorie, dans
+  // l'ordre ou la base les range -- categorie, puis capacite.
+  function unites(logements) {
+    const tries = [...(logements || [])].sort(
+      (a, b) =>
+        (a.categorie < b.categorie ? -1 : a.categorie > b.categorie ? 1 : 0) ||
+        Number(!!a.vue_mer) - Number(!!b.vue_mer) ||
+        a.capacite - b.capacite
+    );
+    const rangs = {};
+    const tout = [];
+    for (const l of tries) {
+      for (let numero = 1; numero <= (Number(l.nombre) || 0); numero += 1) {
+        rangs[l.categorie] = (rangs[l.categorie] || 0) + 1;
+        const quoi = NOMS_COUCHAGE[l.categorie] || l.categorie;
+        tout.push({
+          logement_id: l.id,
+          numero,
+          categorie: l.categorie,
+          capacite: l.capacite,
+          nom: `${quoi.charAt(0).toUpperCase()}${quoi.slice(1)} ${rangs[l.categorie]}`,
+        });
+      }
     }
-    if (personne.reduction_type === "euros") return arrondir(Math.min(valeur, total));
-    return 0;
+    return tout;
+  }
+
+  // « Réduction — Alice — tout le séjour — étudiante » : ce
+  // qu'on lit sur la ligne du detail, et en survolant la case.
+  function libelleAjustement(a, personnes, nomsUnites) {
+    let cible;
+    if (a.participant_id) {
+      const p = personnes.get(a.participant_id);
+      cible = !p
+        ? "une personne"
+        : p.famille && p.famille !== p.prenom
+          ? `${p.prenom} (${p.famille})`
+          : p.prenom;
+    } else {
+      cible = nomsUnites.get(`${a.logement_id}#${a.numero}`) || "un couchage retiré";
+    }
+    const periode = !a.jour
+      ? "tout le séjour"
+      : a.participant_id
+        ? `le ${afficherJourCourt(a.jour)}`
+        : `nuit du ${afficherJourCourt(a.jour)}`;
+    return [
+      a.sens === "reduction" ? "Réduction" : "Supplément",
+      cible,
+      periode,
+      ...(a.description ? [a.description] : []),
+    ].join(" — ");
+  }
+
+  // Ce qu'une personne doit pour un jour : la nuit qui commence ce soir-la,
+  // sa taxe, et les repas du jour.
+  function baseDuJour(ligne, jour) {
+    let somme = (ligne.parNuit[jour] || 0) + (ligne.parTaxe[jour] || 0);
+    for (const [cle, montant] of Object.entries(ligne.parRepas)) {
+      if (cle.startsWith(`${jour}|`)) somme += montant;
+    }
+    return arrondir(somme);
   }
 
   function calculer(faits, brut) {
@@ -324,6 +405,11 @@ window.FACTURE = (function () {
           // une deuxieme occasion de se tromper.
           parNuit: {},
           parRepas: {},
+          parTaxe: {},
+          // Les supplements (positifs) et reductions (negatifs) qui la
+          // touchent, et leur somme.
+          ajustement: 0,
+          ajustements: [],
         });
       }
       return compte.get(id);
@@ -491,7 +577,9 @@ window.FACTURE = (function () {
       for (const nuitee of nuitees) {
         const personne = personnes.get(nuitee.personne_id) || {};
         if (personne.categorie_age !== "adulte") continue;
-        pour(nuitee.personne_id).taxe = arrondir(pour(nuitee.personne_id).taxe + taxe);
+        const compteTaxe = pour(nuitee.personne_id);
+        compteTaxe.taxe = arrondir(compteTaxe.taxe + taxe);
+        compteTaxe.parTaxe[nuitee.jour] = arrondir((compteTaxe.parTaxe[nuitee.jour] || 0) + taxe);
         const t = prester("3taxe", {
           ordre: 3,
           libelle: "Taxe de séjour — adultes",
@@ -542,14 +630,115 @@ window.FACTURE = (function () {
       r.jours.add(repas.jour);
     }
 
-    // LA REDUCTION VIENT EN DERNIER, sur la note entiere : c'est ce que
-    // l'organisateur accorde a une personne, pas ce que l'hotel remise sur
-    // une prestation. Le detail par prestation -- celui qu'on pose a cote
-    // du contrat -- ne la voit donc pas : il totalise `brut`, pas `total`.
+    // --- les supplements et reductions specifiques, EN DERNIER : ils
+    // portent sur ce que la grille a deja chiffre.
+    //
+    // Une PERSONNE : sa note entiere, ou celle d'un jour -- la nuit qui
+    // commence ce soir-la, sa taxe, les repas du jour.
+    //
+    // Une CHAMBRE ou un GITE : un pourcentage porte sur ce que chaque
+    // occupant y paie pour ses nuits ; un montant se partage a parts egales
+    // entre toutes les nuitees d'occupant de la periode -- trois personnes
+    // deux nuits, six parts. Le partage ne demande que de savoir qui dort
+    // la, ce que le plan montre deja a toute la famille.
+    //
+    // Une reduction ne rend jamais d'argent : elle se plafonne a ce qui
+    // reste du par la personne. Chacun fait sa ligne au detail du sejour,
+    // pour que le total du detail reste celui de la facture.
+    const courant = new Map();
+    for (const [id, l] of compte) courant.set(id, arrondir(l.hebergement + l.repas + l.taxe));
+    const nomsUnites = new Map(
+      unites([...grille.logements.values()]).map((u) => [`${u.logement_id}#${u.numero}`, u.nom])
+    );
+    let supplements = 0;
+    let reductions = 0;
+    // Ce que chaque regle fait reellement, par identifiant : le panneau de
+    // l'organisateur le montre a cote de la regle.
+    const effets = {};
+
+    for (const a of ordonnerAjustements(faits.ajustements || [])) {
+      const reduction = a.sens === "reduction";
+      const valeur = Number(a.valeur) || 0;
+      const libelle = libelleAjustement(a, personnes, nomsUnites);
+      const dus = new Map();
+
+      if (a.participant_id) {
+        const l = compte.get(a.participant_id);
+        const base = !l
+          ? 0
+          : a.jour
+            ? baseDuJour(l, a.jour)
+            : arrondir(l.hebergement + l.repas + l.taxe);
+        // Un montant retire sur UN JOUR s'arrete a ce que coute ce jour ;
+        // sur tout le sejour, a ce que la personne doit encore, plus bas.
+        const m =
+          a.mode === "pourcentage"
+            ? pourcent(base, valeur)
+            : reduction && a.jour
+              ? Math.min(arrondir(valeur), base)
+              : arrondir(valeur);
+        if (m > 0) dus.set(a.participant_id, m);
+      } else {
+        const nuits = [...grille.couchages.values()]
+          .filter(
+            (c) =>
+              c.logement_id === a.logement_id &&
+              Number(c.numero) === Number(a.numero) &&
+              (!a.jour || c.jour === a.jour)
+          )
+          .map((c) => ({ personne_id: c.participant_id || c.personne_id, jour: c.jour }))
+          .sort(
+            (x, y) =>
+              (x.jour < y.jour ? -1 : x.jour > y.jour ? 1 : 0) ||
+              (x.personne_id < y.personne_id ? -1 : x.personne_id > y.personne_id ? 1 : 0)
+          );
+        if (a.mode === "pourcentage") {
+          const bases = new Map();
+          for (const n of nuits) {
+            const l = compte.get(n.personne_id);
+            if (!l) continue;
+            bases.set(n.personne_id, arrondir((bases.get(n.personne_id) || 0) + (l.parNuit[n.jour] || 0)));
+          }
+          for (const [id, base] of bases) {
+            const m = pourcent(base, valeur);
+            if (m > 0) dus.set(id, m);
+          }
+        } else if (nuits.length) {
+          const morceaux = partager(valeur, nuits.length);
+          nuits.forEach((n, i) => {
+            dus.set(n.personne_id, arrondir((dus.get(n.personne_id) || 0) + morceaux[i]));
+          });
+        }
+      }
+
+      let effet = 0;
+      for (const id of [...dus.keys()].sort()) {
+        const avant = courant.has(id) ? courant.get(id) : 0;
+        const m = reduction ? Math.min(dus.get(id), avant) : dus.get(id);
+        if (m <= 0) continue;
+        const signe = reduction ? -m : m;
+        courant.set(id, arrondir(avant + signe));
+        const ligne = pour(id);
+        ligne.ajustement = arrondir(ligne.ajustement + signe);
+        ligne.ajustements.push({ libelle, description: a.description || "", montant: signe });
+        effet = arrondir(effet + signe);
+      }
+      effets[a.id] = effet;
+      if (reduction) reductions = arrondir(reductions - effet);
+      else supplements = arrondir(supplements + effet);
+
+      // Une ligne au detail, meme quand elle ne touche personne : c'est
+      // ainsi qu'on voit qu'un gite vise est reste vide.
+      const ligneDetail = prester(`5ajust|${a.id}`, { ordre: 5, libelle, unitaire: 0, remise: 0 });
+      ligneDetail.quantite = 1;
+      ligneDetail.unitaire = effet;
+      ligneDetail.montant = effet;
+      if (a.jour) ligneDetail.jours.add(a.jour);
+    }
+
     const lignes = [...compte.values()].map((l) => {
       const brut = arrondir(l.hebergement + l.repas + l.taxe);
-      const reduction = reductionDe(personnes.get(l.personne_id), brut);
-      return { ...l, brut, reduction, total: arrondir(brut - reduction) };
+      return { ...l, brut, total: arrondir(brut + l.ajustement) };
     });
     // L'ORDRE VIENT DE LA BASE : couples de la premiere generation, leurs
     // enfants dessous, du plus age au plus jeune. Retrier ici par prenom
@@ -582,7 +771,7 @@ window.FACTURE = (function () {
     const detail = [...parPrestation.values()]
       .map((p) => ({
         libelle:
-          parNature.get(p.libelle) > 1
+          parNature.get(p.libelle) > 1 && p.jours.size
             ? `${p.libelle} — ${[...p.jours].sort().map(afficherJourCourt).join(", ")}`
             : p.libelle,
         quantite: p.quantite,
@@ -600,7 +789,10 @@ window.FACTURE = (function () {
       repasColonnes,
       total: arrondir(lignes.reduce((somme, l) => somme + l.total, 0)),
       brut: arrondir(lignes.reduce((somme, l) => somme + l.brut, 0)),
-      reductions: arrondir(lignes.reduce((somme, l) => somme + l.reduction, 0)),
+      // Les deux en positif : ce qui s'ajoute, ce qui se retire.
+      supplements,
+      reductions,
+      effets,
       manquants: [...manquants].sort(),
       sansPlace,
     };
@@ -675,5 +867,5 @@ window.FACTURE = (function () {
     ];
   }
 
-  return { calculer, prestations, synthese, repasFactures };
+  return { calculer, prestations, synthese, repasFactures, unites };
 })();

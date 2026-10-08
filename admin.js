@@ -114,8 +114,10 @@ const MESSAGES = {
   TITRE_VIDE: "Il manque l'intitulé de l'activité.",
   ACTIVITE_EXISTE: "Cette idée est déjà dans la liste.",
   ACTIVITE_INCONNUE: "Cette idée n'existe plus. Recharge la page.",
-  REDUCTION_INVALIDE:
-    "Une réduction est un nombre positif — et un pourcentage ne dépasse pas 100.",
+  AJUSTEMENT_INVALIDE:
+    "La valeur doit être positive — et un pourcentage ne dépasse pas 100 pour une réduction, 1000 pour un supplément.",
+  CIBLE_INVALIDE: "Choisis une personne, ou une chambre ou un gîte.",
+  JOUR_HORS_SEJOUR: "Ce jour n'est pas dans le séjour.",
 };
 
 const etat = {
@@ -636,9 +638,9 @@ function ouvrirOnglet(onglet) {
   // plus, ce volet ne se saisit pas.
   if (onglet.id === "onglet-facture") rechargerFacture();
   if (onglet.id === "onglet-hotel") rechargerHotel();
-  // Les reductions disent ce qu'elles retirent : c'est un calcul de
-  // facture, refait comme elle a chaque ouverture.
-  if (onglet.id === "onglet-tarifs") rechargerReductions();
+  // Les supplements et reductions disent ce qu'ils ajoutent ou retirent :
+  // c'est un calcul de facture, refait comme elle a chaque ouverture.
+  if (onglet.id === "onglet-tarifs") rechargerAjustements();
 }
 
 onglets.forEach((onglet, i) => {
@@ -2327,8 +2329,8 @@ document.getElementById("tarifs-enregistrer").addEventListener("click", async ()
       p_repas_jour: lireRepasJour(),
     });
     await rechargerTarifs();
-    // Un prix qui change change ce qu'une reduction en pourcentage retire.
-    rechargerReductions();
+    // Un prix qui change change ce qu'un pourcentage ajoute ou retire.
+    rechargerAjustements();
     messageTarifs.className = "ok";
     messageTarifs.textContent =
       `${r.tarifs} prix enregistré(s), ${r.annexes} réglage(s) annexe(s)` +
@@ -2393,6 +2395,7 @@ function dessinerFacture(calcul) {
 
   compteurFacture.textContent = calcul.lignes.length
     ? `${calcul.lignes.length} personne(s) — ${euros(calcul.total)} en tout` +
+      (calcul.supplements ? `, dont ${euros(calcul.supplements)} de suppléments` : "") +
       (calcul.reductions ? `, après ${euros(calcul.reductions)} de réductions` : "")
     : "";
 
@@ -2449,7 +2452,7 @@ function dessinerFacture(calcul) {
     zoneResume.textContent = "";
     zoneResume.appendChild(
       tableauFacture(
-        COLONNES_FACTURE.resume({ reductions: calcul.reductions > 0 }),
+        COLONNES_FACTURE.resume({ ajustements: calcul.lignes.some((l) => l.ajustement) }),
         calcul.lignes,
         gens
       )
@@ -2527,85 +2530,119 @@ async function rechargerFacture() {
 }
 
 
-// --------------------------------------------------------- reductions
+// ------------------------------------------- supplements et reductions
 //
-// Une reduction par personne, sur sa note entiere : en pourcentage ou en
-// euros. Elle se pose dans l'onglet Tarifs et nulle part ailleurs --
-// aucune fonction familiale n'ecrit ces colonnes. La famille la voit sur
-// sa note, l'organisateur dans le recapitulatif de la facture.
+// Ce que l'organisateur ajoute ou retire a la main : un sens, un
+// pourcentage ou un montant, une cible -- une personne, ou une chambre /
+// un gite precis -- un jour ou tout le sejour, et une description. Ils se
+// posent ici et nulle part ailleurs : aucune fonction familiale n'ecrit
+// cette table. La famille les voit sur sa note.
 //
-// LE MONTANT N'EST PAS GARDE. La base retient le type et la valeur ; ce
-// que cela retire se calcule a la lecture, comme le reste de la facture.
-// « 10 % » d'une note qui change suit la note.
+// LE MONTANT N'EST PAS GARDE. La base retient la regle ; ce qu'elle ajoute
+// ou retire se calcule a la lecture, comme le reste de la facture.
 
-const choixReductionPersonne = document.getElementById("reduction-personne");
-const choixReductionType = document.getElementById("reduction-type");
-const champReductionValeur = document.getElementById("reduction-valeur");
-const boutonReduction = document.getElementById("reduction-enregistrer");
-const messageReduction = document.getElementById("message-reduction");
-const zoneListeReductions = document.getElementById("liste-reductions");
-const compteurReductions = document.getElementById("compteur-reductions");
+const choixAjustementSens = document.getElementById("ajustement-sens");
+const choixAjustementMode = document.getElementById("ajustement-mode");
+const champAjustementValeur = document.getElementById("ajustement-valeur");
+const choixAjustementCible = document.getElementById("ajustement-cible");
+const choixAjustementJour = document.getElementById("ajustement-jour");
+const champAjustementDescription = document.getElementById("ajustement-description");
+const boutonAjustement = document.getElementById("ajustement-ajouter");
+const messageAjustement = document.getElementById("message-ajustement");
+const zoneListeAjustements = document.getElementById("liste-ajustements");
+const compteurAjustements = document.getElementById("compteur-ajustements");
 
-function libelleReduction(personne) {
-  const valeur = Number(personne.reduction_valeur) || 0;
-  return personne.reduction_type === "pourcentage"
-    ? `${String(valeur).replace(".", ",")} %`
-    : euros(valeur);
-}
-
-function nomReduction(personne) {
+function nomPersonne(personne) {
   return personne.famille && personne.famille !== personne.prenom
     ? `${personne.prenom} (${personne.famille})`
     : personne.prenom;
 }
 
-// Choisir quelqu'un montre ce qu'il a deja : on corrige une reduction,
-// on ne la ressaisit pas de memoire.
-function remplirReduction() {
-  const personne = (etat.participants || []).find(
-    (p) => p.id === choixReductionPersonne.value
-  );
-  if (personne && personne.reduction_type) {
-    choixReductionType.value = personne.reduction_type;
-    champReductionValeur.value = Number(personne.reduction_valeur);
-  } else {
-    choixReductionType.value = "pourcentage";
-    champReductionValeur.value = "";
-  }
-  champReductionValeur.disabled = !choixReductionType.value;
+// Les exemplaires, nommes comme le plan les nomme. Le calcul en tient la
+// liste : la facture et ce panneau doivent dire « Gîte 2 » du meme gite.
+function unitesAjustables() {
+  return FACTURE.unites(tarifs.logements || []);
 }
 
-function dessinerReductions(calcul) {
-  const gens = etat.participants || [];
+// Une seule liste, en deux groupes : on vise une personne OU un couchage,
+// et deux listes cote a cote laisseraient croire qu'on peut les deux.
+function remplirCiblesAjustement() {
+  const garde = choixAjustementCible.value;
+  choixAjustementCible.textContent = "";
 
-  // La liste se refait a chaque calcul ; la personne choisie reste choisie.
-  const garde = choixReductionPersonne.value;
-  choixReductionPersonne.textContent = "";
-  for (const personne of gens) {
+  const gens = document.createElement("optgroup");
+  gens.label = "Une personne";
+  for (const personne of etat.participants || []) {
     const option = document.createElement("option");
-    option.value = personne.id;
-    option.textContent = nomReduction(personne);
-    choixReductionPersonne.appendChild(option);
+    option.value = `p:${personne.id}`;
+    option.textContent = nomPersonne(personne);
+    gens.appendChild(option);
   }
-  if (gens.some((p) => p.id === garde)) choixReductionPersonne.value = garde;
-  remplirReduction();
 
-  const accordees = gens.filter((p) => p.reduction_type);
-  compteurReductions.textContent = accordees.length
-    ? `${accordees.length} personne(s) — ${euros(calcul.reductions)} en tout`
+  const couchages = document.createElement("optgroup");
+  couchages.label = "Une chambre ou un gîte";
+  for (const u of unitesAjustables()) {
+    const option = document.createElement("option");
+    option.value = `u:${u.logement_id}#${u.numero}`;
+    option.textContent = `${u.nom} (${u.capacite} pers.)`;
+    couchages.appendChild(option);
+  }
+
+  if (gens.children.length) choixAjustementCible.appendChild(gens);
+  if (couchages.children.length) choixAjustementCible.appendChild(couchages);
+  if ([...choixAjustementCible.options].some((o) => o.value === garde)) {
+    choixAjustementCible.value = garde;
+  }
+}
+
+// Tout le sejour par defaut : c'est le cas courant, et il vient en tete.
+function remplirJoursAjustement() {
+  const garde = choixAjustementJour.value;
+  choixAjustementJour.textContent = "";
+  const tout = document.createElement("option");
+  tout.value = "";
+  tout.textContent = "Tout le séjour";
+  choixAjustementJour.appendChild(tout);
+  for (const jour of tarifs.jours || []) {
+    const option = document.createElement("option");
+    option.value = jour;
+    option.textContent = afficherJourLong(jour);
+    choixAjustementJour.appendChild(option);
+  }
+  if ([...choixAjustementJour.options].some((o) => o.value === garde)) {
+    choixAjustementJour.value = garde;
+  }
+}
+
+function libelleValeur(a) {
+  const valeur = Number(a.valeur) || 0;
+  return a.mode === "pourcentage" ? `${String(valeur).replace(".", ",")} %` : euros(valeur);
+}
+
+function dessinerAjustements(ajustements, calcul) {
+  remplirCiblesAjustement();
+  remplirJoursAjustement();
+
+  const liste = ajustements || [];
+  compteurAjustements.textContent = liste.length
+    ? `${liste.length} ligne(s)` +
+      (calcul.supplements ? ` — +${euros(calcul.supplements)}` : "") +
+      (calcul.reductions ? ` — −${euros(calcul.reductions)}` : "")
     : "";
-  if (!accordees.length) {
-    rienDire(zoneListeReductions, "Aucune réduction accordée.");
+  if (!liste.length) {
+    rienDire(zoneListeAjustements, "Aucun supplément ni réduction.");
     return;
   }
 
-  const parPersonne = new Map(calcul.lignes.map((l) => [l.personne_id, l]));
+  const gens = new Map((etat.participants || []).map((p) => [p.id, p]));
+  const noms = new Map(unitesAjustables().map((u) => [`${u.logement_id}#${u.numero}`, u.nom]));
+
   const cadre = document.createElement("div");
   cadre.className = "tableau-large";
   const table = document.createElement("table");
   const tete = document.createElement("thead");
   const rangee = document.createElement("tr");
-  for (const titre of ["Personne", "Réduction", "Retiré de sa note", ""]) {
+  for (const titre of ["Nature", "Valeur", "Appliqué à", "Période", "Description", "Effet", ""]) {
     const th = document.createElement("th");
     th.textContent = titre;
     rangee.appendChild(th);
@@ -2614,96 +2651,120 @@ function dessinerReductions(calcul) {
   table.appendChild(tete);
 
   const corps = document.createElement("tbody");
-  for (const personne of accordees) {
+  for (const a of liste) {
     const tr = document.createElement("tr");
-    const nom = document.createElement("th");
-    nom.scope = "row";
-    nom.textContent = nomReduction(personne);
-    tr.appendChild(nom);
-    tr.appendChild(cellule(libelleReduction(personne)));
-    // Sans note -- rien de declare -- il n'y a rien a retirer : la case
-    // le dit d'un tiret, la reduction attend.
-    const ligne = parPersonne.get(personne.id);
-    tr.appendChild(celluleEuros(ligne ? ligne.reduction : 0));
+    const nature = document.createElement("th");
+    nature.scope = "row";
+    nature.textContent = a.sens === "reduction" ? "Réduction" : "Supplément";
+    tr.appendChild(nature);
+    tr.appendChild(cellule(libelleValeur(a)));
+    const personne = a.participant_id ? gens.get(a.participant_id) : null;
+    tr.appendChild(
+      cellule(
+        a.participant_id
+          ? personne
+            ? nomPersonne(personne)
+            : "?"
+          : noms.get(`${a.logement_id}#${a.numero}`) || "couchage retiré"
+      )
+    );
+    tr.appendChild(cellule(a.jour ? afficherJourLong(a.jour) : "Tout le séjour"));
+    tr.appendChild(cellule(a.description || "—", a.description ? "" : "rien"));
+    // Ce que la regle fait REELLEMENT aujourd'hui : zero si le gite vise
+    // est vide, ou si la personne n'a encore rien declare.
+    const effet = (calcul.effets || {})[a.id] || 0;
+    const td = celluleEuros(effet);
+    if (effet > 0) td.textContent = `+${td.textContent}`;
+    tr.appendChild(td);
 
-    const td = document.createElement("td");
+    const action = document.createElement("td");
     const retirer = document.createElement("button");
     retirer.type = "button";
     retirer.className = "retirer";
     retirer.textContent = "Retirer";
-    retirer.addEventListener("click", () => enregistrerReduction(personne, null, null));
-    td.appendChild(retirer);
-    tr.appendChild(td);
+    retirer.addEventListener("click", () => retirerAjustement(a));
+    action.appendChild(retirer);
+    tr.appendChild(action);
     corps.appendChild(tr);
   }
   table.appendChild(corps);
   cadre.appendChild(table);
-  zoneListeReductions.textContent = "";
-  zoneListeReductions.appendChild(cadre);
+  zoneListeAjustements.textContent = "";
+  zoneListeAjustements.appendChild(cadre);
 }
 
-async function enregistrerReduction(personne, type, valeur) {
-  messageReduction.className = "";
-  messageReduction.textContent = "Enregistrement…";
-  try {
-    const r = await rpc("admin_reduction", {
-      p_code: etat.code,
-      p_id: personne.id,
-      p_type: type,
-      p_valeur: valeur,
-    });
-    // On reprend ce que la base a garde -- arrondi au centime -- et non
-    // ce qu'on a tape.
-    Object.assign(personne, r);
-    messageReduction.className = "ok";
-    messageReduction.textContent = type
-      ? `Réduction de ${libelleReduction(personne)} pour ${personne.prenom}.`
-      : `Plus de réduction pour ${personne.prenom}.`;
-    await rechargerReductions();
-  } catch (erreur) {
-    messageReduction.className = "erreur";
-    messageReduction.textContent = erreur.message;
-  }
-}
-
-// Ce que chacun se voit retirer depend de sa note : il faut les faits et
-// la grille, comme pour la facture. Le calcul est le meme, et seul ce
-// panneau en est dessine.
-async function rechargerReductions() {
+// Ce que chaque regle ajoute ou retire depend des notes : il faut les
+// faits et la grille, comme pour la facture. Le calcul est le meme.
+async function rechargerAjustements() {
   try {
     const faits = await rpc("admin_faits", { p_code: etat.code });
-    dessinerReductions(FACTURE.calculer(faits, tarifs));
+    dessinerAjustements(faits.ajustements, FACTURE.calculer(faits, tarifs));
   } catch (erreur) {
-    messageReduction.className = "erreur";
-    messageReduction.textContent = erreur.message;
+    messageAjustement.className = "erreur";
+    messageAjustement.textContent = erreur.message;
   }
 }
 
-choixReductionPersonne.addEventListener("change", remplirReduction);
-choixReductionType.addEventListener("change", () => {
-  champReductionValeur.disabled = !choixReductionType.value;
-});
-
-boutonReduction.addEventListener("click", () => {
-  const personne = (etat.participants || []).find(
-    (p) => p.id === choixReductionPersonne.value
-  );
-  if (!personne) return;
-  const type = choixReductionType.value || null;
-  if (!type) {
-    enregistrerReduction(personne, null, null);
-    return;
+async function retirerAjustement(a) {
+  messageAjustement.className = "";
+  messageAjustement.textContent = "Retrait…";
+  try {
+    await rpc("admin_ajustement_retirer", { p_code: etat.code, p_id: a.id });
+    messageAjustement.className = "ok";
+    messageAjustement.textContent = "Retiré.";
+    await rechargerAjustements();
+  } catch (erreur) {
+    messageAjustement.className = "erreur";
+    messageAjustement.textContent = erreur.message;
   }
+}
+
+boutonAjustement.addEventListener("click", async () => {
+  const sens = choixAjustementSens.value;
+  const mode = choixAjustementMode.value;
+  const valeur = Number(String(champAjustementValeur.value).replace(",", "."));
+  const cible = choixAjustementCible.value;
+
   // La base refuse aussi -- une page ne fait pas foi -- mais un refus
   // qu'on voit venir vaut mieux qu'un refus recu.
-  const valeur = Number(String(champReductionValeur.value).replace(",", "."));
-  if (!(valeur > 0) || (type === "pourcentage" && valeur > 100)) {
-    messageReduction.className = "erreur";
-    messageReduction.textContent = MESSAGES.REDUCTION_INVALIDE;
-    champReductionValeur.focus();
+  const plafond = sens === "reduction" ? 100 : 1000;
+  if (!(valeur > 0) || (mode === "pourcentage" && valeur > plafond)) {
+    messageAjustement.className = "erreur";
+    messageAjustement.textContent = MESSAGES.AJUSTEMENT_INVALIDE;
+    champAjustementValeur.focus();
     return;
   }
-  enregistrerReduction(personne, type, valeur);
+  if (!cible) {
+    messageAjustement.className = "erreur";
+    messageAjustement.textContent = MESSAGES.CIBLE_INVALIDE;
+    return;
+  }
+
+  const [genre, quoi] = [cible.slice(0, 1), cible.slice(2)];
+  const [logement, numero] = quoi.split("#");
+  messageAjustement.className = "";
+  messageAjustement.textContent = "Enregistrement…";
+  try {
+    await rpc("admin_ajustement_ajouter", {
+      p_code: etat.code,
+      p_sens: sens,
+      p_mode: mode,
+      p_valeur: valeur,
+      p_participant: genre === "p" ? quoi : null,
+      p_logement: genre === "u" ? logement : null,
+      p_numero: genre === "u" ? Number(numero) : null,
+      p_jour: choixAjustementJour.value || null,
+      p_description: champAjustementDescription.value.trim() || null,
+    });
+    champAjustementValeur.value = "";
+    champAjustementDescription.value = "";
+    messageAjustement.className = "ok";
+    messageAjustement.textContent = `${sens === "reduction" ? "Réduction" : "Supplément"} ajouté.`;
+    await rechargerAjustements();
+  } catch (erreur) {
+    messageAjustement.className = "erreur";
+    messageAjustement.textContent = erreur.message;
+  }
 });
 
 

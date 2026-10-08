@@ -112,6 +112,7 @@ function dessiner(calcul, faits) {
 
   compteurFacture.textContent = calcul.lignes.length
     ? `${calcul.lignes.length} personne(s) — ${euros(calcul.total)} en tout` +
+      (calcul.supplements ? `, dont ${euros(calcul.supplements)} de suppléments` : "") +
       (calcul.reductions ? `, après ${euros(calcul.reductions)} de réductions` : "")
     : "";
 
@@ -147,7 +148,11 @@ function dessiner(calcul, faits) {
   // longueurs differentes, comme l'organisateur.
   zoneResume.textContent = "";
   zoneResume.appendChild(
-    tableau(colonnes.resume({ reductions: calcul.reductions > 0 }), calcul.lignes, gens)
+    tableau(
+      colonnes.resume({ ajustements: calcul.lignes.some((l) => l.ajustement) }),
+      calcul.lignes,
+      gens
+    )
   );
 
   // --- la synthese

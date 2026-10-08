@@ -253,6 +253,7 @@ SANS_GESTE = {
     # Ses deux appelants s'en chargent : le recollage nomme le geste, la
     # restauration ne se trace pas.
     "private.vue_mer_fondre",
+    "private.reductions_reprendre",
 }
 
 # Les tables dont une écriture doit se retrouver dans l'historique. La même

@@ -12,10 +12,6 @@ class Personne:
     prenom: str
     famille: str
     categorie_age: str  # adulte | jeune | enfant | bebe
-    # Ce que l'organisateur retire de sa note entiere : `pourcentage` ou
-    # `euros`, et la valeur qui va avec. Rien par defaut.
-    reduction_type: str | None = None
-    reduction_valeur: float = 0.0
 
 
 @dataclass(frozen=True)

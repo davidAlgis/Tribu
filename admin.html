@@ -618,45 +618,70 @@
       <p id="message-tarifs" role="status" aria-live="polite"></p>
 
       <!--
-        Les réductions accordées à une personne vivent ICI, avec les prix,
-        et nulle part côté famille : chacun voit la sienne sur sa note,
-        personne ne se l'accorde. Elles s'enregistrent à part — elles ne
-        touchent pas à la grille, et le bouton du dessus non plus.
+        Ce que l'organisateur ajoute ou retire À LA MAIN, au-delà de la
+        grille : une réduction pour une étudiante, le ménage d'un gîte, une
+        nuit offerte. Ils vivent ICI, avec les prix, et nulle part côté
+        famille : chacun les voit sur sa note, personne ne se les accorde.
+        Ils s'enregistrent à part — ils ne touchent pas à la grille, et le
+        bouton du dessus non plus.
       -->
-      <fieldset id="panneau-reductions">
-        <legend>Réductions accordées <span id="compteur-reductions" class="discret-inline"></span></legend>
+      <fieldset id="panneau-ajustements">
+        <legend>Suppléments / réductions spécifiques <span id="compteur-ajustements" class="discret-inline"></span></legend>
         <div class="grille">
           <div>
-            <label for="reduction-personne">Personne</label>
-            <select id="reduction-personne"></select>
-          </div>
-          <div>
-            <label for="reduction-type">Réduction</label>
-            <select id="reduction-type">
-              <option value="pourcentage">en pourcentage</option>
-              <option value="euros">en euros</option>
-              <option value="">aucune</option>
+            <label for="ajustement-sens">Nature</label>
+            <select id="ajustement-sens">
+              <option value="reduction">Réduction</option>
+              <option value="supplement">Supplément</option>
             </select>
           </div>
           <div>
-            <label for="reduction-valeur">Valeur</label>
-            <input type="number" id="reduction-valeur" min="0.01" step="0.01"
+            <label for="ajustement-mode">En</label>
+            <select id="ajustement-mode">
+              <option value="pourcentage">pourcentage</option>
+              <option value="euros">euros</option>
+            </select>
+          </div>
+          <div>
+            <label for="ajustement-valeur">Valeur</label>
+            <input type="number" id="ajustement-valeur" min="0.01" step="0.01"
                    inputmode="decimal" placeholder="ex. 25">
+          </div>
+          <div>
+            <label for="ajustement-cible">Appliqué à</label>
+            <select id="ajustement-cible"></select>
+          </div>
+          <div>
+            <label for="ajustement-jour">Période</label>
+            <select id="ajustement-jour"></select>
+          </div>
+          <div>
+            <label for="ajustement-description">Description (facultatif)</label>
+            <input type="text" id="ajustement-description" maxlength="200" autocomplete="off"
+                   placeholder="ex. ménage de fin de séjour">
           </div>
         </div>
         <div class="actions">
-          <button type="button" id="reduction-enregistrer">Enregistrer la réduction</button>
+          <button type="button" id="ajustement-ajouter">Ajouter</button>
         </div>
-        <p id="message-reduction" role="status" aria-live="polite"></p>
+        <p id="message-ajustement" role="status" aria-live="polite"></p>
 
-        <div id="liste-reductions"></div>
+        <div id="liste-ajustements"></div>
 
         <p class="note">
-          Elle porte sur <strong>toute la note</strong> de la personne —
-          hébergement, repas et taxe de séjour. Un montant en euros ne
-          dépasse jamais la note&nbsp;: une réduction ne rend pas d'argent.
-          Le détail envoyé à l'hôtel ne la voit pas&nbsp;: c'est une affaire
-          de famille, pas une remise de l'hôtel.
+          Sur <strong>une personne</strong>, il porte sur toute sa note —
+          hébergement, repas, taxe de séjour — ou, pour un jour, sur la nuit
+          qui commence ce soir-là, sa taxe et les repas du jour. Sur
+          <strong>une chambre ou un gîte</strong>, un pourcentage porte sur ce
+          que chaque occupant y paie pour ses nuits&nbsp;; un montant en euros
+          se partage à parts égales entre toutes les nuitées d'occupant de la
+          période — il suit donc le plan de couchage.
+        </p>
+        <p class="note">
+          Les suppléments passent d'abord, les réductions ensuite&nbsp;: une
+          réduction ne rend jamais d'argent, elle s'arrête à ce que la personne
+          doit encore. La description se lit en survolant la case du tableau de
+          facture, et chacun a sa ligne au détail du séjour, onglet Hôtel.
         </p>
       </fieldset>
     </div>

@@ -527,6 +527,14 @@ button:disabled { opacity: 0.5; cursor: default; }
    la saisie reste ouverte, et c'est a l'organisateur de trancher -- mais
    ca doit sauter aux yeux dans un tableau de chiffres. La couleur ne porte
    pas seule : la cellule a aussi un `title` qui dit l'ecart. */
+/* Une case qui s'explique au survol : un supplement, une reduction. Le
+   souligne pointille dit qu'il y a quelque chose a lire. */
+td.explique {
+  text-decoration: underline dotted;
+  text-underline-offset: 3px;
+  cursor: help;
+}
+
 td.trop {
   color: var(--erreur);
   font-weight: 700;

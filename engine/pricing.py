@@ -80,8 +80,10 @@ from engine.rules import (
 # `LIBELLES_REGIME` : c'est LE LOGEMENT qu'on paye.
 LIBELLE_LOGEMENT = "Le logement"
 
-# La ligne negative qui porte la reduction accordee par l'organisateur.
+# Les lignes des supplements et reductions specifiques (onglet Tarifs).
 LIBELLE_REDUCTION = "Reduction"
+LIBELLE_SUPPLEMENT = "Supplement"
+LIBELLE_TAXE = "Taxe de sejour"
 
 # Ce que le type dit de sa facturation. Les memes mots que la base.
 AUCUNE = "aucune"
@@ -137,6 +139,8 @@ class Grille:
     logements: dict[str, dict] = field(default_factory=dict)
     # (personne_id, jour) -> (logement_id, numero)
     couchages: dict[tuple[str, date], tuple[str, int]] = field(default_factory=dict)
+    # Les supplements et reductions specifiques, tels que la base les rend.
+    ajustements: list[dict] = field(default_factory=list)
 
     # --- Comment un type se facture -------------------------------
     #
@@ -182,6 +186,7 @@ def grille_depuis(donnees: dict) -> Grille:
         grille.logements[ligne["id"]] = {
             "categorie": ligne["categorie"],
             "capacite": ligne["capacite"],
+            "nombre": ligne.get("nombre", 1),
             "vue_mer": bool(ligne.get("vue_mer", False)),
             # Comment ce type se facture. Absents d'un jeu de donnees
             # ecrit avant ce reglage : les methodes de `Grille` retombent
@@ -218,6 +223,8 @@ def grille_depuis(donnees: dict) -> Grille:
             ligne["logement_id"],
             int(ligne["numero"]),
         )
+
+    grille.ajustements = list(donnees.get("ajustements", []))
 
     return grille
 
@@ -419,7 +426,7 @@ def _facturer_taxe(prestations, personnes, grille, facturation) -> None:
             LigneFacture(
                 personne_id=nuitee.personne_id,
                 jour=nuitee.jour,
-                libelle="Taxe de sejour",
+                libelle=LIBELLE_TAXE,
                 detail="par adulte et par nuit",
                 prix=round(montant, 2),
             )
@@ -462,58 +469,143 @@ def _facturer_repas(prestations, personnes, grille, facturation) -> None:
         )
 
 
-def _reduction(personne, total: float) -> float:
-    """Ce que l'organisateur retire d'une note. Le meme calcul que
-    `reductionDe` dans `facture.js`.
-
-    Un montant en euros ne depasse jamais la note : une reduction ne rend
-    pas d'argent.
-
-    Le pourcentage se calcule EN CENTIMES ENTIERS, et le demi-centime
-    monte : `round` arrondit au pair, `Math.round` au-dessus, et 12,5 % de
-    180,20 tombait d'un centime different de chaque cote.
-    """
-    valeur = float(getattr(personne, "reduction_valeur", 0) or 0)
-    if valeur <= 0 or total <= 0:
+def _pourcent(base: float, valeur: float) -> float:
+    """Un pourcentage d'un montant, EN CENTIMES ENTIERS, le demi-centime
+    vers le haut : `round` arrondit au pair, `Math.round` au-dessus, et
+    12,5 % de 180,20 tombait d'un centime different de chaque cote."""
+    if base <= 0:
         return 0.0
-    if personne.reduction_type == "pourcentage":
-        centimes = round(total * 100)
-        centiemes = round(min(valeur, 100) * 100)
-        return ((centimes * centiemes + 5000) // 10000) / 100
-    if personne.reduction_type == "euros":
-        return round(min(valeur, total), 2)
-    return 0.0
+    return ((round(base * 100) * round(valeur * 100) + 5000) // 10000) / 100
 
 
-def _facturer_reductions(personnes, facturation) -> None:
-    """La reduction, EN DERNIER et sur la note entiere : une ligne negative
-    par personne, sans date -- elle ne tient a aucun jour.
+def _partager(total: float, combien: int) -> list[float]:
+    """Un montant en parts egales, en centimes entiers : les premieres
+    recoivent le centime qui reste. `_parts` arrondit en euros, et l'arrondi
+    au pair s'ecarterait de JavaScript sur un demi-centime."""
+    centimes = round(total * 100)
+    part, reste = divmod(centimes, combien)
+    return [(part + (1 if i < reste else 0)) / 100 for i in range(combien)]
 
-    Ce n'est pas une remise de l'hotel : celle-la vit dans les tarifs et
-    se lit sur chaque nuit. Celle-ci est une affaire interne a la famille.
-    """
-    notes = defaultdict(float)
-    for ligne in facturation.lignes:
-        notes[ligne.personne_id] += ligne.prix
 
-    for personne_id in sorted(notes):
-        personne = personnes[personne_id]
-        retire = _reduction(personne, round(notes[personne_id], 2))
-        if not retire:
-            continue
-        facturation.lignes.append(
-            LigneFacture(
-                personne_id=personne_id,
-                jour=None,
-                libelle=LIBELLE_REDUCTION,
-                detail=(
-                    f"{personne.reduction_valeur:g} % de la note"
-                    if personne.reduction_type == "pourcentage"
-                    else "montant fixe"
-                ),
-                prix=-retire,
+def _unites(logements: dict) -> dict[tuple[str, int], str]:
+    """« Chambre 3 », « Gite 1 » : les exemplaires nommes comme le plan les
+    nomme -- le rang se compte par categorie, categorie puis capacite."""
+    noms = {}
+    rangs: dict[str, int] = defaultdict(int)
+    tries = sorted(
+        logements.items(),
+        key=lambda x: (x[1]["categorie"], bool(x[1].get("vue_mer")), x[1]["capacite"]),
+    )
+    for logement_id, ligne in tries:
+        for numero in range(1, int(ligne.get("nombre") or 0) + 1):
+            rangs[ligne["categorie"]] += 1
+            noms[(logement_id, numero)] = (
+                f"{ligne['categorie'].capitalize()} {rangs[ligne['categorie']]}"
             )
+    return noms
+
+
+def _facturer_ajustements(personnes, grille, facturation) -> None:
+    """Les supplements et reductions specifiques, EN DERNIER : ils portent
+    sur ce que la grille a deja chiffre. Le meme calcul que dans
+    `facture.js`, et le test de comparaison les veut d'accord au centime.
+
+    Une PERSONNE : sa note entiere, ou celle d'un jour -- la nuit qui
+    commence ce soir-la, sa taxe, les repas du jour.
+
+    Une CHAMBRE ou un GITE (un exemplaire du plan) : un pourcentage porte
+    sur ce que chaque occupant y paie pour ses nuits ; un montant se partage
+    a parts egales entre toutes les nuitees d'occupant de la periode.
+
+    Les supplements d'abord, puis les reductions : une reduction ne rend
+    jamais d'argent, elle se plafonne a ce qui reste du par la personne.
+    Une ligne par regle et par personne touchee, sans date quand la regle
+    vaut pour tout le sejour.
+    """
+    hebergement: dict = defaultdict(float)
+    taxe: dict = defaultdict(float)
+    repas: dict = defaultdict(float)
+    note: dict = defaultdict(float)
+    for ligne in facturation.lignes:
+        cle = (ligne.personne_id, ligne.jour)
+        note[ligne.personne_id] += ligne.prix
+        if ligne.libelle == LIBELLE_TAXE:
+            taxe[cle] += ligne.prix
+        elif ligne.libelle in LIBELLES_REPAS.values() and ligne.detail.startswith("hors pension"):
+            repas[cle] += ligne.prix
+        else:
+            hebergement[cle] += ligne.prix
+
+    courant = {qui: round(montant, 2) for qui, montant in note.items()}
+    noms = _unites(grille.logements)
+
+    for a in sorted(grille.ajustements, key=lambda x: (x["sens"] == "reduction", str(x["id"]))):
+        reduction = a["sens"] == "reduction"
+        valeur = float(a["valeur"])
+        jour = _jour(a["jour"]) if a.get("jour") else None
+        dus: dict[str, float] = {}
+
+        if a.get("participant_id"):
+            qui = a["participant_id"]
+            if qui not in courant:
+                base = 0.0
+            elif jour:
+                base = round(hebergement[(qui, jour)] + taxe[(qui, jour)] + repas[(qui, jour)], 2)
+            else:
+                base = round(note[qui], 2)
+            # Un montant retire sur UN JOUR s'arrete a ce que coute ce jour ;
+            # sur tout le sejour, a ce que la personne doit encore, plus bas.
+            if a["mode"] == "pourcentage":
+                m = _pourcent(base, valeur)
+            elif reduction and jour:
+                m = min(round(valeur, 2), base)
+            else:
+                m = round(valeur, 2)
+            if m > 0:
+                dus[qui] = m
+            p = personnes.get(qui)
+            cible = p.prenom if p else "?"
+        else:
+            unite = (a["logement_id"], int(a["numero"]))
+            nuits = sorted(
+                (j, qui)
+                for (qui, j), place in grille.couchages.items()
+                if (place[0], int(place[1])) == unite and (jour is None or j == jour)
+            )
+            if a["mode"] == "pourcentage":
+                bases: dict[str, float] = {}
+                for j, qui in nuits:
+                    if qui in courant:
+                        bases[qui] = round(bases.get(qui, 0.0) + hebergement[(qui, j)], 2)
+                for qui, base in bases.items():
+                    m = _pourcent(base, valeur)
+                    if m > 0:
+                        dus[qui] = m
+            elif nuits:
+                for (j, qui), morceau in zip(nuits, _partager(valeur, len(nuits))):
+                    dus[qui] = round(dus.get(qui, 0.0) + morceau, 2)
+            cible = noms.get(unite, "couchage retire")
+
+        detail = " - ".join(
+            [cible, f"le {jour}" if jour else "tout le sejour"]
+            + ([a["description"]] if a.get("description") else [])
         )
+        for qui in sorted(dus):
+            avant = courant.get(qui, 0.0)
+            m = min(dus[qui], avant) if reduction else dus[qui]
+            if m <= 0:
+                continue
+            signe = -m if reduction else m
+            courant[qui] = round(avant + signe, 2)
+            facturation.lignes.append(
+                LigneFacture(
+                    personne_id=qui,
+                    jour=jour,
+                    libelle=LIBELLE_REDUCTION if reduction else LIBELLE_SUPPLEMENT,
+                    detail=detail,
+                    prix=round(signe, 2),
+                )
+            )
 
 
 def facturer(prestations: Prestations, personnes: dict, grille: Grille) -> Facturation:
@@ -527,6 +619,6 @@ def facturer(prestations: Prestations, personnes: dict, grille: Grille) -> Factu
     facturation.lignes.sort(key=lambda l: (l.jour, l.personne_id, l.libelle))
     # Apres le tri : une ligne sans date ne se compare pas aux autres, et
     # elle se lit mieux en fin de detail.
-    _facturer_reductions(personnes, facturation)
+    _facturer_ajustements(personnes, grille, facturation)
     facturation.sans_place.sort(key=lambda x: (x[1], x[0]))
     return facturation

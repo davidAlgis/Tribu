@@ -110,6 +110,13 @@ window.TABLEAUX = (function () {
     return part.bas ? Math.round((part.haut / part.bas) * 100) / 100 : null;
   }
 
+  // Un supplement s'ecrit avec son signe, sur chaque ligne comme sur les
+  // totaux : sans lui, rien ne le distinguerait d'une depense ordinaire.
+  function signer(td, colonne) {
+    if (colonne.signe && /^\d/.test(td.textContent)) td.textContent = `+${td.textContent}`;
+    return td;
+  }
+
   // Un tableau par personne : une colonne par case du sejour, puis les
   // totaux. CHAQUE FAMILLE FERME SUR SA SOMME -- c'est la ligne qu'on
   // cherche au moment de demander l'argent, et une colonne qui repeterait
@@ -145,7 +152,7 @@ window.TABLEAUX = (function () {
       // Toutes les colonnes, y compris le detail : ce que la famille a
       // depense cette nuit-la se lit aussi bien que ce qu'elle doit en tout.
       colonnes.forEach((colonne, rang) => {
-        tr.appendChild(celluleEuros(quotient(colonne, cumul[rang])));
+        tr.appendChild(signer(celluleEuros(quotient(colonne, cumul[rang])), colonne));
       });
       corps.appendChild(tr);
     };
@@ -172,9 +179,18 @@ window.TABLEAUX = (function () {
         cumul[rang].bas += part.bas;
         sommes[rang].haut += part.haut;
         sommes[rang].bas += part.bas;
-        tr.appendChild(
-          celluleEuros(quotient(colonne, part), colonne.total ? "total-personne" : "")
+        const td = signer(
+          celluleEuros(quotient(colonne, part), colonne.total ? "total-personne" : ""),
+          colonne
         );
+        // Ce que la case ne dit pas -- pourquoi ce montant -- se lit en la
+        // survolant.
+        const titre = colonne.titre ? colonne.titre(ligne) : "";
+        if (titre) {
+          td.title = titre;
+          td.classList.add("explique");
+        }
+        tr.appendChild(td);
       });
       corps.appendChild(tr);
     }
@@ -188,7 +204,7 @@ window.TABLEAUX = (function () {
     titre.textContent = "TOTAL";
     totaux.appendChild(titre);
     colonnes.forEach((colonne, rang) => {
-      totaux.appendChild(celluleEuros(quotient(colonne, sommes[rang])));
+      totaux.appendChild(signer(celluleEuros(quotient(colonne, sommes[rang])), colonne));
     });
     pied.appendChild(totaux);
     table.appendChild(pied);
@@ -239,11 +255,20 @@ window.TABLEAUX = (function () {
           rapport: { haut: (l) => l.repas, bas: (l) => window.FACTURE.repasFactures(l) },
         });
       }
-      // La reduction ne se montre que si quelqu'un en a une : une colonne de
-      // tirets partout n'apprend rien. Elle s'ecrit EN NEGATIF, pour que le
-      // total reste la somme de ce qui le precede.
-      if (options && options.reductions) {
-        lignes.push({ libelle: "Réduction", valeur: (l) => -(l.reduction || 0) });
+      // Les supplements et reductions specifiques ne se montrent que si
+      // quelqu'un en a : une colonne de tirets partout n'apprend rien. Ils
+      // s'ecrivent avec leur signe, pour que le total reste la somme de ce
+      // qui le precede ; le survol dit d'ou ils viennent.
+      if (options && options.ajustements) {
+        lignes.push({
+          libelle: "Suppl. / réd.",
+          valeur: (l) => l.ajustement || 0,
+          signe: true,
+          titre: (l) =>
+            (l.ajustements || [])
+              .map((a) => `${a.libelle} : ${a.montant > 0 ? "+" : ""}${euros(a.montant)}`)
+              .join("\n"),
+        });
       }
       lignes.push({ libelle: "Total", valeur: (l) => l.total, total: true });
       if (rapports) {

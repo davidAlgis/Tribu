@@ -39,7 +39,8 @@ EXEMPLE = RACINE / "exemple_donnees.json"
 # De quoi ranger une ligne de facture dans la bonne colonne de la page.
 REPAS = set(LIBELLES_REPAS.values())
 TAXE = "Taxe de sejour"
-REDUCTION = "Reduction"
+# Les supplements et reductions specifiques : une colonne, signee.
+AJUSTEMENTS = {"Reduction", "Supplement"}
 
 # Un gîte à 100 partagé par trois : 33,34 + 33,33 + 33,33. C'est l'endroit
 # où deux arrondis peuvent se séparer d'un centime.
@@ -132,15 +133,10 @@ PARTAGE = {
 HOTEL = {
     "_commentaire": "Jeu de test : deux parts qui s'additionnent, sans pension.",
     "personnes": [
-        # Les trois facons d'etre reduit : une part, un montant, et un
-        # montant plus gros que la note -- qui ne doit rien rendre.
-        {"id": "a1", "prenom": "Alice", "famille": "A", "categorie_age": "adulte",
-         "reduction_type": "pourcentage", "reduction_valeur": 12.5},
-        {"id": "a2", "prenom": "Bruno", "famille": "A", "categorie_age": "adulte",
-         "reduction_type": "euros", "reduction_valeur": 7.3},
+        {"id": "a1", "prenom": "Alice", "famille": "A", "categorie_age": "adulte"},
+        {"id": "a2", "prenom": "Bruno", "famille": "A", "categorie_age": "adulte"},
         {"id": "e1", "prenom": "Chloe", "famille": "A", "categorie_age": "enfant"},
-        {"id": "d1", "prenom": "David", "famille": "D", "categorie_age": "adulte",
-         "reduction_type": "euros", "reduction_valeur": 1000},
+        {"id": "d1", "prenom": "David", "famille": "D", "categorie_age": "adulte"},
     ],
     # 2027-09-13 est un lundi : tout est au tarif semaine.
     "presences": [
@@ -210,6 +206,35 @@ HOTEL = {
             {"personne_id": "e1", "jour": "2027-09-14", "logement_id": "ch2", "numero": 1},
             {"personne_id": "a2", "jour": "2027-09-14", "logement_id": "ch3", "numero": 1},
         ],
+        # Les supplements et reductions specifiques, tous les cas a la fois.
+        # Le plan nomme ch2 « Chambre 1 » a « Chambre 3 », ch3 « Chambre 4 ».
+        "ajustements": [
+            # une part de la note entiere d'une personne
+            {"id": "aj1", "sens": "reduction", "mode": "pourcentage", "valeur": 12.5,
+             "participant_id": "a1"},
+            # un montant plus gros que la note : il ne rend rien
+            {"id": "aj2", "sens": "reduction", "mode": "euros", "valeur": 1000,
+             "participant_id": "d1"},
+            # un montant sur une chambre, partage entre ses quatre nuitees
+            # d'occupant -- 10,01 € ne tombe pas rond
+            {"id": "aj3", "sens": "supplement", "mode": "euros", "valeur": 10.01,
+             "logement_id": "ch2", "numero": 1, "description": "menage"},
+            # un montant sur une chambre, une nuit seulement
+            {"id": "aj4", "sens": "supplement", "mode": "euros", "valeur": 7,
+             "logement_id": "ch3", "numero": 1, "jour": "2027-09-13"},
+            # une part de ce qu'une personne doit un jour donne
+            {"id": "aj5", "sens": "reduction", "mode": "pourcentage", "valeur": 50,
+             "participant_id": "a2", "jour": "2027-09-14"},
+            # une part de ce que chaque occupant paie pour une chambre
+            {"id": "aj6", "sens": "reduction", "mode": "pourcentage", "valeur": 10,
+             "logement_id": "ch2", "numero": 1},
+            # une chambre ou personne ne dort : rien a partager
+            {"id": "aj7", "sens": "supplement", "mode": "euros", "valeur": 20,
+             "logement_id": "ch2", "numero": 2},
+            # un supplement sur une personne, en euros
+            {"id": "aj8", "sens": "supplement", "mode": "euros", "valeur": 3.33,
+             "participant_id": "e1", "description": "t-shirt"},
+        ],
     },
 }
 
@@ -226,12 +251,12 @@ def colonnes_python(chemin: Path) -> dict:
     facturation = facturer(calculer_prestations(presences, grille.logements), personnes, grille)
 
     compte = defaultdict(
-        lambda: {"hebergement": 0.0, "repas": 0.0, "taxe": 0.0, "reduction": 0.0}
+        lambda: {"hebergement": 0.0, "repas": 0.0, "taxe": 0.0, "ajustement": 0.0}
     )
     for ligne in facturation.lignes:
-        if ligne.libelle == REDUCTION:
-            # Positive, comme la page la tient : ce qu'on retire.
-            compte[ligne.personne_id]["reduction"] -= ligne.prix
+        if ligne.libelle in AJUSTEMENTS:
+            # Signee, comme la page la tient : positive pour un supplement.
+            compte[ligne.personne_id]["ajustement"] += ligne.prix
             continue
         if ligne.libelle == TAXE:
             colonne = "taxe"
@@ -259,6 +284,7 @@ def colonnes_js(chemin: Path) -> dict:
           personnes: donnees.personnes,
           presences: donnees.presences,
           couchages: grille.couchages || [],
+          ajustements: grille.ajustements || [],
         }},
         grille
       );
@@ -266,12 +292,14 @@ def colonnes_js(chemin: Path) -> dict:
       for (const l of resultat.lignes) {{
         par[l.personne_id] = {{
           hebergement: l.hebergement, repas: l.repas, taxe: l.taxe, nuits: l.nuits,
-          reduction: l.reduction, brut: l.brut, total: l.total,
+          ajustement: l.ajustement, ajustements: l.ajustements, brut: l.brut, total: l.total,
           parNuit: l.parNuit, parRepas: l.parRepas,
         }};
       }}
       process.stdout.write(JSON.stringify({{
-        par, total: resultat.total, brut: resultat.brut, reductions: resultat.reductions,
+        par, total: resultat.total, brut: resultat.brut,
+        supplements: resultat.supplements, reductions: resultat.reductions,
+        effets: resultat.effets,
         colonnesNuits: resultat.nuits,
         colonnesRepas: resultat.repasColonnes.map((c) => c.cle),
         prestations: resultat.prestations,
@@ -327,7 +355,7 @@ def test_les_deux_calculs_connaissent_les_memes_personnes(jeux):
 
 
 @JEUX
-@pytest.mark.parametrize("colonne", ["hebergement", "repas", "taxe", "reduction"])
+@pytest.mark.parametrize("colonne", ["hebergement", "repas", "taxe", "ajustement"])
 def test_chaque_colonne_tombe_au_centime_pres(jeux, colonne):
     """Régimes, remises, supplément vue mer, part d'un gîte partagé,
     exception de repas, taxe réservée aux adultes : tout est là-dedans."""
@@ -344,7 +372,7 @@ def test_chaque_colonne_tombe_au_centime_pres(jeux, colonne):
 def test_le_total_est_le_meme_des_deux_cotes(jeux):
     python, js = jeux
     somme = round(
-        sum(v["hebergement"] + v["repas"] + v["taxe"] - v["reduction"]
+        sum(v["hebergement"] + v["repas"] + v["taxe"] + v["ajustement"]
             for v in python.values()),
         2,
     )
@@ -430,9 +458,8 @@ def test_le_detail_du_sejour_totalise_la_facture(jeux):
     """
     _, js = jeux
     detail = round(sum(l["montant"] for l in js["prestations"]), 2)
-    # Le BRUT, pas le total : la reduction est une affaire de famille, et
-    # le detail envoye a l'hotel n'a pas a la connaitre.
-    assert detail == round(js["brut"], 2)
+    # Le TOTAL : chaque supplement et chaque reduction a sa ligne au detail.
+    assert detail == round(js["total"], 2)
 
 
 @JEUX
@@ -487,9 +514,9 @@ def test_la_synthese_se_relit_avec_statistics(jeux):
     lignes = list(js["par"].values())
     assert lignes, "aucune ligne : le test ne sert à rien"
 
-    # Ce que chacun PAIE : la reduction de l'organisateur deduite.
+    # Ce que chacun PAIE : supplements et reductions compris.
     totaux = {
-        qui: round(v["hebergement"] + v["repas"] + v["taxe"] - v["reduction"], 2)
+        qui: round(v["hebergement"] + v["repas"] + v["taxe"] + v["ajustement"], 2)
         for qui, v in js["par"].items()
     }
     dormeurs = [v for v in js["par"].values() if v["nuits"] > 0]
@@ -499,7 +526,7 @@ def test_la_synthese_se_relit_avec_statistics(jeux):
         "hebergement": [round(v["hebergement"] + v["taxe"], 2) for v in lignes],
         "total": list(totaux.values()),
         "nuitee": [
-            (v["hebergement"] + v["repas"] + v["taxe"] - v["reduction"]) / v["nuits"]
+            (v["hebergement"] + v["repas"] + v["taxe"] + v["ajustement"]) / v["nuits"]
             for v in dormeurs
         ],
     }
@@ -591,20 +618,54 @@ def test_seuls_les_repas_factures_se_comptent():
 
 
 @pytest.mark.parametrize("jeux", ["hotel"], indirect=True)
-def test_une_reduction_porte_sur_la_note_entiere_et_ne_rend_rien(jeux):
-    """Un pourcentage se prend sur toute la note, taxe comprise ; un
-    montant plus gros que la note la ramène à zéro, jamais en dessous. Et
-    le détail par prestation, celui de l'hôtel, ne la voit pas."""
+def test_les_supplements_et_reductions_tombent_ou_on_les_pose(jeux):
+    """Chaque cible et chaque periode, sur le jeu « hotel » : une personne
+    ou une chambre, la note entiere ou un jour, un pourcentage ou un
+    montant -- et une reduction qui ne rend jamais d'argent."""
     _, js = jeux
-    alice, bruno, chloe, david = (js["par"][q] for q in ("a1", "a2", "e1", "d1"))
+    par = js["par"]
+    effets = js["effets"]
 
-    # 12,5 % de 180,20 font 22,525 : le demi-centime monte, des deux côtés.
-    assert alice["brut"] == 180.2 and alice["reduction"] == 22.53
-    assert bruno["reduction"] == 7.3
-    assert chloe["reduction"] == 0
-    assert david["reduction"] == david["brut"] and david["total"] == 0
+    # 10,01 € sur la chambre 1 : quatre nuitees, et le centime qui reste va
+    # a la premiere -- Alice, la nuit du 13.
+    assert effets["aj3"] == 10.01
+    # 7 € sur la chambre 4, la seule nuit du 13 : Bruno et David, 3,50 € chacun.
+    assert effets["aj4"] == 7
+    # La chambre 2 est vide : la regle existe, elle ne touche personne.
+    assert effets["aj7"] == 0
+    # David doit moins que 1 000 € : sa note tombe a zero, pas en dessous.
+    assert par["d1"]["total"] == 0
+    assert effets["aj2"] == -(par["d1"]["brut"] + 3.5)
 
-    for valeurs in js["par"].values():
-        assert valeurs["total"] == round(valeurs["brut"] - valeurs["reduction"], 2)
-    assert js["reductions"] > 0
-    assert round(js["brut"] - js["reductions"], 2) == round(js["total"], 2)
+    for qui, valeurs in par.items():
+        assert valeurs["total"] >= 0, qui
+        assert valeurs["total"] == round(valeurs["brut"] + valeurs["ajustement"], 2), qui
+        assert round(sum(a["montant"] for a in valeurs["ajustements"]), 2) == valeurs["ajustement"], qui
+
+    assert round(js["brut"] + js["supplements"] - js["reductions"], 2) == round(js["total"], 2)
+
+
+@pytest.mark.parametrize("jeux", ["hotel"], indirect=True)
+def test_chaque_ajustement_a_sa_ligne_au_detail(jeux):
+    """« [Réduction/Supplément] — [à qui] — période — description » : une
+    ligne par regle au detail du sejour, meme quand elle ne touche personne."""
+    _, js = jeux
+    libelles = [l["libelle"] for l in js["prestations"]]
+    assert "Supplément — Chambre 1 — tout le séjour — menage" in libelles
+    assert "Supplément — Chambre 2 — tout le séjour" in libelles
+    assert "Supplément — Chloe (A) — tout le séjour — t-shirt" in libelles
+    assert any(l.startswith("Réduction — Bruno (A) — le ") for l in libelles)
+    assert any(l.startswith("Supplément — Chambre 4 — nuit du ") for l in libelles)
+    # Les ajustements viennent apres tout ce que l'hotel facture.
+    ordres = [l["ordre"] for l in js["prestations"]]
+    assert ordres == sorted(ordres)
+
+
+@pytest.mark.parametrize("jeux", ["hotel"], indirect=True)
+def test_la_description_se_lit_au_survol(jeux):
+    """Ce que la case du recapitulatif montre au survol : chaque regle qui
+    touche la personne, avec son montant."""
+    _, js = jeux
+    chloe = js["par"]["e1"]["ajustements"]
+    assert any("t-shirt" in a["libelle"] and a["montant"] == 3.33 for a in chloe)
+    assert any("menage" in a["libelle"] for a in chloe)

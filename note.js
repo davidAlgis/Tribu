@@ -325,13 +325,14 @@ function dessiner(donnees, calcul) {
   // servent a comparer des sejours de longueurs differentes, ce qu'on ne
   // fait pas sur sa propre note.
   //
-  // La reduction, si l'organisateur en a accorde une aux miens, se montre :
-  // sans elle, le total ne serait pas la somme de ce qui le precede.
+  // Les supplements et reductions que l'organisateur a poses sur les miens
+  // se montrent : sans eux, le total ne serait pas la somme de ce qui le
+  // precede.
   zoneResume.appendChild(
     tableau(
       colonnes.resume({
         rapports: false,
-        reductions: lignes.some((l) => l.reduction > 0),
+        ajustements: lignes.some((l) => l.ajustement),
       }),
       lignes,
       gens
