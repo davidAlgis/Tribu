@@ -1,15 +1,16 @@
 "use strict";
 
-// Les comptes de tout le monde : ce que l'onglet Facture montre a
-// l'organisateur, pour qui a recu l'adresse de cette page et connait le
-// code famille.
+// Les comptes de tout le monde : ce que les onglets Facture et Hotel
+// montrent a l'organisateur, pour qui a recu l'adresse de cette page et
+// connait le code famille.
 //
 // CE FICHIER NE CALCULE NI NE DESSINE RIEN. Les montants viennent de
-// `facture.js`, les tableaux de `tableaux.js` -- les memes que l'onglet
-// Facture. Il ne reste ici que le branchement : le code, l'appel, et
-// l'ordre des panneaux.
+// `facture.js`, les tableaux de `tableaux.js` et `hotel.js` -- les memes
+// que l'organisateur -- et les fichiers de `classeur.js`. Il ne reste ici
+// que le branchement : le code, l'appel, les onglets, et la lecture des
+// tableaux affiches pour les exporter.
 //
-// RIEN NE S'ECRIT. La page lit.
+// RIEN NE S'ECRIT EN BASE. La page lit, et telecharge.
 
 const { SUPABASE_URL, SUPABASE_ANON_KEY } = window.CONFIG;
 
@@ -78,6 +79,8 @@ document.getElementById("form-code").addEventListener("submit", async (e) => {
     messageCode.textContent = "";
     montrer("etape-comptes");
     dessiner(FACTURE.calculer(donnees.faits, donnees.grille), donnees.faits);
+    HOTEL.dessiner(zonesHotel, donnees.faits, donnees.grille);
+    majExports();
   } catch (erreur) {
     messageCode.className = "erreur";
     messageCode.textContent = erreur.message;
@@ -195,6 +198,150 @@ function dessiner(calcul, faits) {
     zoneRepas.appendChild(tableau(colonnes.repas(calcul), mangeurs, gens));
   }
 }
+
+// ---------------------------------------------------------------- hotel
+
+const zonesHotel = {
+  alerte: document.getElementById("alerte-hotel"),
+  entete: document.getElementById("hotel-entete"),
+  detail: document.getElementById("hotel-detail"),
+  compteurDetail: document.getElementById("compteur-hotel-detail"),
+  couchages: document.getElementById("hotel-couchages"),
+  compteurNuits: document.getElementById("compteur-hotel-nuits"),
+  couverts: document.getElementById("hotel-couverts"),
+  compteurRepas: document.getElementById("compteur-hotel-repas"),
+};
+
+// ---------------------------------------------------------------- onglets
+//
+// Le meme motif que la page de l'organisateur : un seul volet ouvert, les
+// fleches passent de l'un a l'autre.
+
+const onglets = [...document.querySelectorAll('.onglets [role="tab"]')];
+
+function ouvrirOnglet(onglet) {
+  for (const o of onglets) {
+    const actif = o === onglet;
+    o.setAttribute("aria-selected", actif ? "true" : "false");
+    o.tabIndex = actif ? 0 : -1;
+    document.getElementById(o.getAttribute("aria-controls")).hidden = !actif;
+  }
+}
+
+onglets.forEach((onglet, i) => {
+  onglet.addEventListener("click", () => ouvrirOnglet(onglet));
+  onglet.addEventListener("keydown", (e) => {
+    const pas = { ArrowLeft: -1, ArrowRight: 1 }[e.key];
+    let cible = null;
+    if (pas) cible = onglets[(i + pas + onglets.length) % onglets.length];
+    else if (e.key === "Home") cible = onglets[0];
+    else if (e.key === "End") cible = onglets[onglets.length - 1];
+    if (!cible) return;
+    e.preventDefault();
+    ouvrirOnglet(cible);
+    cible.focus();
+  });
+});
+
+// ---------------------------------------------------------------- exports
+//
+// ON EXPORTE CE QUI EST AFFICHE, case par case : le fichier dit exactement
+// ce que la page dit, sous-totaux de famille compris. Un montant redevient
+// un nombre -- « 12,50 € » s'additionne dans Excel, pas son texte -- et un
+// tiret, qui veut dire « rien », laisse la case vide.
+
+function valeurDe(texte) {
+  const propre = texte.replace(/[\u00a0\u202f]/g, " ").trim();
+  if (propre === "" || propre === "—") return null;
+  const nombre = propre.match(/^([+\-−]?)(\d[\d ]*)(?:,(\d+))?(?: €)?$/);
+  if (!nombre) return propre;
+  const valeur = Number(nombre[2].replace(/ /g, "") + (nombre[3] ? `.${nombre[3]}` : ""));
+  return nombre[1] === "-" || nombre[1] === "−" ? -valeur : valeur;
+}
+
+function lignesDe(table) {
+  return [...table.querySelectorAll("tr")].map((tr) =>
+    [...tr.children].map((c, rang) =>
+      // La premiere colonne nomme la ligne : on la garde en texte, meme
+      // quand c'est un nombre.
+      rang === 0 ? c.textContent.trim() : valeurDe(c.textContent)
+    )
+  );
+}
+
+function tableDe(zone) {
+  return zone.querySelector("table");
+}
+
+// « Ce que chacun paie » -> « ce-que-chacun-paie » : un nom de fichier sans
+// accent ni espace passe partout.
+function nomDeFichier(texte) {
+  return texte
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-|-$/g, "");
+}
+
+function telecharger(contenu, nom, type) {
+  const lien = document.createElement("a");
+  lien.href = URL.createObjectURL(new Blob([contenu], { type }));
+  lien.download = nom;
+  document.body.appendChild(lien);
+  lien.click();
+  lien.remove();
+  setTimeout(() => URL.revokeObjectURL(lien.href), 1000);
+}
+
+const XLSX_TYPE = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet";
+
+function exporterZone(zone, format) {
+  const table = tableDe(zone);
+  if (!table) return;
+  const feuille = zone.dataset.feuille || "Tableau";
+  const lignes = lignesDe(table);
+  if (format === "csv") {
+    telecharger(CLASSEUR.csv(lignes), `tribu-${nomDeFichier(feuille)}.csv`, "text/csv;charset=utf-8");
+  } else {
+    telecharger(
+      CLASSEUR.xlsx([{ nom: feuille, lignes }]),
+      `tribu-${nomDeFichier(feuille)}.xlsx`,
+      XLSX_TYPE
+    );
+  }
+}
+
+// Tous les tableaux d'un onglet, une feuille chacun, dans l'ordre de la page.
+function exporterVolet(volet, fichier) {
+  const feuilles = [...volet.querySelectorAll("[data-feuille]")]
+    .filter((zone) => tableDe(zone))
+    .map((zone) => ({ nom: zone.dataset.feuille, lignes: lignesDe(tableDe(zone)) }));
+  if (!feuilles.length) return;
+  telecharger(CLASSEUR.xlsx(feuilles), `tribu-${fichier}.xlsx`, XLSX_TYPE);
+}
+
+// Un bouton qui ne peut rien exporter -- rien de declare, donc pas de
+// tableau -- le montre au lieu de produire un fichier vide.
+function majExports() {
+  for (const bouton of document.querySelectorAll("[data-exporter]")) {
+    bouton.disabled = !tableDe(document.getElementById(bouton.dataset.exporter));
+  }
+  for (const bouton of document.querySelectorAll("[data-tout]")) {
+    bouton.disabled = ![...document.getElementById(bouton.dataset.tout)
+      .querySelectorAll("[data-feuille]")].some((zone) => tableDe(zone));
+  }
+}
+
+document.addEventListener("click", (e) => {
+  const un = e.target.closest("[data-exporter]");
+  if (un) {
+    exporterZone(document.getElementById(un.dataset.exporter), un.dataset.format);
+    return;
+  }
+  const tout = e.target.closest("[data-tout]");
+  if (tout) exporterVolet(document.getElementById(tout.dataset.tout), tout.dataset.fichier);
+});
 
 // ---------------------------------------------------------------- etapes
 

@@ -12,8 +12,8 @@
   <!--
     CETTE PAGE N'EST ANNONCÉE NULLE PART. Ni le menu ni l'accueil n'y
     mènent : elle ne s'ouvre qu'à qui en a reçu l'adresse. Elle montre la
-    note de CHACUN — ce que l'onglet Facture montre à l'organisateur — et
-    se lit avec le code famille.
+    note de CHACUN et ce qu'on envoie à l'hôtel — les onglets Facture et
+    Hôtel de l'organisateur — et se lit avec le code famille.
 
     Ce n'est pas un verrou : le dépôt est public, et qui le fouille la
     trouve. Un test veille seulement à ce qu'aucune page n'y renvoie.
@@ -22,8 +22,8 @@
 
   <h1>Les comptes du séjour.</h1>
   <p class="sous-titre">
-    Ce que chacun paie, famille par famille, et le détail nuit par nuit et
-    repas par repas.
+    Ce que chacun paie, et ce qu'on envoie à l'hôtel. Chaque tableau
+    s'exporte, en CSV ou en classeur Excel.
   </p>
 
   <p id="fil" class="fil" role="status" hidden>
@@ -48,62 +48,168 @@
 
   <!-- ---- Étape 2 : les comptes -------------------------------- -->
   <section id="etape-comptes" hidden>
-    <!--
-      CE QUI REND LE TOTAL FAUX RESTE HORS DES PANNEAUX. Une alerte pliée
-      dans un tiroir n'alerte personne.
-    -->
-    <div id="alerte-facture"></div>
     <p id="message" role="status" aria-live="polite"></p>
 
+    <div class="onglets" role="tablist" aria-label="Les comptes">
+      <button type="button" role="tab" id="onglet-facture"
+              aria-controls="volet-facture" aria-selected="true">Facture</button>
+      <button type="button" role="tab" id="onglet-hotel"
+              aria-controls="volet-hotel" aria-selected="false" tabindex="-1">Hôtel</button>
+    </div>
+
     <!--
-      Les mêmes tableaux que l'onglet Facture de l'organisateur, dessinés
-      par le même module. Le récapitulatif est OUVERT, le reste plié.
+      Chaque tableau porte ses deux boutons d'export, juste en dessous :
+      `data-exporter` désigne la zone dont on exporte le tableau, et
+      `data-feuille` sur la zone donne son nom au fichier et à la feuille.
+      En bas de chaque onglet, un bouton les prend tous, une feuille par
+      tableau.
     -->
-    <details class="panneau-pliable" id="panneau-resume" open>
-      <summary>Ce que chacun paie <span id="compteur-facture" class="discret-inline"></span></summary>
 
-      <div id="facture-resume"></div>
+    <!-- ---- Facture --------------------------------------------- -->
+    <div class="volet" id="volet-facture" role="tabpanel" aria-labelledby="onglet-facture" tabindex="0">
+      <!--
+        CE QUI REND LE TOTAL FAUX RESTE HORS DES PANNEAUX. Une alerte pliée
+        dans un tiroir n'alerte personne.
+      -->
+      <div id="alerte-facture"></div>
 
-      <p class="note">
-        Une ligne par personne, et chaque famille ferme sur sa somme. La
-        colonne <strong>hébergement</strong> comprend la taxe de séjour. Les
-        colonnes <strong>par nuitée</strong> et <strong>par repas</strong>
-        ramènent chaque somme à ce qu'elle achète&nbsp;: elles ne
-        s'additionnent pas.
-      </p>
-    </details>
+      <details class="panneau-pliable" id="panneau-resume" open>
+        <summary>Ce que chacun paie <span id="compteur-facture" class="discret-inline"></span></summary>
 
-    <details class="panneau-pliable" id="panneau-synthese">
-      <summary>En résumé <span id="compteur-synthese" class="discret-inline"></span></summary>
+        <div id="facture-resume" data-feuille="Ce que chacun paie"></div>
+        <div class="actions exporter">
+          <button type="button" class="discret" data-exporter="facture-resume" data-format="csv">Exporter en CSV</button>
+          <button type="button" class="discret" data-exporter="facture-resume" data-format="xlsx">Exporter en XLSX</button>
+        </div>
 
-      <div id="facture-synthese"></div>
+        <p class="note">
+          Une ligne par personne, et chaque famille ferme sur sa somme. La
+          colonne <strong>hébergement</strong> comprend la taxe de séjour. Les
+          colonnes <strong>par nuitée</strong> et <strong>par repas</strong>
+          ramènent chaque somme à ce qu'elle achète&nbsp;: elles ne
+          s'additionnent pas. Survole une case <strong>suppl. / réd.</strong>
+          pour savoir d'où elle vient.
+        </p>
+      </details>
 
-      <p class="note">
-        La <strong>forme</strong> de la dépense&nbsp;: un écart-type proche de
-        zéro dit que tout le monde paie à peu près la même chose&nbsp;; large,
-        il dit que la moyenne ne représente personne.
-      </p>
-    </details>
+      <details class="panneau-pliable" id="panneau-synthese">
+        <summary>En résumé <span id="compteur-synthese" class="discret-inline"></span></summary>
 
-    <details class="panneau-pliable" id="panneau-nuits">
-      <summary>Les nuits <span id="compteur-nuits" class="discret-inline"></span></summary>
+        <div id="facture-synthese" data-feuille="En résumé"></div>
+        <div class="actions exporter">
+          <button type="button" class="discret" data-exporter="facture-synthese" data-format="csv">Exporter en CSV</button>
+          <button type="button" class="discret" data-exporter="facture-synthese" data-format="xlsx">Exporter en XLSX</button>
+        </div>
 
-      <div id="facture-hebergement"></div>
-    </details>
+        <p class="note">
+          La <strong>forme</strong> de la dépense&nbsp;: un écart-type proche de
+          zéro dit que tout le monde paie à peu près la même chose&nbsp;; large,
+          il dit que la moyenne ne représente personne.
+        </p>
+      </details>
 
-    <details class="panneau-pliable" id="panneau-repas">
-      <summary>Les repas hors pension <span id="compteur-repas" class="discret-inline"></span></summary>
+      <details class="panneau-pliable" id="panneau-nuits">
+        <summary>Les nuits <span id="compteur-nuits" class="discret-inline"></span></summary>
 
-      <div id="facture-repas"></div>
-    </details>
+        <div id="facture-hebergement" data-feuille="Les nuits"></div>
+        <div class="actions exporter">
+          <button type="button" class="discret" data-exporter="facture-hebergement" data-format="csv">Exporter en CSV</button>
+          <button type="button" class="discret" data-exporter="facture-hebergement" data-format="xlsx">Exporter en XLSX</button>
+        </div>
+      </details>
+
+      <details class="panneau-pliable" id="panneau-repas">
+        <summary>Les repas hors pension <span id="compteur-repas" class="discret-inline"></span></summary>
+
+        <div id="facture-repas" data-feuille="Les repas hors pension"></div>
+        <div class="actions exporter">
+          <button type="button" class="discret" data-exporter="facture-repas" data-format="csv">Exporter en CSV</button>
+          <button type="button" class="discret" data-exporter="facture-repas" data-format="xlsx">Exporter en XLSX</button>
+        </div>
+      </details>
+
+      <div class="actions">
+        <button type="button" data-tout="volet-facture" data-fichier="facture">Tout exporter en XLSX</button>
+      </div>
+    </div>
+
+    <!-- ---- Hôtel ----------------------------------------------- -->
+    <div class="volet" id="volet-hotel" role="tabpanel" aria-labelledby="onglet-hotel" tabindex="0" hidden>
+      <!--
+        Ce qu'on envoie à l'hôtel : des nombres de chambres et des nombres
+        de couverts, aucun nom. Le même dessin que l'onglet Hôtel de
+        l'organisateur (`hotel.js`).
+      -->
+      <div id="alerte-hotel"></div>
+
+      <!-- Les trois lignes qu'un contrat d'hôtel porte en tête. -->
+      <p id="hotel-entete" class="fil"></p>
+
+      <details class="panneau-pliable" id="panneau-detail" open>
+        <summary>Le détail du séjour <span id="compteur-hotel-detail" class="discret-inline"></span></summary>
+
+        <div id="hotel-detail" data-feuille="Le détail du séjour"></div>
+        <div class="actions exporter">
+          <button type="button" class="discret" data-exporter="hotel-detail" data-format="csv">Exporter en CSV</button>
+          <button type="button" class="discret" data-exporter="hotel-detail" data-format="xlsx">Exporter en XLSX</button>
+        </div>
+
+        <p class="note">
+          Le même argent que l'onglet Facture, regroupé
+          <strong>par prestation</strong>&nbsp;: la forme d'un contrat
+          d'hôtel. Les suppléments et réductions spécifiques y ont chacun leur
+          ligne, et le total reste celui de la facture.
+        </p>
+      </details>
+
+      <details class="panneau-pliable" id="panneau-couchages" open>
+        <summary>Les couchages, nuit par nuit <span id="compteur-hotel-nuits" class="discret-inline"></span></summary>
+
+        <div id="hotel-couchages" data-feuille="Les couchages"></div>
+        <div class="actions exporter">
+          <button type="button" class="discret" data-exporter="hotel-couchages" data-format="csv">Exporter en CSV</button>
+          <button type="button" class="discret" data-exporter="hotel-couchages" data-format="xlsx">Exporter en XLSX</button>
+        </div>
+
+        <p class="note">
+          Le nombre d'exemplaires de chaque type <strong>réellement
+          occupés</strong> cette nuit-là, d'après le plan de couchage. Une
+          chambre où dort une seule personne compte pour une chambre.
+        </p>
+      </details>
+
+      <details class="panneau-pliable" id="panneau-couverts" open>
+        <summary>Les couverts, repas par repas <span id="compteur-hotel-repas" class="discret-inline"></span></summary>
+
+        <div id="hotel-couverts" data-feuille="Les couverts"></div>
+        <div class="actions exporter">
+          <button type="button" class="discret" data-exporter="hotel-couverts" data-format="csv">Exporter en CSV</button>
+          <button type="button" class="discret" data-exporter="hotel-couverts" data-format="xlsx">Exporter en XLSX</button>
+        </div>
+
+        <p class="note">
+          Un couvert par personne qui a coché ce repas, compris dans une
+          pension ou pris à part. Les colonnes de <strong>préférences</strong>
+          comptent, parmi les personnes attablées, celles qui l'ont
+          déclaré&nbsp;— des nombres, jamais des noms.
+        </p>
+      </details>
+
+      <div class="actions">
+        <button type="button" data-tout="volet-hotel" data-fichier="hotel">Tout exporter en XLSX</button>
+      </div>
+    </div>
   </section>
 </main>
 
 <script src="./config.js"></script>
-<!-- `facture.js` calcule, `tableaux.js` met en page : les deux mêmes que
-     l'onglet Facture. `comptes.js` ne fait que les brancher. -->
+<!-- `facture.js` calcule, `tableaux.js` et `hotel.js` mettent en page :
+     les mêmes que les onglets Facture et Hôtel. `classeur.js` écrit les
+     fichiers. `comptes.js` ne fait que les brancher. -->
 <script src="./facture.js"></script>
 <script src="./tableaux.js"></script>
+<script src="./hotel.js"></script>
+<script src="./classeur.js"></script>
 <script src="./comptes.js"></script>
 </body>
 </html>

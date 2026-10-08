@@ -302,6 +302,8 @@ MODULES = {
     "REPARTIR": "repartir.js",
     "FACTURE": "facture.js",
     "TABLEAUX": "tableaux.js",
+    "HOTEL": "hotel.js",
+    "CLASSEUR": "classeur.js",
 }
 
 
@@ -325,7 +327,7 @@ def test_chaque_module_utilise_est_charge_par_la_page(page, pages):
     assert manquants == [], f"{page} : {manquants} utilisé(s), script absent de la page"
 
 
-@pytest.mark.parametrize("module", ["repartir.js", "facture.js"])
+@pytest.mark.parametrize("module", ["repartir.js", "facture.js", "classeur.js"])
 def test_les_calculs_se_lisent_sans_navigateur(module):
     """`repartir.js` ne décide que d'une chose : qui dort où.
     `facture.js` ne décide que de ce que chacun paie. Ni l'un ni l'autre
@@ -353,3 +355,21 @@ def test_la_vue_mer_ne_se_propose_plus(pages):
         for texte, quoi in ((html, page), (js, f"script de {page}")):
             assert "chambre+vue_mer" not in texte, f"{quoi} propose encore la vue mer"
             assert "tarif-vue-mer" not in texte, f"{quoi} a encore le supplément vue mer"
+
+
+def test_chaque_export_designe_un_tableau(pages):
+    """Un bouton d'export vise sa zone par son identifiant, et la zone donne
+    son nom a la feuille. Un identifiant renomme d'un cote seulement, et le
+    bouton ne trouverait rien a exporter -- sans le dire."""
+    html, _ = pages["comptes.html"]
+    ids = identifiants(html)
+    feuilles = set(re.findall(r'id="([^"]+)"[^>]*data-feuille="[^"]+"', html))
+    vises = re.findall(r'data-exporter="([^"]+)"', html)
+    assert vises, "aucun bouton d'export : le test ne sert a rien"
+    for zone in vises:
+        assert zone in feuilles, f"{zone} : le bouton vise une zone sans nom de feuille"
+    # Chaque zone a ses deux formats.
+    for zone in feuilles:
+        assert vises.count(zone) == 2, f"{zone} : il manque un format"
+    for volet in re.findall(r'data-tout="([^"]+)"', html):
+        assert volet in ids, f"{volet} : le bouton « tout exporter » vise un volet absent"

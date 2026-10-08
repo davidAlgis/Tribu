@@ -2376,18 +2376,10 @@ const {
   cellule,
   celluleEuros,
   quantieme,
-  libelleNuit,
-  libelleRepas,
   rienDire,
   tableau: tableauFacture,
   colonnes: COLONNES_FACTURE,
 } = TABLEAUX;
-
-const NOMS_REPAS = {
-  petit_dejeuner: "Petit-déj.",
-  dejeuner: "Déjeuner",
-  diner: "Dîner",
-};
 
 function dessinerFacture(calcul) {
   const gens = new Map((etat.participants || []).map((p) => [p.id, p]));
@@ -2774,334 +2766,27 @@ boutonAjustement.addEventListener("click", async () => {
 // couverts. AUCUN NOM -- l'hotel n'a pas besoin de savoir qui, et ce qui
 // ne sort pas ne se perd pas.
 //
-// Rien de neuf en base : les faits (qui dort ou, qui mange quoi) et la
-// liste des participants (tranche d'age, preferences) sont deja chargees
-// pour la facture et pour la liste. On ne fait ici que compter.
+// L'ONGLET SE DESSINE DANS `hotel.js`, que la page des comptes partage :
+// deux copies, et ce qu'on envoie a l'hotel ne serait plus ce que la
+// famille lit. Les couverts arrivent deja additionnes par la base.
 
-const TRANCHES_HOTEL = [
-  ["bebe", "Bébés"],
-  ["enfant", "Enfants"],
-  ["jeune", "Jeunes"],
-  ["adulte", "Adultes"],
-];
-
-const PREFERENCES_HOTEL = [
-  ["vegetarien", "Végétariens"],
-  ["vegan", "Vegans"],
-  ["sans_gluten", "Sans gluten"],
-  ["non_buveur", "Sans alcool"],
-];
-
-const zoneHotelDetail = document.getElementById("hotel-detail");
-const enteteHotel = document.getElementById("hotel-entete");
-const compteurHotelDetail = document.getElementById("compteur-hotel-detail");
-const zoneHotelCouchages = document.getElementById("hotel-couchages");
-const zoneHotelCouverts = document.getElementById("hotel-couverts");
-const alerteHotel = document.getElementById("alerte-hotel");
-const compteurHotelNuits = document.getElementById("compteur-hotel-nuits");
-const compteurHotelRepas = document.getElementById("compteur-hotel-repas");
+const zonesHotel = {
+  alerte: document.getElementById("alerte-hotel"),
+  entete: document.getElementById("hotel-entete"),
+  detail: document.getElementById("hotel-detail"),
+  compteurDetail: document.getElementById("compteur-hotel-detail"),
+  couchages: document.getElementById("hotel-couchages"),
+  compteurNuits: document.getElementById("compteur-hotel-nuits"),
+  couverts: document.getElementById("hotel-couverts"),
+  compteurRepas: document.getElementById("compteur-hotel-repas"),
+};
 const messageHotel = document.getElementById("message-hotel");
-
-// Combien d'exemplaires de chaque type sont occupes, nuit par nuit.
-//
-// C'EST LE PLAN QUI COMPTE, et non l'inventaire -- qui dit ce qu'on
-// pourrait prendre -- ni les souhaits, qui disent ce qu'on voudrait. Une
-// chambre ou dort une seule personne compte pour une chambre : c'est la
-// chambre qu'on reserve, pas le lit.
-function couchagesParNuit(faits) {
-  const parJour = new Map();
-  for (const c of faits.couchages || []) {
-    if (!parJour.has(c.jour)) parJour.set(c.jour, new Map());
-    const parType = parJour.get(c.jour);
-    if (!parType.has(c.logement_id)) parType.set(c.logement_id, new Set());
-    parType.get(c.logement_id).add(c.numero);
-  }
-  return parJour;
-}
-
-// Qui dort sur place sans avoir de place attribuee : l'hotel compterait
-// une chambre de moins.
-function dormeursSansPlace(faits) {
-  const places = new Set((faits.couchages || []).map((c) => `${c.participant_id}|${c.jour}`));
-  return (faits.presences || []).filter(
-    (p) => p.hebergement !== "exterieur" && !places.has(`${p.participant_id}|${p.jour}`)
-  );
-}
-
-function couvertsParRepas(faits, gens) {
-  const compte = new Map();
-  for (const presence of faits.presences || []) {
-    const personne = gens.get(presence.participant_id);
-    if (!personne) continue;
-    for (const [repas] of REPAS_HORS) {
-      if (!presence[repas]) continue;
-      const cle = `${presence.jour}|${repas}`;
-      if (!compte.has(cle)) {
-        compte.set(cle, { jour: presence.jour, repas, total: 0 });
-        for (const [t] of TRANCHES_HOTEL) compte.get(cle)[t] = 0;
-        for (const [p] of PREFERENCES_HOTEL) compte.get(cle)[p] = 0;
-      }
-      const ligne = compte.get(cle);
-      ligne.total += 1;
-      if (ligne[personne.categorie_age] !== undefined) ligne[personne.categorie_age] += 1;
-      for (const [p] of PREFERENCES_HOTEL) if (personne[p]) ligne[p] += 1;
-    }
-  }
-  const RANG = { petit_dejeuner: 0, dejeuner: 1, diner: 2 };
-  return [...compte.values()].sort(
-    (a, b) => a.jour.localeCompare(b.jour) || RANG[a.repas] - RANG[b.repas]
-  );
-}
-
-// Un tableau de nombres : les zeros s'effacent, seuls les chiffres qui
-// comptent restent a l'oeil.
-function tableauHotel(colonnes, lignes) {
-  const cadre = document.createElement("div");
-  cadre.className = "tableau-large";
-  const table = document.createElement("table");
-
-  const tete = document.createElement("thead");
-  const rangee = document.createElement("tr");
-  for (const colonne of colonnes) {
-    const th = document.createElement("th");
-    th.textContent = colonne.libelle;
-    rangee.appendChild(th);
-  }
-  tete.appendChild(rangee);
-  table.appendChild(tete);
-
-  const corps = document.createElement("tbody");
-  const sommes = colonnes.map(() => 0);
-  for (const ligne of lignes) {
-    const tr = document.createElement("tr");
-    colonnes.forEach((colonne, rang) => {
-      if (rang === 0) {
-        const th = document.createElement("th");
-        th.scope = "row";
-        th.textContent = colonne.valeur(ligne);
-        tr.appendChild(th);
-        return;
-      }
-      const valeur = colonne.valeur(ligne);
-      sommes[rang] += valeur;
-      const td = document.createElement("td");
-      td.textContent = valeur ? String(valeur) : "—";
-      if (!valeur) td.className = "rien";
-      if (colonne.total) td.classList.add("total-personne");
-      tr.appendChild(td);
-    });
-    corps.appendChild(tr);
-  }
-  table.appendChild(corps);
-
-  const pied = document.createElement("tfoot");
-  const totaux = document.createElement("tr");
-  colonnes.forEach((colonne, rang) => {
-    if (rang === 0) {
-      const th = document.createElement("th");
-      th.scope = "row";
-      th.textContent = "TOTAL";
-      totaux.appendChild(th);
-      return;
-    }
-    const td = document.createElement("td");
-    td.textContent = String(sommes[rang]);
-    totaux.appendChild(td);
-  });
-  pied.appendChild(totaux);
-  table.appendChild(pied);
-
-  cadre.appendChild(table);
-  return cadre;
-}
-
-// « 51 personnes du 24/10/2026 au 28/10/2026. Première prestation :
-// déjeuner du 24. Dernière : déjeuner du 28. » Les trois lignes qu'un
-// contrat porte en tete, et qu'on recopie sinon a la main.
-function enteteDuSejour(faits, couverts) {
-  const gens = new Set();
-  let debut = null;
-  let fin = null;
-  for (const presence of faits.presences || []) {
-    gens.add(presence.participant_id);
-    if (!debut || presence.jour < debut) debut = presence.jour;
-    if (!fin || presence.jour > fin) fin = presence.jour;
-  }
-  if (!gens.size) return "";
-
-  const jour = (iso) => new Date(`${iso}T12:00:00`).toLocaleDateString("fr-FR");
-  const dire = (l) => `${NOMS_REPAS[l.repas].toLowerCase()} du ${quantieme(l.jour)}`;
-  const bornes = couverts.length
-    ? ` Première prestation : ${dire(couverts[0])}. ` +
-      `Dernière : ${dire(couverts[couverts.length - 1])}.`
-    : "";
-  return `${gens.size} personnes, du ${jour(debut)} au ${jour(fin)}.${bornes}`;
-}
-
-function dessinerDetail(prestations) {
-  compteurHotelDetail.textContent = prestations.length
-    ? `${prestations.length} ligne(s) — ${euros(
-        Math.round(prestations.reduce((t, l) => t + l.montant, 0) * 100) / 100
-      )}`
-    : "";
-
-  if (!prestations.length) {
-    rienDire(zoneHotelDetail, "Rien à facturer : ni nuit, ni repas déclarés.");
-    return;
-  }
-
-  const cadre = document.createElement("div");
-  cadre.className = "tableau-large";
-  const table = document.createElement("table");
-
-  const tete = document.createElement("thead");
-  const rangee = document.createElement("tr");
-  for (const titre of ["Prestation", "Quantité", "Prix unitaire", "Remise", "Montant"]) {
-    const th = document.createElement("th");
-    th.textContent = titre;
-    rangee.appendChild(th);
-  }
-  tete.appendChild(rangee);
-  table.appendChild(tete);
-
-  const corps = document.createElement("tbody");
-  for (const ligne of prestations) {
-    const tr = document.createElement("tr");
-    const nom = document.createElement("th");
-    nom.scope = "row";
-    nom.textContent = ligne.libelle;
-    tr.appendChild(nom);
-    tr.appendChild(cellule(String(ligne.quantite)));
-    tr.appendChild(celluleEuros(ligne.unitaire));
-    tr.appendChild(cellule(ligne.remise ? `−${ligne.remise}\u00a0%` : "—",
-                           ligne.remise ? "" : "rien"));
-    tr.appendChild(celluleEuros(ligne.montant, "total-personne"));
-    corps.appendChild(tr);
-  }
-  table.appendChild(corps);
-
-  const pied = document.createElement("tfoot");
-  const totaux = document.createElement("tr");
-  const titre = document.createElement("th");
-  titre.scope = "row";
-  titre.textContent = "TOTAL";
-  totaux.appendChild(titre);
-  totaux.appendChild(cellule(""));
-  totaux.appendChild(cellule(""));
-  totaux.appendChild(cellule(""));
-  totaux.appendChild(
-    celluleEuros(
-      Math.round(prestations.reduce((t, l) => t + l.montant, 0) * 100) / 100,
-      "total-personne"
-    )
-  );
-  pied.appendChild(totaux);
-  table.appendChild(pied);
-
-  cadre.appendChild(table);
-  zoneHotelDetail.textContent = "";
-  zoneHotelDetail.appendChild(cadre);
-}
-
-function dessinerHotel(faits) {
-  const gens = new Map((etat.participants || []).map((p) => [p.id, p]));
-  const logements = (tarifs.logements || []).slice();
-
-  // --- les couchages
-  const parNuit = couchagesParNuit(faits);
-  const nuits = [...parNuit.keys()].sort();
-  const utilises = logements.filter((l) =>
-    nuits.some((j) => (parNuit.get(j).get(l.id) || new Set()).size)
-  );
-
-  const sansPlace = dormeursSansPlace(faits);
-  alerteHotel.textContent = "";
-  if (sansPlace.length) {
-    const p = document.createElement("p");
-    p.className = "erreur";
-    p.textContent =
-      `${sansPlace.length} nuit(s) déclarée(s) sans place attribuée : ces ` +
-      "personnes ne sont comptées dans aucune chambre. Finis le plan de " +
-      "couchage avant d'envoyer ces chiffres.";
-    alerteHotel.appendChild(p);
-  }
-
-  compteurHotelNuits.textContent = nuits.length ? `${nuits.length} nuit(s)` : "";
-  if (!nuits.length) {
-    rienDire(
-      zoneHotelCouchages,
-      "Aucune place attribuée : le plan de couchage dira quelles chambres réserver."
-    );
-  } else {
-    zoneHotelCouchages.textContent = "";
-    zoneHotelCouchages.appendChild(
-      tableauHotel(
-        [
-          { libelle: "Nuit du", valeur: (j) => libelleNuit(j).replace("Nuit du ", "") },
-          ...utilises.map((l) => ({
-            libelle: nommerTarif(l),
-            valeur: (j) => (parNuit.get(j).get(l.id) || new Set()).size,
-          })),
-          {
-            libelle: "Couchages",
-            valeur: (j) =>
-              [...parNuit.get(j).values()].reduce((t, u) => t + u.size, 0),
-            total: true,
-          },
-          {
-            libelle: "Dormeurs",
-            valeur: (j) =>
-              (faits.couchages || []).filter((c) => c.jour === j).length,
-          },
-        ],
-        nuits
-      )
-    );
-  }
-
-  // --- le detail du sejour, et l'en-tete
-  const calcul = FACTURE.calculer(faits, tarifs);
-  dessinerDetail(calcul.prestations || []);
-
-  // --- les couverts
-  const couverts = couvertsParRepas(faits, gens);
-  compteurHotelRepas.textContent = couverts.length
-    ? `${couverts.reduce((t, l) => t + l.total, 0)} couvert(s)`
-    : "";
-  enteteHotel.textContent = enteteDuSejour(faits, couverts);
-
-  if (!couverts.length) {
-    rienDire(zoneHotelCouverts, "Aucun repas déclaré.");
-  } else {
-    zoneHotelCouverts.textContent = "";
-    zoneHotelCouverts.appendChild(
-      tableauHotel(
-        [
-          {
-            libelle: "Repas",
-            valeur: (l) => libelleRepas(l),
-          },
-          ...TRANCHES_HOTEL.map(([cle, libelle]) => ({
-            libelle,
-            valeur: (l) => l[cle],
-          })),
-          { libelle: "Couverts", valeur: (l) => l.total, total: true },
-          ...PREFERENCES_HOTEL.map(([cle, libelle]) => ({
-            libelle,
-            valeur: (l) => l[cle],
-          })),
-        ],
-        couverts
-      )
-    );
-  }
-}
 
 async function rechargerHotel() {
   messageHotel.className = "";
   messageHotel.textContent = "Calcul…";
   try {
-    dessinerHotel(await rpc("admin_faits", { p_code: etat.code }));
+    HOTEL.dessiner(zonesHotel, await rpc("admin_faits", { p_code: etat.code }), tarifs);
     messageHotel.textContent = "";
   } catch (erreur) {
     messageHotel.className = "erreur";

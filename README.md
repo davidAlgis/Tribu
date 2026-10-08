@@ -184,11 +184,28 @@ pas une miette de pension.
 
 ## Les comptes de tout le monde, derrière un lien
 
-[`comptes.html`](comptes.html) montre ce que montre l'onglet **Facture**
-d'`admin.html` — la note de **chacun**, la synthèse, les nuits, les repas —
-avec le **code famille**. Elle n'est **annoncée nulle part** : ni le menu
+[`comptes.html`](comptes.html) montre ce que montrent les onglets
+**Facture** et **Hôtel** d'`admin.html` — la note de **chacun**, la synthèse,
+les nuits, les repas ; le détail du séjour, les couchages, les couverts —
+avec le **code famille**, en deux onglets. Elle n'est **annoncée nulle part** : ni le menu
 ni l'accueil n'y mènent, et un test y veille. On y arrive en recevant son
 adresse, par exemple `https://<toi>.github.io/Tribu/comptes.html`.
+
+**Chaque tableau s'exporte**, juste en dessous, en **CSV** ou en **XLSX** ;
+en bas de chaque onglet, **« Tout exporter en XLSX »** les met tous dans un
+classeur, une feuille par tableau. On exporte ce qui est affiché, case par
+case, sous-totaux compris ; un montant y redevient un nombre, qu'Excel sait
+additionner. Le CSV est à la française — point-virgule, virgule décimale —
+sans quoi Excel met tout dans la première colonne. Le classeur est écrit par
+[`classeur.js`](classeur.js), sans bibliothèque tierce : un test le relit
+avec openpyxl.
+
+**Les couverts arrivent déjà additionnés.** L'onglet Hôtel compte, repas par
+repas, les végétariens, vegans, sans gluten et sans alcool. La page ne reçoit
+que ces nombres — la base fait l'addition — et jamais les préférences d'une
+personne, que [`regimes.html`](regimes.html) garde pour soi. L'onglet de
+l'organisateur lit la même addition : les deux onglets Hôtel se dessinent
+dans [`hotel.js`](hotel.js).
 
 **Ce n'est pas un verrou, et il faut le savoir.** Le dépôt est public : la
 page et la fonction qu'elle appelle (`comptes_charger`) s'y lisent, et le

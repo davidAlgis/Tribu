@@ -4452,6 +4452,42 @@ begin
     -- Les supplements et reductions specifiques : tous, comme le reste.
     'ajustements', private.ajustements_liste(),
 
+    -- LES COUVERTS, DEJA ADDITIONNES : par repas, combien de personnes par
+    -- tranche d'age et combien declarent chaque preference. C'est ce que
+    -- l'onglet Hotel envoie a l'hotel. La page des comptes, ouverte avec le
+    -- seul code famille, le montre aussi -- et les preferences de chacun,
+    -- que `regimes.html` garde pour soi, n'ont pas a lui parvenir une par
+    -- une. La base additionne ; les deux pages lisent la meme addition.
+    'couverts', coalesce((
+      select jsonb_agg(jsonb_build_object(
+               'jour', x.jour, 'repas', x.repas, 'total', x.total,
+               'bebe', x.bebe, 'enfant', x.enfant, 'jeune', x.jeune, 'adulte', x.adulte,
+               'vegetarien', x.vegetarien, 'vegan', x.vegan,
+               'sans_gluten', x.sans_gluten, 'non_buveur', x.non_buveur
+             ) order by x.jour, x.rang)
+      from (
+        select pr.jour, m.repas, m.rang,
+               count(*) as total,
+               count(*) filter (where p.categorie_age = 'bebe')   as bebe,
+               count(*) filter (where p.categorie_age = 'enfant') as enfant,
+               count(*) filter (where p.categorie_age = 'jeune')  as jeune,
+               count(*) filter (where p.categorie_age = 'adulte') as adulte,
+               count(*) filter (where p.vegetarien)  as vegetarien,
+               count(*) filter (where p.vegan)       as vegan,
+               count(*) filter (where p.sans_gluten) as sans_gluten,
+               count(*) filter (where p.non_buveur)  as non_buveur
+          from public.presences pr
+          join private.participants p on p.id = pr.participant_id
+         cross join lateral (values
+                ('petit_dejeuner', 0, pr.petit_dejeuner),
+                ('dejeuner',       1, pr.dejeuner),
+                ('diner',          2, pr.diner)) as m(repas, rang, pris)
+         where m.pris
+           and pr.jour between r.date_debut and r.date_fin
+         group by pr.jour, m.repas, m.rang
+      ) x
+    ), '[]'::jsonb),
+
     'personnes', coalesce((
       select jsonb_agg(jsonb_build_object(
                'id', p.id,
