@@ -182,6 +182,30 @@ compare au centime sur **trois** jeux de données, dont un qui n'exerce que
 ça : deux parts qui s'additionnent, un prix qui dépend de l'occupation, et
 pas une miette de pension.
 
+## Accorder une réduction à quelqu'un
+
+Dans l'onglet **Facture**, le panneau **Réductions accordées** : une
+personne, **un pourcentage ou un montant en euros**, et c'est tout. Elle
+porte sur **toute la note** — hébergement, repas, taxe de séjour — et un
+montant plus gros que la note la ramène à zéro, jamais en dessous.
+
+**L'organisateur seul la pose.** Aucune fonction familiale n'écrit ces
+colonnes ; la famille la voit sur sa propre note, dans une colonne
+« Réduction » écrite en négatif — sans quoi le total ne serait plus la
+somme de ce qui le précède.
+
+**La base garde le type et la valeur, pas le montant.** « 10 % » d'une
+note qui change suit la note. Les deux colonnes sont nulles par défaut :
+recoller le schéma sur une base remplie ne change aucune facture.
+
+**L'hôtel ne la voit pas.** Le détail par prestation totalise ce que
+l'hôtel facture ; la réduction est une affaire de famille, comme la
+ligne négative « Reduction » qui la porte dans l'export Excel.
+
+Le pourcentage se calcule **en centimes entiers**, le demi-centime vers
+le haut : 12,5 % de 180,20 € tombait d'un centime différent en Python et
+en JavaScript, et le test de comparaison l'a vu.
+
 ## Les activités
 
 Une liste d'idées, et trois réponses par personne : **Oui**, **Pourquoi

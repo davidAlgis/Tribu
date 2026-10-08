@@ -115,6 +115,8 @@ const MESSAGES = {
   TITRE_VIDE: "Il manque l'intitulé de l'activité.",
   ACTIVITE_EXISTE: "Cette idée est déjà dans la liste.",
   ACTIVITE_INCONNUE: "Cette idée n'existe plus. Recharge la page.",
+  REDUCTION_INVALIDE:
+    "Une réduction est un nombre positif — et un pourcentage ne dépasse pas 100.",
 };
 
 const etat = {
@@ -2403,7 +2405,8 @@ function dessinerFacture(calcul) {
   const arrondi = (v) => Math.round(v * 100) / 100;
 
   compteurFacture.textContent = calcul.lignes.length
-    ? `${calcul.lignes.length} personne(s) — ${euros(calcul.total)} en tout`
+    ? `${calcul.lignes.length} personne(s) — ${euros(calcul.total)} en tout` +
+      (calcul.reductions ? `, après ${euros(calcul.reductions)} de réductions` : "")
     : "";
 
   // Ce qui rend le total faux se dit AVANT le total, et non en note de
@@ -2458,9 +2461,15 @@ function dessinerFacture(calcul) {
   } else {
     zoneResume.textContent = "";
     zoneResume.appendChild(
-      tableauFacture(COLONNES_FACTURE.resume(), calcul.lignes, gens)
+      tableauFacture(
+        COLONNES_FACTURE.resume({ reductions: calcul.reductions > 0 }),
+        calcul.lignes,
+        gens
+      )
     );
   }
+
+  dessinerReductions(calcul);
 
   // --- la synthese : la forme de la depense, et non son montant
   dessinerSynthese(calcul);
@@ -2531,6 +2540,172 @@ async function rechargerFacture() {
     messageFacture.textContent = erreur.message;
   }
 }
+
+
+// --------------------------------------------------------- reductions
+//
+// Une reduction par personne, sur sa note entiere : en pourcentage ou en
+// euros. Elle se pose ICI et nulle part ailleurs -- aucune fonction
+// familiale n'ecrit ces colonnes. La famille la voit sur sa note.
+//
+// LE MONTANT N'EST PAS GARDE. La base retient le type et la valeur ; ce
+// que cela retire se calcule a la lecture, comme le reste de la facture.
+// « 10 % » d'une note qui change suit la note.
+
+const choixReductionPersonne = document.getElementById("reduction-personne");
+const choixReductionType = document.getElementById("reduction-type");
+const champReductionValeur = document.getElementById("reduction-valeur");
+const boutonReduction = document.getElementById("reduction-enregistrer");
+const messageReduction = document.getElementById("message-reduction");
+const zoneListeReductions = document.getElementById("liste-reductions");
+const compteurReductions = document.getElementById("compteur-reductions");
+
+function libelleReduction(personne) {
+  const valeur = Number(personne.reduction_valeur) || 0;
+  return personne.reduction_type === "pourcentage"
+    ? `${String(valeur).replace(".", ",")} %`
+    : euros(valeur);
+}
+
+function nomReduction(personne) {
+  return personne.famille && personne.famille !== personne.prenom
+    ? `${personne.prenom} (${personne.famille})`
+    : personne.prenom;
+}
+
+// Choisir quelqu'un montre ce qu'il a deja : on corrige une reduction,
+// on ne la ressaisit pas de memoire.
+function remplirReduction() {
+  const personne = (etat.participants || []).find(
+    (p) => p.id === choixReductionPersonne.value
+  );
+  if (personne && personne.reduction_type) {
+    choixReductionType.value = personne.reduction_type;
+    champReductionValeur.value = Number(personne.reduction_valeur);
+  } else {
+    choixReductionType.value = "pourcentage";
+    champReductionValeur.value = "";
+  }
+  champReductionValeur.disabled = !choixReductionType.value;
+}
+
+function dessinerReductions(calcul) {
+  const gens = etat.participants || [];
+
+  // La liste se refait a chaque calcul ; la personne choisie reste choisie.
+  const garde = choixReductionPersonne.value;
+  choixReductionPersonne.textContent = "";
+  for (const personne of gens) {
+    const option = document.createElement("option");
+    option.value = personne.id;
+    option.textContent = nomReduction(personne);
+    choixReductionPersonne.appendChild(option);
+  }
+  if (gens.some((p) => p.id === garde)) choixReductionPersonne.value = garde;
+  remplirReduction();
+
+  const accordees = gens.filter((p) => p.reduction_type);
+  compteurReductions.textContent = accordees.length
+    ? `${accordees.length} personne(s) — ${euros(calcul.reductions)} en tout`
+    : "";
+  if (!accordees.length) {
+    rienDire(zoneListeReductions, "Aucune réduction accordée.");
+    return;
+  }
+
+  const parPersonne = new Map(calcul.lignes.map((l) => [l.personne_id, l]));
+  const cadre = document.createElement("div");
+  cadre.className = "tableau-large";
+  const table = document.createElement("table");
+  const tete = document.createElement("thead");
+  const rangee = document.createElement("tr");
+  for (const titre of ["Personne", "Réduction", "Retiré de sa note", ""]) {
+    const th = document.createElement("th");
+    th.textContent = titre;
+    rangee.appendChild(th);
+  }
+  tete.appendChild(rangee);
+  table.appendChild(tete);
+
+  const corps = document.createElement("tbody");
+  for (const personne of accordees) {
+    const tr = document.createElement("tr");
+    const nom = document.createElement("th");
+    nom.scope = "row";
+    nom.textContent = nomReduction(personne);
+    tr.appendChild(nom);
+    tr.appendChild(cellule(libelleReduction(personne)));
+    // Sans note -- rien de declare -- il n'y a rien a retirer : la case
+    // le dit d'un tiret, la reduction attend.
+    const ligne = parPersonne.get(personne.id);
+    tr.appendChild(celluleEuros(ligne ? ligne.reduction : 0));
+
+    const td = document.createElement("td");
+    const retirer = document.createElement("button");
+    retirer.type = "button";
+    retirer.className = "retirer";
+    retirer.textContent = "Retirer";
+    retirer.addEventListener("click", () => enregistrerReduction(personne, null, null));
+    td.appendChild(retirer);
+    tr.appendChild(td);
+    corps.appendChild(tr);
+  }
+  table.appendChild(corps);
+  cadre.appendChild(table);
+  zoneListeReductions.textContent = "";
+  zoneListeReductions.appendChild(cadre);
+}
+
+async function enregistrerReduction(personne, type, valeur) {
+  messageReduction.className = "";
+  messageReduction.textContent = "Enregistrement…";
+  try {
+    const r = await rpc("admin_reduction", {
+      p_code: etat.code,
+      p_id: personne.id,
+      p_type: type,
+      p_valeur: valeur,
+    });
+    // On reprend ce que la base a garde -- arrondi au centime -- et non
+    // ce qu'on a tape.
+    Object.assign(personne, r);
+    messageReduction.className = "ok";
+    messageReduction.textContent = type
+      ? `Réduction de ${libelleReduction(personne)} pour ${personne.prenom}.`
+      : `Plus de réduction pour ${personne.prenom}.`;
+    await rechargerFacture();
+  } catch (erreur) {
+    messageReduction.className = "erreur";
+    messageReduction.textContent = erreur.message;
+  }
+}
+
+choixReductionPersonne.addEventListener("change", remplirReduction);
+choixReductionType.addEventListener("change", () => {
+  champReductionValeur.disabled = !choixReductionType.value;
+});
+
+boutonReduction.addEventListener("click", () => {
+  const personne = (etat.participants || []).find(
+    (p) => p.id === choixReductionPersonne.value
+  );
+  if (!personne) return;
+  const type = choixReductionType.value || null;
+  if (!type) {
+    enregistrerReduction(personne, null, null);
+    return;
+  }
+  // La base refuse aussi -- une page ne fait pas foi -- mais un refus
+  // qu'on voit venir vaut mieux qu'un refus recu.
+  const valeur = Number(String(champReductionValeur.value).replace(",", "."));
+  if (!(valeur > 0) || (type === "pourcentage" && valeur > 100)) {
+    messageReduction.className = "erreur";
+    messageReduction.textContent = MESSAGES.REDUCTION_INVALIDE;
+    champReductionValeur.focus();
+    return;
+  }
+  enregistrerReduction(personne, type, valeur);
+});
 
 
 // -------------------------------------------------------------- hotel

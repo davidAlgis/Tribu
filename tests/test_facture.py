@@ -39,6 +39,7 @@ EXEMPLE = RACINE / "exemple_donnees.json"
 # De quoi ranger une ligne de facture dans la bonne colonne de la page.
 REPAS = set(LIBELLES_REPAS.values())
 TAXE = "Taxe de sejour"
+REDUCTION = "Reduction"
 
 # Un gîte à 100 partagé par trois : 33,34 + 33,33 + 33,33. C'est l'endroit
 # où deux arrondis peuvent se séparer d'un centime.
@@ -131,10 +132,15 @@ PARTAGE = {
 HOTEL = {
     "_commentaire": "Jeu de test : deux parts qui s'additionnent, sans pension.",
     "personnes": [
-        {"id": "a1", "prenom": "Alice", "famille": "A", "categorie_age": "adulte"},
-        {"id": "a2", "prenom": "Bruno", "famille": "A", "categorie_age": "adulte"},
+        # Les trois facons d'etre reduit : une part, un montant, et un
+        # montant plus gros que la note -- qui ne doit rien rendre.
+        {"id": "a1", "prenom": "Alice", "famille": "A", "categorie_age": "adulte",
+         "reduction_type": "pourcentage", "reduction_valeur": 12.5},
+        {"id": "a2", "prenom": "Bruno", "famille": "A", "categorie_age": "adulte",
+         "reduction_type": "euros", "reduction_valeur": 7.3},
         {"id": "e1", "prenom": "Chloe", "famille": "A", "categorie_age": "enfant"},
-        {"id": "d1", "prenom": "David", "famille": "D", "categorie_age": "adulte"},
+        {"id": "d1", "prenom": "David", "famille": "D", "categorie_age": "adulte",
+         "reduction_type": "euros", "reduction_valeur": 1000},
     ],
     # 2027-09-13 est un lundi : tout est au tarif semaine.
     "presences": [
@@ -219,8 +225,14 @@ def colonnes_python(chemin: Path) -> dict:
     # sur le seul jeu qui l'exerce.
     facturation = facturer(calculer_prestations(presences, grille.logements), personnes, grille)
 
-    compte = defaultdict(lambda: {"hebergement": 0.0, "repas": 0.0, "taxe": 0.0})
+    compte = defaultdict(
+        lambda: {"hebergement": 0.0, "repas": 0.0, "taxe": 0.0, "reduction": 0.0}
+    )
     for ligne in facturation.lignes:
+        if ligne.libelle == REDUCTION:
+            # Positive, comme la page la tient : ce qu'on retire.
+            compte[ligne.personne_id]["reduction"] -= ligne.prix
+            continue
         if ligne.libelle == TAXE:
             colonne = "taxe"
         elif ligne.libelle in REPAS and ligne.detail.startswith("hors pension"):
@@ -254,11 +266,12 @@ def colonnes_js(chemin: Path) -> dict:
       for (const l of resultat.lignes) {{
         par[l.personne_id] = {{
           hebergement: l.hebergement, repas: l.repas, taxe: l.taxe, nuits: l.nuits,
+          reduction: l.reduction, brut: l.brut, total: l.total,
           parNuit: l.parNuit, parRepas: l.parRepas,
         }};
       }}
       process.stdout.write(JSON.stringify({{
-        par, total: resultat.total,
+        par, total: resultat.total, brut: resultat.brut, reductions: resultat.reductions,
         colonnesNuits: resultat.nuits,
         colonnesRepas: resultat.repasColonnes.map((c) => c.cle),
         prestations: resultat.prestations,
@@ -314,7 +327,7 @@ def test_les_deux_calculs_connaissent_les_memes_personnes(jeux):
 
 
 @JEUX
-@pytest.mark.parametrize("colonne", ["hebergement", "repas", "taxe"])
+@pytest.mark.parametrize("colonne", ["hebergement", "repas", "taxe", "reduction"])
 def test_chaque_colonne_tombe_au_centime_pres(jeux, colonne):
     """Régimes, remises, supplément vue mer, part d'un gîte partagé,
     exception de repas, taxe réservée aux adultes : tout est là-dedans."""
@@ -330,7 +343,11 @@ def test_chaque_colonne_tombe_au_centime_pres(jeux, colonne):
 @JEUX
 def test_le_total_est_le_meme_des_deux_cotes(jeux):
     python, js = jeux
-    somme = round(sum(sum(v.values()) for v in python.values()), 2)
+    somme = round(
+        sum(v["hebergement"] + v["repas"] + v["taxe"] - v["reduction"]
+            for v in python.values()),
+        2,
+    )
     assert somme == round(js["total"], 2)
 
 
@@ -413,7 +430,9 @@ def test_le_detail_du_sejour_totalise_la_facture(jeux):
     """
     _, js = jeux
     detail = round(sum(l["montant"] for l in js["prestations"]), 2)
-    assert detail == round(js["total"], 2)
+    # Le BRUT, pas le total : la reduction est une affaire de famille, et
+    # le detail envoye a l'hotel n'a pas a la connaitre.
+    assert detail == round(js["brut"], 2)
 
 
 @JEUX
@@ -468,8 +487,9 @@ def test_la_synthese_se_relit_avec_statistics(jeux):
     lignes = list(js["par"].values())
     assert lignes, "aucune ligne : le test ne sert à rien"
 
+    # Ce que chacun PAIE : la reduction de l'organisateur deduite.
     totaux = {
-        qui: round(v["hebergement"] + v["repas"] + v["taxe"], 2)
+        qui: round(v["hebergement"] + v["repas"] + v["taxe"] - v["reduction"], 2)
         for qui, v in js["par"].items()
     }
     dormeurs = [v for v in js["par"].values() if v["nuits"] > 0]
@@ -479,7 +499,8 @@ def test_la_synthese_se_relit_avec_statistics(jeux):
         "hebergement": [round(v["hebergement"] + v["taxe"], 2) for v in lignes],
         "total": list(totaux.values()),
         "nuitee": [
-            (v["hebergement"] + v["repas"] + v["taxe"]) / v["nuits"] for v in dormeurs
+            (v["hebergement"] + v["repas"] + v["taxe"] - v["reduction"]) / v["nuits"]
+            for v in dormeurs
         ],
     }
 
@@ -567,3 +588,23 @@ def test_seuls_les_repas_factures_se_comptent():
     # Un repas facturé zéro reste un repas : c'est un prix manquant, pas
     # un repas absent — et la ligne rouge de l'onglet le dit déjà.
     assert json.loads(sortie.stdout) == [0, 2, 0]
+
+
+@pytest.mark.parametrize("jeux", ["hotel"], indirect=True)
+def test_une_reduction_porte_sur_la_note_entiere_et_ne_rend_rien(jeux):
+    """Un pourcentage se prend sur toute la note, taxe comprise ; un
+    montant plus gros que la note la ramène à zéro, jamais en dessous. Et
+    le détail par prestation, celui de l'hôtel, ne la voit pas."""
+    _, js = jeux
+    alice, bruno, chloe, david = (js["par"][q] for q in ("a1", "a2", "e1", "d1"))
+
+    # 12,5 % de 180,20 font 22,525 : le demi-centime monte, des deux côtés.
+    assert alice["brut"] == 180.2 and alice["reduction"] == 22.53
+    assert bruno["reduction"] == 7.3
+    assert chloe["reduction"] == 0
+    assert david["reduction"] == david["brut"] and david["total"] == 0
+
+    for valeurs in js["par"].values():
+        assert valeurs["total"] == round(valeurs["brut"] - valeurs["reduction"], 2)
+    assert js["reductions"] > 0
+    assert round(js["brut"] - js["reductions"], 2) == round(js["total"], 2)

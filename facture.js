@@ -280,6 +280,28 @@ window.FACTURE = (function () {
     return tout;
   }
 
+  // Ce que l'organisateur retire de la note d'une personne. Le meme calcul
+  // que `_reduction` dans `engine/pricing.py`.
+  //
+  // Un montant en euros ne depasse jamais la note : une reduction ne rend
+  // pas d'argent.
+  //
+  // LE POURCENTAGE SE CALCULE EN CENTIMES ENTIERS. 12,5 % de 180,20 font
+  // 22,525 : en virgule flottante, JavaScript arrondit au-dessus et Python
+  // au pair -- un centime d'ecart, que le test de comparaison a attrape.
+  // En entiers, le demi-centime monte des deux cotes, sans ambiguite.
+  function reductionDe(personne, total) {
+    const valeur = Number(personne && personne.reduction_valeur) || 0;
+    if (!personne || valeur <= 0 || total <= 0) return 0;
+    if (personne.reduction_type === "pourcentage") {
+      const centimes = Math.round(total * 100);
+      const centiemes = Math.round(Math.min(valeur, 100) * 100);
+      return Math.floor((centimes * centiemes + 5000) / 10000) / 100;
+    }
+    if (personne.reduction_type === "euros") return arrondir(Math.min(valeur, total));
+    return 0;
+  }
+
   function calculer(faits, brut) {
     const personnes = new Map((faits.personnes || []).map((p) => [p.id, p]));
     const grille = grilleDepuis(brut || {}, faits.couchages);
@@ -520,10 +542,15 @@ window.FACTURE = (function () {
       r.jours.add(repas.jour);
     }
 
-    const lignes = [...compte.values()].map((l) => ({
-      ...l,
-      total: arrondir(l.hebergement + l.repas + l.taxe),
-    }));
+    // LA REDUCTION VIENT EN DERNIER, sur la note entiere : c'est ce que
+    // l'organisateur accorde a une personne, pas ce que l'hotel remise sur
+    // une prestation. Le detail par prestation -- celui qu'on pose a cote
+    // du contrat -- ne la voit donc pas : il totalise `brut`, pas `total`.
+    const lignes = [...compte.values()].map((l) => {
+      const brut = arrondir(l.hebergement + l.repas + l.taxe);
+      const reduction = reductionDe(personnes.get(l.personne_id), brut);
+      return { ...l, brut, reduction, total: arrondir(brut - reduction) };
+    });
     // L'ORDRE VIENT DE LA BASE : couples de la premiere generation, leurs
     // enfants dessous, du plus age au plus jeune. Retrier ici par prenom
     // defferait ce rangement -- et la facture se lit a cote de la liste
@@ -572,6 +599,8 @@ window.FACTURE = (function () {
       nuits: [...nuitsVues].sort(),
       repasColonnes,
       total: arrondir(lignes.reduce((somme, l) => somme + l.total, 0)),
+      brut: arrondir(lignes.reduce((somme, l) => somme + l.brut, 0)),
+      reductions: arrondir(lignes.reduce((somme, l) => somme + l.reduction, 0)),
       manquants: [...manquants].sort(),
       sansPlace,
     };

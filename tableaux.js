@@ -239,6 +239,12 @@ window.TABLEAUX = (function () {
           rapport: { haut: (l) => l.repas, bas: (l) => window.FACTURE.repasFactures(l) },
         });
       }
+      // La reduction ne se montre que si quelqu'un en a une : une colonne de
+      // tirets partout n'apprend rien. Elle s'ecrit EN NEGATIF, pour que le
+      // total reste la somme de ce qui le precede.
+      if (options && options.reductions) {
+        lignes.push({ libelle: "Réduction", valeur: (l) => -(l.reduction || 0) });
+      }
       lignes.push({ libelle: "Total", valeur: (l) => l.total, total: true });
       if (rapports) {
         lignes.push(

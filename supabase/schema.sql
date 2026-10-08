@@ -297,6 +297,32 @@ alter table private.participants
 alter table private.participants
   add column if not exists sans_gluten boolean not null default false;
 
+-- Une reduction accordee par l'organisateur, sur TOUTE la note de la
+-- personne : un etudiant a qui l'on fait cadeau d'un quart, un oncle qui
+-- a avance cinquante euros. Deux faits, et non un montant calcule : la
+-- base ne derive toujours rien, la facture applique.
+--
+--   'pourcentage' : une part du total, de 0 a 100
+--   'euros'       : un montant fixe, jamais plus que le total
+--
+-- NULLES PAR DEFAUT, ET LES DEUX ENSEMBLE : une base deja remplie n'a
+-- personne a reduire, et la contrainte ne refuse aucune ligne existante.
+-- Ce n'est PAS une remise de l'hotel -- celle-la vit dans les tarifs et se
+-- lit sur le contrat. Celle-ci est une affaire interne a la famille : le
+-- detail envoye a l'hotel ne la voit pas.
+alter table private.participants
+  add column if not exists reduction_type text;
+alter table private.participants
+  add column if not exists reduction_valeur numeric(10, 2);
+
+alter table private.participants drop constraint if exists participants_reduction_valide;
+alter table private.participants add constraint participants_reduction_valide
+  check (
+    (reduction_type is null and reduction_valeur is null)
+    or (reduction_type = 'pourcentage' and reduction_valeur > 0 and reduction_valeur <= 100)
+    or (reduction_type = 'euros' and reduction_valeur > 0)
+  );
+
 alter table private.participants drop constraint if exists participants_portee_valide;
 alter table private.participants add constraint participants_portee_valide
   check (portee in ('descendance', 'foyer', 'soi'));
@@ -1306,8 +1332,11 @@ grant execute on function public.activites_proposer(text, uuid, text, text)    t
 --  cle secrete, qui ne quitte jamais la machine de l'organisateur. Le
 --  navigateur, lui, n'y a aucun acces.
 --
+-- Les colonnes de la reduction viennent EN DERNIER : `create or replace
+-- view` accepte d'en ajouter a la fin, et refuse tout le reste.
 create or replace view public.v_participants as
-  select id, prenom, famille, categorie_age, invite
+  select id, prenom, famille, categorie_age, invite,
+         reduction_type, reduction_valeur
   from private.participants;
 
 revoke all on public.v_participants from anon, authenticated;
@@ -1362,6 +1391,8 @@ begin
              'parent_id', p.parent_id,
              'conjoint_id', p.conjoint_id,
              'invite', p.invite,
+             'reduction_type', p.reduction_type,
+             'reduction_valeur', p.reduction_valeur,
              'portee', p.portee,
              -- Le nombre rend le reglage concret : passer de 16 a 2 se voit,
              -- la ou « portee : foyer » ne dit rien de ce qu'on a change.
@@ -2147,6 +2178,52 @@ begin
 end $fn$;
 
 grant execute on function public.admin_regime(text, uuid, jsonb) to anon;
+
+-- ---- 8l. Une reduction sur la note de quelqu'un ----
+--
+--  L'ORGANISATEUR SEUL. Aucune fonction familiale n'ecrit ces colonnes :
+--  la famille voit sa reduction sur sa note, elle ne se l'accorde pas.
+--
+--  `p_type` nul retire la reduction. La contrainte de la table tient la
+--  regle ; on la redit ici pour rendre une erreur qu'une page sait lire,
+--  plutot que le message brut de Postgres.
+create or replace function public.admin_reduction(
+  p_code   text,
+  p_id     uuid,
+  p_type   text,
+  p_valeur numeric default null
+)
+returns jsonb
+language plpgsql security definer
+set search_path = private, pg_temp as $fn$
+begin
+  perform private.verifier_code(p_code, 'admin');
+  perform private.geste('Réduction');
+
+  if not exists (select 1 from private.participants x where x.id = p_id) then
+    raise exception 'INCONNU' using errcode = 'P0001';
+  end if;
+
+  if p_type is not null and (
+       p_type not in ('pourcentage', 'euros')
+       or p_valeur is null or p_valeur <= 0
+       or (p_type = 'pourcentage' and p_valeur > 100)) then
+    raise exception 'REDUCTION_INVALIDE' using errcode = 'P0001';
+  end if;
+
+  update private.participants x
+     set reduction_type   = p_type,
+         reduction_valeur = case when p_type is null then null
+                                 else round(p_valeur, 2) end
+   where x.id = p_id;
+
+  return (select jsonb_build_object(
+                   'reduction_type', x.reduction_type,
+                   'reduction_valeur', x.reduction_valeur)
+            from private.participants x where x.id = p_id);
+end $fn$;
+
+grant execute on function public.admin_reduction(text, uuid, text, numeric) to anon;
 
 -- ---- 8m. Les activites, cote organisateur ----
 --
@@ -4208,7 +4285,11 @@ begin
                'prenom', p.prenom,
                'famille', p.famille,
                'categorie_age', p.categorie_age,
-               'invite', p.invite
+               'invite', p.invite,
+               -- La reduction s'applique au total : sans elle, la page
+               -- chiffrerait une note que personne ne paiera.
+               'reduction_type', p.reduction_type,
+               'reduction_valeur', p.reduction_valeur
              ) order by o.rang)
       from private.participants p
       join private.ordre_familial() o on o.id = p.id
@@ -4364,7 +4445,11 @@ set search_path = private, pg_temp as $fn$
                'prenom', p.prenom,
                'famille', p.famille,
                'categorie_age', p.categorie_age,
-               'invite', p.invite
+               'invite', p.invite,
+               -- La reduction s'applique au total : sans elle, la page
+               -- chiffrerait une note que personne ne paiera.
+               'reduction_type', p.reduction_type,
+               'reduction_valeur', p.reduction_valeur
              ) order by o.rang)
       from private.participants p
       join miens m on m.id = p.id
@@ -5307,9 +5392,11 @@ begin
                  private.couchages, private.logements, private.envies,
                  private.activites, private.options_date, private.participants;
 
+  -- Une copie d'avant les reductions n'en porte pas : `nullif` rend nul ce
+  -- qui manque, et la personne revient sans reduction -- ce qu'elle etait.
   insert into private.participants
     (id, prenom, famille, categorie_age, parent_id, conjoint_id, invite, portee,
-     date_naissance, cree_le)
+     date_naissance, reduction_type, reduction_valeur, cree_le)
   select (l->>'id')::uuid,
          l->>'prenom',
          l->>'famille',
@@ -5319,6 +5406,8 @@ begin
          coalesce((l->>'invite')::boolean, false),
          coalesce(nullif(l->>'portee', ''), 'descendance'),
          nullif(l->>'date_naissance', '')::date,
+         nullif(l->>'reduction_type', ''),
+         nullif(l->>'reduction_valeur', '')::numeric,
          coalesce((l->>'cree_le')::timestamptz, now())
     from jsonb_array_elements(coalesce(c->'participants', '[]'::jsonb)) as l;
   get diagnostics n_participants = row_count;

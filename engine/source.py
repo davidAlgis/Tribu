@@ -25,6 +25,8 @@ def _vers_personne(ligne: dict) -> Personne:
         prenom=ligne["prenom"],
         famille=ligne["famille"],
         categorie_age=ligne["categorie_age"],
+        reduction_type=ligne.get("reduction_type") or None,
+        reduction_valeur=float(ligne.get("reduction_valeur") or 0),
     )
 
 
@@ -60,7 +62,7 @@ def charger_json(chemin: str | Path) -> tuple[dict, list, dict]:
 COLONNES = {
     # `v_participants` est une vue sur private.participants, lisible par la
     # seule cle secrete : le schema `private` n'est pas expose par PostgREST.
-    "v_participants": "id,prenom,famille,categorie_age",
+    "v_participants": "id,prenom,famille,categorie_age,reduction_type,reduction_valeur",
     "presences": (
         "participant_id,jour,hebergement,petit_dejeuner,dejeuner,diner,"
         "vue_mer,logement_id"

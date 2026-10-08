@@ -61,6 +61,7 @@ qu'il reste a poser.
 
 from __future__ import annotations
 
+from collections import defaultdict
 from dataclasses import dataclass, field
 from datetime import date
 from pathlib import Path
@@ -78,6 +79,9 @@ from engine.rules import (
 # peut la porter tout en comprenant des repas -- donc pas un libelle de
 # `LIBELLES_REGIME` : c'est LE LOGEMENT qu'on paye.
 LIBELLE_LOGEMENT = "Le logement"
+
+# La ligne negative qui porte la reduction accordee par l'organisateur.
+LIBELLE_REDUCTION = "Reduction"
 
 # Ce que le type dit de sa facturation. Les memes mots que la base.
 AUCUNE = "aucune"
@@ -458,6 +462,60 @@ def _facturer_repas(prestations, personnes, grille, facturation) -> None:
         )
 
 
+def _reduction(personne, total: float) -> float:
+    """Ce que l'organisateur retire d'une note. Le meme calcul que
+    `reductionDe` dans `facture.js`.
+
+    Un montant en euros ne depasse jamais la note : une reduction ne rend
+    pas d'argent.
+
+    Le pourcentage se calcule EN CENTIMES ENTIERS, et le demi-centime
+    monte : `round` arrondit au pair, `Math.round` au-dessus, et 12,5 % de
+    180,20 tombait d'un centime different de chaque cote.
+    """
+    valeur = float(getattr(personne, "reduction_valeur", 0) or 0)
+    if valeur <= 0 or total <= 0:
+        return 0.0
+    if personne.reduction_type == "pourcentage":
+        centimes = round(total * 100)
+        centiemes = round(min(valeur, 100) * 100)
+        return ((centimes * centiemes + 5000) // 10000) / 100
+    if personne.reduction_type == "euros":
+        return round(min(valeur, total), 2)
+    return 0.0
+
+
+def _facturer_reductions(personnes, facturation) -> None:
+    """La reduction, EN DERNIER et sur la note entiere : une ligne negative
+    par personne, sans date -- elle ne tient a aucun jour.
+
+    Ce n'est pas une remise de l'hotel : celle-la vit dans les tarifs et
+    se lit sur chaque nuit. Celle-ci est une affaire interne a la famille.
+    """
+    notes = defaultdict(float)
+    for ligne in facturation.lignes:
+        notes[ligne.personne_id] += ligne.prix
+
+    for personne_id in sorted(notes):
+        personne = personnes[personne_id]
+        retire = _reduction(personne, round(notes[personne_id], 2))
+        if not retire:
+            continue
+        facturation.lignes.append(
+            LigneFacture(
+                personne_id=personne_id,
+                jour=None,
+                libelle=LIBELLE_REDUCTION,
+                detail=(
+                    f"{personne.reduction_valeur:g} % de la note"
+                    if personne.reduction_type == "pourcentage"
+                    else "montant fixe"
+                ),
+                prix=-retire,
+            )
+        )
+
+
 def facturer(prestations: Prestations, personnes: dict, grille: Grille) -> Facturation:
     facturation = Facturation()
     # LES DEUX PARTS NE S'EXCLUENT PLUS : un type qui les a toutes les deux
@@ -467,5 +525,8 @@ def facturer(prestations: Prestations, personnes: dict, grille: Grille) -> Factu
     _facturer_taxe(prestations, personnes, grille, facturation)
     _facturer_repas(prestations, personnes, grille, facturation)
     facturation.lignes.sort(key=lambda l: (l.jour, l.personne_id, l.libelle))
+    # Apres le tri : une ligne sans date ne se compare pas aux autres, et
+    # elle se lit mieux en fin de detail.
+    _facturer_reductions(personnes, facturation)
     facturation.sans_place.sort(key=lambda x: (x[1], x[0]))
     return facturation
