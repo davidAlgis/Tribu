@@ -16,7 +16,7 @@
 // `facture.js`, comme la facture ; ici on met en page.
 
 window.HOTEL = (function () {
-  const { cellule, celluleEuros, quantieme, libelleNuit, libelleRepas, rienDire, euros } =
+  const { cellule, celluleEuros, quantieme, libelleNuit, libelleRepas, rienDire } =
     window.TABLEAUX;
 
   const TRANCHES = [
@@ -209,8 +209,7 @@ window.HOTEL = (function () {
   }
 
   // Tout l'onglet, dans les zones que la page lui donne :
-  //   alerte, entete, detail, compteurDetail, couchages, compteurNuits,
-  //   couverts, compteurRepas.
+  //   alerte, entete, detail, couchages, couverts.
   function dessiner(zones, faits, grille) {
     const logements = (grille.logements || []).slice();
 
@@ -233,7 +232,6 @@ window.HOTEL = (function () {
       zones.alerte.appendChild(p);
     }
 
-    zones.compteurNuits.textContent = nuits.length ? `${nuits.length} nuit(s)` : "";
     if (!nuits.length) {
       rienDire(
         zones.couchages,
@@ -266,11 +264,6 @@ window.HOTEL = (function () {
 
     // --- le detail du sejour
     const prestations = window.FACTURE.calculer(faits, grille).prestations || [];
-    zones.compteurDetail.textContent = prestations.length
-      ? `${prestations.length} ligne(s) — ${euros(
-          Math.round(prestations.reduce((t, l) => t + l.montant, 0) * 100) / 100
-        )}`
-      : "";
     if (!prestations.length) {
       rienDire(zones.detail, "Rien à facturer : ni nuit, ni repas déclarés.");
     } else {
@@ -280,9 +273,6 @@ window.HOTEL = (function () {
 
     // --- les couverts, deja additionnes par la base
     const couverts = faits.couverts || [];
-    zones.compteurRepas.textContent = couverts.length
-      ? `${couverts.reduce((t, l) => t + l.total, 0)} couvert(s)`
-      : "";
     zones.entete.textContent = entete(faits, couverts);
 
     if (!couverts.length) {

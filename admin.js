@@ -2356,11 +2356,7 @@ const zoneResume = document.getElementById("facture-resume");
 const zoneNuits = document.getElementById("facture-hebergement");
 const zoneRepasFacture = document.getElementById("facture-repas");
 const alerteFacture = document.getElementById("alerte-facture");
-const compteurFacture = document.getElementById("compteur-facture");
 const zoneSynthese = document.getElementById("facture-synthese");
-const compteurSynthese = document.getElementById("compteur-synthese");
-const compteurNuits = document.getElementById("compteur-nuits");
-const compteurRepas = document.getElementById("compteur-repas");
 const messageFacture = document.getElementById("message-facture");
 
 // LES TABLEAUX D'ARGENT SE DESSINENT AILLEURS, dans `tableaux.js`, parce
@@ -2383,13 +2379,6 @@ const {
 
 function dessinerFacture(calcul) {
   const gens = new Map((etat.participants || []).map((p) => [p.id, p]));
-  const arrondi = (v) => Math.round(v * 100) / 100;
-
-  compteurFacture.textContent = calcul.lignes.length
-    ? `${calcul.lignes.length} personne(s) — ${euros(calcul.total)} en tout` +
-      (calcul.supplements ? `, dont ${euros(calcul.supplements)} de suppléments` : "") +
-      (calcul.reductions ? `, après ${euros(calcul.reductions)} de réductions` : "")
-    : "";
 
   // Ce qui rend le total faux se dit AVANT le total, et non en note de
   // bas de page : une somme qu'on lit sans savoir qu'elle est incomplete
@@ -2456,11 +2445,6 @@ function dessinerFacture(calcul) {
 
   // --- les nuits
   const dormeurs = calcul.lignes.filter((l) => l.nuits > 0);
-  compteurNuits.textContent = dormeurs.length
-    ? `${calcul.nuits.length} nuit(s) — ${euros(
-        arrondi(dormeurs.reduce((t, l) => t + l.hebergement + l.taxe, 0))
-      )}`
-    : "";
   if (!dormeurs.length) {
     rienDire(zoneNuits, "Personne n'a déclaré dormir sur place : rien à facturer ici.");
   } else {
@@ -2472,11 +2456,6 @@ function dessinerFacture(calcul) {
 
   // --- les repas
   const mangeurs = calcul.lignes.filter((l) => Object.keys(l.parRepas).length);
-  compteurRepas.textContent = mangeurs.length
-    ? `${calcul.repasColonnes.length} repas — ${euros(
-        arrondi(mangeurs.reduce((t, l) => t + l.repas, 0))
-      )}`
-    : "";
   if (!mangeurs.length) {
     rienDire(
       zoneRepasFacture,
@@ -2493,17 +2472,11 @@ function dessinerFacture(calcul) {
 
 function dessinerSynthese(calcul) {
   if (!calcul.lignes.length) {
-    compteurSynthese.textContent = "";
     rienDire(zoneSynthese, "Rien de facturé : il n'y a pas de moyenne à faire.");
     return;
   }
 
   const series = FACTURE.synthese(calcul.lignes);
-  const total = series.find((s) => s.cle === "total") || {};
-  compteurSynthese.textContent = total.moyenne
-    ? `${euros(total.moyenne)} par personne en moyenne`
-    : "";
-
   zoneSynthese.textContent = "";
   zoneSynthese.appendChild(TABLEAUX.synthese(series, calcul.lignes.length));
 }
@@ -2774,11 +2747,8 @@ const zonesHotel = {
   alerte: document.getElementById("alerte-hotel"),
   entete: document.getElementById("hotel-entete"),
   detail: document.getElementById("hotel-detail"),
-  compteurDetail: document.getElementById("compteur-hotel-detail"),
   couchages: document.getElementById("hotel-couchages"),
-  compteurNuits: document.getElementById("compteur-hotel-nuits"),
   couverts: document.getElementById("hotel-couverts"),
-  compteurRepas: document.getElementById("compteur-hotel-repas"),
 };
 const messageHotel = document.getElementById("message-hotel");
 

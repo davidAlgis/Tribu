@@ -95,13 +95,8 @@ const zoneSynthese = document.getElementById("facture-synthese");
 const zoneNuits = document.getElementById("facture-hebergement");
 const zoneRepas = document.getElementById("facture-repas");
 const alerteFacture = document.getElementById("alerte-facture");
-const compteurFacture = document.getElementById("compteur-facture");
-const compteurSynthese = document.getElementById("compteur-synthese");
-const compteurNuits = document.getElementById("compteur-nuits");
-const compteurRepas = document.getElementById("compteur-repas");
 
-const { euros, rienDire, tableau, colonnes } = TABLEAUX;
-const arrondi = (v) => Math.round(v * 100) / 100;
+const { rienDire, tableau, colonnes } = TABLEAUX;
 
 function alerter(texte) {
   const p = document.createElement("p");
@@ -112,12 +107,6 @@ function alerter(texte) {
 
 function dessiner(calcul, faits) {
   const gens = new Map((faits.personnes || []).map((p) => [p.id, p]));
-
-  compteurFacture.textContent = calcul.lignes.length
-    ? `${calcul.lignes.length} personne(s) — ${euros(calcul.total)} en tout` +
-      (calcul.supplements ? `, dont ${euros(calcul.supplements)} de suppléments` : "") +
-      (calcul.reductions ? `, après ${euros(calcul.reductions)} de réductions` : "")
-    : "";
 
   // Ce qui rend le total faux se dit AVANT le total. Le lecteur n'a rien
   // pour le corriger : on lui dit seulement de ne pas s'y fier encore.
@@ -141,9 +130,6 @@ function dessiner(calcul, faits) {
     rienDire(zoneSynthese, "Rien de compté : il n'y a pas de moyenne à faire.");
     rienDire(zoneNuits, "Aucune nuit déclarée.");
     rienDire(zoneRepas, "Aucun repas déclaré.");
-    compteurSynthese.textContent = "";
-    compteurNuits.textContent = "";
-    compteurRepas.textContent = "";
     return;
   }
 
@@ -160,20 +146,11 @@ function dessiner(calcul, faits) {
 
   // --- la synthese
   const series = FACTURE.synthese(calcul.lignes);
-  const total = series.find((s) => s.cle === "total") || {};
-  compteurSynthese.textContent = total.moyenne
-    ? `${euros(total.moyenne)} par personne en moyenne`
-    : "";
   zoneSynthese.textContent = "";
   zoneSynthese.appendChild(TABLEAUX.synthese(series, calcul.lignes.length));
 
   // --- les nuits
   const dormeurs = calcul.lignes.filter((l) => l.nuits > 0);
-  compteurNuits.textContent = dormeurs.length
-    ? `${calcul.nuits.length} nuit(s) — ${euros(
-        arrondi(dormeurs.reduce((t, l) => t + l.hebergement + l.taxe, 0))
-      )}`
-    : "";
   if (!dormeurs.length) {
     rienDire(zoneNuits, "Personne n'a déclaré dormir sur place.");
   } else {
@@ -183,11 +160,6 @@ function dessiner(calcul, faits) {
 
   // --- les repas hors pension
   const mangeurs = calcul.lignes.filter((l) => Object.keys(l.parRepas).length);
-  compteurRepas.textContent = mangeurs.length
-    ? `${calcul.repasColonnes.length} repas — ${euros(
-        arrondi(mangeurs.reduce((t, l) => t + l.repas, 0))
-      )}`
-    : "";
   if (!mangeurs.length) {
     rienDire(
       zoneRepas,
@@ -205,11 +177,8 @@ const zonesHotel = {
   alerte: document.getElementById("alerte-hotel"),
   entete: document.getElementById("hotel-entete"),
   detail: document.getElementById("hotel-detail"),
-  compteurDetail: document.getElementById("compteur-hotel-detail"),
   couchages: document.getElementById("hotel-couchages"),
-  compteurNuits: document.getElementById("compteur-hotel-nuits"),
   couverts: document.getElementById("hotel-couverts"),
-  compteurRepas: document.getElementById("compteur-hotel-repas"),
 };
 
 // ---------------------------------------------------------------- onglets
