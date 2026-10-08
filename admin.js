@@ -108,7 +108,6 @@ const MESSAGES = {
   CATEGORIE_INCONNUE: "Type de couchage inconnu.",
   CAPACITE_INVALIDE: "La capacité doit être un nombre entre 1 et 30.",
   NOMBRE_INVALIDE: "Le nombre de logements doit être entre 1 et 200.",
-  VUE_MER_HORS_CHAMBRE: "La vue mer ne concerne que les chambres.",
   LOGEMENT_EXISTANT: "Ce type est déjà dans l'inventaire : corrige plutôt sa ligne.",
   UNITE_INCONNUE: "Ce couchage n'existe plus. Recharge la page.",
   PAS_SUR_PLACE: "Cette personne n'a pas déclaré dormir sur place cette nuit-là.",
@@ -1241,29 +1240,19 @@ async function retirerActivite(activite, compte) {
 // l'inventaire, et le reste suit -- comme les dates du sejour, sorties de
 // l'editeur SQL pour la meme raison.
 
-// Meme vocabulaire que la grille de saisie (`app.js`) : la vue mer est une
-// VARIANTE DE CHAMBRE, pas une option a cote. La base, elle, garde deux
-// champs -- une categorie et un supplement -- parce que c'est ainsi que
-// l'hotel facture.
-const CHAMBRE_VUE_MER = "chambre+vue_mer";
-
+// Meme vocabulaire que la grille de saisie (`app.js`). IL N'Y A PLUS DE VUE
+// MER : la base a fondu ses chambres dans les chambres classiques de meme
+// taille (`private.vue_mer_fondre`), et ne la pose plus.
 const TYPES_LOGEMENT = {
   chambre: { categorie: "chambre", vue_mer: false, un: "chambre", plusieurs: "chambres" },
-  [CHAMBRE_VUE_MER]: {
-    categorie: "chambre",
-    vue_mer: true,
-    un: "chambre vue mer",
-    plusieurs: "chambres vue mer",
-  },
   gite: { categorie: "gite", vue_mer: false, un: "gîte", plusieurs: "gîtes" },
 };
 
-// Deux champs en base, une seule valeur dans l'interface. La conversion tient
-// en une ligne, mais elle doit repondre exactement a l'index unique
-// `(categorie, capacite, vue_mer)` : c'est lui qui decide si reposer un type
-// le corrige ou en ajoute un second.
+// Le type d'interface d'une ligne de l'inventaire : sa categorie, et rien
+// d'autre. Une chambre vue mer qui n'aurait pas encore ete fondue -- le
+// schema pas encore recolle -- se compte comme une chambre.
 function typeDe(ligne) {
-  return ligne.categorie === "chambre" && ligne.vue_mer ? CHAMBRE_VUE_MER : ligne.categorie;
+  return ligne.categorie;
 }
 
 function nommerLogement(ligne) {
@@ -1275,7 +1264,7 @@ function nommerLogement(ligne) {
 
 // Ce que l'inventaire offre, par type d'interface.
 function placesParType(logements) {
-  const total = { chambre: 0, [CHAMBRE_VUE_MER]: 0, gite: 0 };
+  const total = { chambre: 0, gite: 0 };
   for (const l of logements || []) total[typeDe(l)] += l.capacite * l.nombre;
   return total;
 }
@@ -1307,7 +1296,7 @@ async function rechargerLogements() {
 
 function dessinerLogements() {
   const offre = placesParType(etat.logements);
-  const total = offre.chambre + offre[CHAMBRE_VUE_MER] + offre.gite;
+  const total = offre.chambre + offre.gite;
   compteurLogements.textContent = etat.logements.length
     ? `${total} place(s) au total`
     : "rien de déclaré";
@@ -1572,15 +1561,14 @@ Celles qui en ont déjà une ne ` +
 
 const COLONNES_TENSION = [
   ["chambre", "Chambre"],
-  [CHAMBRE_VUE_MER, "Vue mer"],
   ["gite", "Gîte"],
 ];
 
-// La base renvoie `chambre` et `chambre_vue_mer` separement -- exactement les
-// deux types que l'inventaire distingue. Les confondre ici ferait passer pour
-// disponible une chambre vue mer que personne n'a.
+// La base renvoie encore `chambre_vue_mer` a part. Il n'y en a plus apres
+// le recollage ; d'ici la, une nuit vue mer est une nuit en chambre.
 function demandeDe(nuit, type) {
-  return (type === CHAMBRE_VUE_MER ? nuit.chambre_vue_mer : nuit[type]) || 0;
+  if (type === "chambre") return (nuit.chambre || 0) + (nuit.chambre_vue_mer || 0);
+  return nuit[type] || 0;
 }
 
 function celluleTension(demande, offre) {
@@ -1654,8 +1642,6 @@ document.getElementById("logement-poser").addEventListener("click", async () => 
   messageLogements.className = "";
   messageLogements.textContent = "Enregistrement…";
   try {
-    // La conversion se fait ici et nulle part ailleurs : l'interface parle de
-    // « chambre vue mer », la base de deux colonnes.
     await rpc("admin_logement_poser", {
       p_code: etat.code,
       p_categorie: type.categorie,
@@ -1750,7 +1736,6 @@ const zoneRepasJour = document.getElementById("grille-repas-jour");
 const choixJour = document.getElementById("repas-jour");
 const zoneJours = document.getElementById("jours-weekend");
 const messageTarifs = document.getElementById("message-tarifs");
-const champVueMer = document.getElementById("tarif-vue-mer");
 const champTaxe = document.getElementById("tarif-taxe-sejour");
 
 // « Enfant » ne dit pas de quel age. Les bornes voyagent avec la grille :
@@ -2086,8 +2071,6 @@ function dessinerGrilleTarifs() {
 }
 
 function dessinerAnnexes() {
-  const vueMer = annexePosee("vue_mer", "");
-  champVueMer.value = String(Number(vueMer ? vueMer.montant : 0));
   const taxe = annexePosee("taxe_sejour", "");
   champTaxe.value = String(Number(taxe ? taxe.montant : 0));
 
@@ -2306,7 +2289,6 @@ function lireGrilleTarifs() {
 
 function lireAnnexes() {
   const lignes = [
-    { cle: "vue_mer", tranche: "", montant: Number(champVueMer.value) || 0 },
     { cle: "taxe_sejour", tranche: "", montant: Number(champTaxe.value) || 0 },
   ];
   for (const champ of document.querySelectorAll(

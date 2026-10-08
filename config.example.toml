@@ -5,7 +5,7 @@
 #  LES TARIFS NE SONT PLUS ICI. Ils vivent en base et se reglent depuis
 #  l'onglet « Tarifs » de la page d'administration : prix par type de
 #  couchage et par tranche d'age, semaine et week-end, remises,
-#  supplement vue mer, reductions de regime, repas hors pension, et les
+#  reductions de regime, repas hors pension, et les
 #  jours comptes en week-end.
 #
 #  Ils s'y reglaient a la main dans ce fichier. Des lors qu'on veut les

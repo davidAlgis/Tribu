@@ -333,7 +333,6 @@
             <label for="logement-categorie">Type de couchage</label>
             <select id="logement-categorie">
               <option value="chambre">Chambre</option>
-              <option value="chambre+vue_mer">Chambre, vue mer</option>
               <option value="gite">Gîte</option>
             </select>
           </div>
@@ -539,9 +538,8 @@
           Un prix de <strong>week-end à 0</strong> veut dire «&nbsp;comme la
           semaine&nbsp;»&nbsp;: beaucoup d'hôtels n'ont qu'un seul prix, et
           la colonne reste alors vide. La <strong>remise</strong> s'applique
-          à la ligne entière — prix, moins la réduction du régime, plus le
-          supplément vue mer — et le prix négocié reste lisible à côté de ce
-          qu'on en retire. Un prix laissé à zéro est facturé zéro et
+          à la ligne entière — prix, moins la réduction du régime — et le
+          prix négocié reste lisible à côté de ce qu'on en retire. Un prix laissé à zéro est facturé zéro et
           ressort dans la feuille «&nbsp;Tarifs manquants&nbsp;» de
           l'export&nbsp;: un bébé gratuit y figurera aussi, et c'est voulu —
           rien ne distingue un zéro choisi d'un zéro oublié.
@@ -559,10 +557,6 @@
         <legend>Ce qui s'ajoute, ce qui se retire</legend>
 
         <div class="grille">
-          <div>
-            <label for="tarif-vue-mer">Supplément vue mer (€ par nuit)</label>
-            <input type="number" id="tarif-vue-mer" min="0" step="0.5">
-          </div>
           <div>
             <label for="tarif-taxe-sejour">
               Taxe de séjour (€ par adulte et par nuit)
@@ -597,9 +591,7 @@
         <div id="grille-repas-jour"></div>
 
         <p class="note">
-          Le supplément vue mer <strong>s'ajoute</strong> au prix de la ligne
-          correspondante&nbsp;: laisse-le à 0 si tu as déjà saisi le prix vue
-          mer en entier. Les réductions se retranchent du prix de pension
+          Les réductions se retranchent du prix de pension
           complète et ne descendent jamais sous zéro&nbsp;— un bébé facturé 0
           reste à 0. Les repas hors pension sont ceux qu'une personne prend
           sans que son régime les comprenne&nbsp;; en gîte, ils le sont tous.

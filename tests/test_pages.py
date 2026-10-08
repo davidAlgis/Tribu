@@ -341,3 +341,15 @@ def test_les_calculs_se_lisent_sans_navigateur(module):
     code = "\n".join(l for l in js.splitlines() if not l.lstrip().startswith("//"))
     dehors = sorted(set(re.findall(r"\b(document|fetch|localStorage|XMLHttpRequest)\b", code)))
     assert dehors == [], f"{module} est sorti de son bocal"
+
+
+def test_la_vue_mer_ne_se_propose_plus(pages):
+    """Il n'y a plus de chambre vue mer : la base a fondu les siennes dans
+    les chambres classiques de même taille, et n'écrit plus le supplément
+    qu'à faux. Une option revenue dans une liste — « en chambre, vue mer »,
+    un supplément dans les tarifs — se remplirait sans que rien ne la
+    retienne, et serait effacée en silence à l'enregistrement."""
+    for page, (html, js) in pages.items():
+        for texte, quoi in ((html, page), (js, f"script de {page}")):
+            assert "chambre+vue_mer" not in texte, f"{quoi} propose encore la vue mer"
+            assert "tarif-vue-mer" not in texte, f"{quoi} a encore le supplément vue mer"

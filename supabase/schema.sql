@@ -777,9 +777,10 @@ begin
       coalesce((l->>'petit_dejeuner')::boolean, false),
       coalesce((l->>'dejeuner')::boolean, false),
       coalesce((l->>'diner')::boolean, false),
-      -- Le supplement vue mer n'existe que pour les chambres.
-      coalesce(g.vue_mer, (l->>'vue_mer')::boolean, false)
-        and coalesce(g.categorie, l->>'hebergement') = 'chambre',
+      -- LA VUE MER N'EXISTE PLUS (voir `private.vue_mer_fondre`) : la
+      -- colonne reste, pour les copies anciennes, et ne s'ecrit plus qu'a
+      -- faux -- quoi qu'envoie une page restee en cache.
+      false,
       g.id
     from jsonb_array_elements(coalesce(p_lignes, '[]'::jsonb)) as l
     left join private.logements g on g.id = nullif(l->>'logement_id', '')::uuid
@@ -1807,27 +1808,28 @@ begin
          coalesce((l->>'petit_dejeuner')::boolean, false),
          coalesce((l->>'dejeuner')::boolean, false),
          coalesce((l->>'diner')::boolean, false),
-         -- Le supplement vue mer n'existe que pour les chambres.
-         coalesce((l->>'vue_mer')::boolean, false) and l->>'hebergement' = 'chambre',
+         -- La vue mer n'existe plus : une chambre vue mer du tableur est une
+         -- chambre, et se range parmi les chambres de sa taille.
+         false,
          coalesce(
            -- La capacite donnee designe une ligne et une seule : c'est
            -- l'index unique de cette section.
            (select g.id from private.logements g
              where g.categorie = l->>'hebergement'
                and g.capacite = (l->>'capacite')::smallint
-               and g.vue_mer = coalesce((l->>'vue_mer')::boolean, false)),
+               and not g.vue_mer),
            -- Sans capacite, il reste un cas sans ambiguite : celui ou
            -- l'inventaire ne connait QU'UNE SORTE de ce couchage. S'il n'y
-           -- a qu'un type de chambre avec vue mer, il n'y a rien a choisir,
-           -- et laisser la declaration generique serait une prudence qui ne
-           -- protege de rien. Des qu'il y en a deux, on s'abstient.
+           -- a qu'un type de chambre, il n'y a rien a choisir, et laisser la
+           -- declaration generique serait une prudence qui ne protege de
+           -- rien. Des qu'il y en a deux, on s'abstient.
            case
              when (select count(*) from private.logements g
                     where g.categorie = l->>'hebergement'
-                      and g.vue_mer = coalesce((l->>'vue_mer')::boolean, false)) = 1
+                      and not g.vue_mer) = 1
              then (select g.id from private.logements g
                     where g.categorie = l->>'hebergement'
-                      and g.vue_mer = coalesce((l->>'vue_mer')::boolean, false)
+                      and not g.vue_mer
                     limit 1)
            end
          )
@@ -1854,7 +1856,7 @@ begin
           select 1 from private.logements g
            where g.categorie = l->>'hebergement'
              and g.capacite = (l->>'capacite')::smallint
-             and g.vue_mer = coalesce((l->>'vue_mer')::boolean, false)
+             and not g.vue_mer
         )
     ), '[]'::jsonb),
     'date_debut', r.date_debut,
@@ -3198,9 +3200,9 @@ begin
   if p_nombre is null or p_nombre not between 1 and 200 then
     raise exception 'NOMBRE_INVALIDE' using errcode = 'P0001';
   end if;
-  if coalesce(p_vue_mer, false) and p_categorie <> 'chambre' then
-    raise exception 'VUE_MER_HORS_CHAMBRE' using errcode = 'P0001';
-  end if;
+  -- `p_vue_mer` reste dans la signature -- la changer obligerait a effacer
+  -- la fonction, et une page en cache l'envoie encore -- mais il ne compte
+  -- plus : la vue mer n'existe plus (voir `private.vue_mer_fondre`).
 
   -- Reposer un type deja connu le CORRIGE, il ne s'ajoute pas. C'est ce qui
   -- permet au formulaire de n'avoir qu'un bouton, et a la liste de n'avoir
@@ -3210,7 +3212,7 @@ begin
   -- ou l'on voit les colonnes de prix qu'ils commandent.
   insert into private.logements
     (categorie, capacite, nombre, vue_mer, part_logement, part_personne, repas_compris)
-  values (p_categorie, p_capacite, p_nombre, coalesce(p_vue_mer, false),
+  values (p_categorie, p_capacite, p_nombre, false,
           case when p_categorie = 'gite' then 'fixe' else 'aucune' end,
           case when p_categorie = 'gite' then 'aucune' else 'par_occupant' end,
           case when p_categorie = 'gite' then '{}'::text[]
@@ -3246,7 +3248,8 @@ language plpgsql security definer
 set search_path = private, pg_temp as $fn$
 declare
   avant private.logements;
-  vue   boolean := coalesce(p_vue_mer, false);
+  -- La vue mer n'existe plus : `p_vue_mer` ne compte pas, voir `poser`.
+  vue   boolean := false;
 begin
   perform private.verifier_code(p_code, 'admin');
   -- Le premier changement de la semaine emporte une copie de l'avant.
@@ -3266,10 +3269,6 @@ begin
   if p_nombre is null or p_nombre not between 1 and 200 then
     raise exception 'NOMBRE_INVALIDE' using errcode = 'P0001';
   end if;
-  if vue and p_categorie <> 'chambre' then
-    raise exception 'VUE_MER_HORS_CHAMBRE' using errcode = 'P0001';
-  end if;
-
   -- Deplacer une ligne sur un type deja present ferait deux lignes pour la
   -- meme chose -- ce que l'index unique refuse de toute facon. On le dit
   -- avec un mot plutot qu'en laissant remonter une violation de contrainte :
@@ -5383,6 +5382,7 @@ declare
   logements_gardes jsonb;   -- l'inventaire, de meme
   activites_gardees jsonb;  -- les sorties, de meme
   envies_gardees   jsonb;   -- et les avis qui vont avec
+  tarifs_gardes    jsonb;   -- les prix, qu'aucune copie ne porte
 begin
   perform private.verifier_code(p_code, 'admin');
 
@@ -5430,9 +5430,16 @@ begin
     select jsonb_agg(to_jsonb(x)) into envies_gardees from private.envies x;
   end if;
 
+  -- LES PRIX. `tarifs` reference l'inventaire : Postgres refuse de vider
+  -- `logements` sans elle -- meme vide -- et la restauration echouait en
+  -- entier depuis que les prix vivent en base. Aucune copie ne les porte :
+  -- on les met de cote, et ceux dont le type existe encore reviennent.
+  select jsonb_agg(to_jsonb(x)) into tarifs_gardes from private.tarifs x;
+
   truncate table public.presences, public.voeux, public.refus_lieu,
-                 private.couchages, private.logements, private.envies,
-                 private.activites, private.options_date, private.participants;
+                 private.couchages, private.tarifs, private.logements,
+                 private.envies, private.activites, private.options_date,
+                 private.participants;
 
   -- Une copie d'avant les reductions n'en porte pas : `nullif` rend nul ce
   -- qui manque, et la personne revient sans reduction -- ce qu'elle etait.
@@ -5619,7 +5626,17 @@ begin
     -- `n_couchages` reste null : rien n'a ete RESTAURE, seulement conserve.
   end if;
 
+  insert into private.tarifs
+  select x.*
+    from jsonb_populate_recordset(null::private.tarifs, tarifs_gardes) x
+   where exists (select 1 from private.logements g where g.id = x.logement_id);
+
   perform private.jalons_purger();
+
+  -- Une copie d'avant la fin de la vue mer en ramene : on la fond aussitot,
+  -- comme au recollage. Sans quoi des chambres que plus aucune page ne
+  -- sait montrer reapparaitraient dans l'inventaire.
+  perform private.vue_mer_fondre();
 
   return jsonb_build_object(
     'participants', n_participants,
@@ -5639,6 +5656,110 @@ grant execute on function public.admin_jalon_lire(text, uuid)       to anon;
 grant execute on function public.admin_jalon_retirer(text, uuid)    to anon;
 grant execute on function public.admin_etat(text)                   to anon;
 grant execute on function public.admin_jalon_restaurer(text, uuid)  to anon;
+
+-- ============================================================
+--  13 bis. La fin de la vue mer
+-- ============================================================
+--
+--  IL N'Y A PLUS DE CHAMBRE VUE MER. Ni la famille ni l'organisateur ne
+--  peuvent plus en choisir ou en poser ; ce qui en existait devient une
+--  chambre classique, DE LA MEME TAILLE.
+--
+--  LES COLONNES RESTENT. `presences.vue_mer`, `logements.vue_mer` : les
+--  retirer casserait la relecture des jalons et des gestes deja pris, qui
+--  les portent. Elles ne s'ecrivent plus qu'a faux.
+--
+--  POUR CHAQUE TYPE VUE MER, deux cas :
+--
+--    une chambre classique de la meme capacite existe
+--      les deux se FONDENT : les chambres vue mer restent des chambres et
+--      s'ajoutent a son nombre ; les declarations passent sur elle ; sur
+--      le plan, chacun garde sa chambre, qui prend le numero suivant ceux
+--      de la chambre classique. Les prix du type vue mer partent avec lui :
+--      ce sont ceux de la chambre classique qui valent.
+--
+--    il n'en existe pas
+--      le type perd simplement sa vue : meme ligne, memes prix, meme plan.
+--
+--  Le supplement vue mer des tarifs s'efface, et plus aucune presence ne
+--  le porte.
+--
+--  SANS ETIQUETTE NI JALON ICI : ceux qui l'appellent s'en chargent. Le
+--  recollage en fait un geste nomme, precede d'un jalon ; la restauration
+--  d'une copie ancienne, qui ne se trace pas, la fond dans la foulee.
+create or replace function private.vue_mer_fondre()
+returns integer
+language plpgsql
+set search_path = private, pg_temp as $fn$
+declare
+  mer    private.logements;
+  classe private.logements;
+  fondus integer := 0;
+begin
+  for mer in
+    select * from private.logements m where m.vue_mer order by m.capacite
+  loop
+    select * into classe
+      from private.logements k
+     where k.categorie = mer.categorie
+       and k.capacite = mer.capacite
+       and not k.vue_mer;
+
+    if classe.id is null then
+      update private.logements k set vue_mer = false where k.id = mer.id;
+    else
+      -- Les places tombees au-dela du rang de la chambre classique -- une
+      -- chambre retiree du nombre, dont le plan garde la trace -- montent
+      -- d'autant : elles doivent rester au-dela, et non reapparaitre dans
+      -- les chambres qui arrivent.
+      update private.couchages c
+         set numero = least(200, c.numero + mer.nombre)
+       where c.logement_id = classe.id
+         and c.numero > classe.nombre;
+
+      update private.couchages c
+         set logement_id = classe.id,
+             numero = least(200, c.numero + classe.nombre)
+       where c.logement_id = mer.id;
+
+      update public.presences pr
+         set logement_id = classe.id
+       where pr.logement_id = mer.id;
+
+      update private.logements k
+         set nombre = least(200, k.nombre + mer.nombre)
+       where k.id = classe.id;
+
+      -- Ses prix partent avec lui (`on delete cascade`).
+      delete from private.logements k where k.id = mer.id;
+    end if;
+
+    fondus := fondus + 1;
+  end loop;
+
+  update public.presences pr set vue_mer = false where pr.vue_mer;
+  delete from private.tarifs_annexes a where a.cle = 'vue_mer';
+
+  return fondus;
+end $fn$;
+
+-- Au recollage, une fois : les fois suivantes, il n'y a plus rien a fondre
+-- et le bloc ne fait rien. Un JALON d'abord -- l'etat complet d'avant --
+-- puis un GESTE nomme, annulable depuis l'onglet Historique comme
+-- n'importe quel autre.
+do $mig$
+begin
+  if exists (select 1 from private.logements m where m.vue_mer)
+     or exists (select 1 from public.presences pr where pr.vue_mer)
+     or exists (select 1 from private.tarifs_annexes a where a.cle = 'vue_mer') then
+    insert into private.jalons (semaine, motif, contenu)
+    values (date_trunc('week', now() at time zone 'Europe/Paris')::date,
+            'manuelle', private.etat_courant());
+    perform private.geste('Fin de la vue mer');
+    perform private.vue_mer_fondre();
+  end if;
+end $mig$;
+
 
 -- ============================================================
 --  14. Etat de la base apres execution

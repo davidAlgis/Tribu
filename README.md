@@ -984,13 +984,28 @@ encore après et qu'une sortie se décide bien avant.
 
 **Absent est l'état par défaut, et ça se voit dans la grille.** La colonne
 de gauche ne demande qu'une chose — **où l'on dort** : « pas sur place »,
-« en chambre », « en chambre, vue mer », « en gîte ». Ces mots ne disent
-plus comment ça se facture&nbsp;— ils ne désignent qu'une ligne de
-l'inventaire, qui porte ses trois réponses (voir plus haut). La vue mer y figure
-comme une variante de chambre, et non comme une case à part : elle tenait
-une colonne entière, désactivée les trois quarts du temps puisque seule une
-chambre peut l'avoir. La base, elle, garde deux champs — un hébergement et
-un supplément — parce que c'est ainsi que l'hôtel facture.
+« en chambre », « en gîte ». Ces mots ne disent plus comment ça se
+facture&nbsp;— ils ne désignent qu'une ligne de l'inventaire, qui porte ses
+trois réponses (voir plus haut).
+
+**Il n'y a plus de chambre vue mer.** Elle existait comme variante de
+chambre, avec son supplément ; elle a disparu des choix de la famille, de
+l'inventaire et des tarifs. Au recollage du schéma, une fois :
+
+- chaque type « chambre vue mer » **se fond** dans la chambre classique de
+  la même capacité — son nombre s'y ajoute, les déclarations passent
+  dessus, et sur le plan chacun garde sa chambre, qui prend le numéro
+  suivant ceux des chambres classiques. Ce sont les prix de la chambre
+  classique qui valent ;
+- sans chambre classique de cette capacité, le type **perd simplement sa
+  vue** : même ligne, mêmes prix, même plan ;
+- le supplément vue mer s'efface des tarifs.
+
+Un **jalon** est pris juste avant, et l'opération entre dans l'historique
+comme un seul geste, « Fin de la vue mer » : elle se défait d'un clic. Les
+colonnes `vue_mer` restent en base — les copies anciennes les portent — et
+ne s'écrivent plus qu'à faux. Restaurer une copie d'avant refond aussitôt
+ce qu'elle ramène.
 
 **Et les tailles de l'inventaire s'y ajoutent** : « en gîte — 4 pers. », « en
 gîte — 6 pers. », chacune juste après sa catégorie. Le tableur d'origine
@@ -1029,8 +1044,7 @@ type, et toutes les déclarations de sa catégorie qui n'en avaient pas le
 prennent. Celles qui en
 ont déjà une ne bougent pas — même d'une autre taille : quelqu'un qui a
 choisi « chambre 3 pers. » l'a choisi, et un bouton de rattrapage n'a pas à
-le contredire. La vue mer sépare, c'est une autre ligne d'inventaire et un
-autre tarif. Le bloc disparaît dès qu'il n'y a plus rien à préciser, et une
+le contredire. Le bloc disparaît dès qu'il n'y a plus rien à préciser, et une
 il entre dans l'historique comme un seul geste : il touche
 potentiellement toute la saisie, et se défait d'un clic.
 

@@ -250,6 +250,9 @@ SANS_GESTE = {
     "public.admin_jalon_prendre",
     "public.admin_jalon_restaurer",
     "public.admin_compacter",
+    # Ses deux appelants s'en chargent : le recollage nomme le geste, la
+    # restauration ne se trace pas.
+    "private.vue_mer_fondre",
 }
 
 # Les tables dont une écriture doit se retrouver dans l'historique. La même

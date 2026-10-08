@@ -19,20 +19,15 @@ const REPAS_COCHABLES = ["dejeuner", "diner"];
 // Une seule question : OU L'ON DORT. Ne pas etre la du tout n'est pas un
 // choix a faire dans la liste -- c'est une journee ou l'on n'a rien coche.
 //
-// La vue mer est une VARIANTE DE CHAMBRE, pas une option a cote. Elle
-// tenait une colonne entiere, desactivee les trois quarts du temps puisque
-// seule une chambre peut l'avoir. La base, elle, garde deux champs -- un
-// hebergement et un supplement -- parce que c'est ainsi que l'hotel
-// facture. `CHAMBRE_VUE_MER` est donc une valeur d'interface, dépliée en
-// deux a l'enregistrement et repliee a la relecture.
-const CHAMBRE_VUE_MER = "chambre+vue_mer";
+// IL N'Y A PLUS DE VUE MER. Elle etait une variante de chambre ; la base
+// a fondu ses chambres dans les chambres classiques de meme taille
+// (`private.vue_mer_fondre`), et n'ecrit plus le supplement qu'a faux.
 
-// Les trois categories que la base connait, et que l'hotel facture. Elles
-// restent proposees telles quelles : on ne sait pas toujours dans quel gite
-// on ira, et « en gîte » sans plus de precision doit rester dicible.
+// Les deux categories ou l'on dort sur place. Elles restent proposees
+// telles quelles : on ne sait pas toujours dans quel gite on ira, et « en
+// gîte » sans plus de precision doit rester dicible.
 const GENERIQUES = [
   { valeur: "chambre", libelle: "en chambre", categorie: "chambre", vue_mer: false },
-  { valeur: CHAMBRE_VUE_MER, libelle: "en chambre, vue mer", categorie: "chambre", vue_mer: true },
   { valeur: "gite", libelle: "en gîte", categorie: "gite", vue_mer: false },
 ];
 
@@ -67,9 +62,9 @@ function construireChoixNuit(logements, presences) {
   nuitsPossibles = [DEHORS];
 
   for (const g of GENERIQUES) {
-    const tailles = inventaire.filter(
-      (l) => l.categorie === g.categorie && l.vue_mer === g.vue_mer
-    );
+    // Un type vue mer ne survit pas au recollage du schema ; s'il en reste
+    // un, il ne se propose plus.
+    const tailles = inventaire.filter((l) => l.categorie === g.categorie && !l.vue_mer);
 
     // LE GENERIQUE NE PARAIT QUE S'IL APPORTE QUELQUE CHOSE.
     //
@@ -88,7 +83,7 @@ function construireChoixNuit(logements, presences) {
     //     le prochain enregistrement l'ecraserait en silence. Il porte
     //     dans ce cas une mention qui le distingue de ses tailles.
     const aRattraper = (presences || []).some(
-      (p) => p.hebergement === g.categorie && !!p.vue_mer === g.vue_mer && sansTaille(p)
+      (p) => p.hebergement === g.categorie && sansTaille(p)
     );
 
     if (!tailles.length) {
@@ -104,7 +99,7 @@ function construireChoixNuit(logements, presences) {
         valeur: l.id,
         libelle: `${g.libelle} — ${l.capacite} pers.`,
         categorie: l.categorie,
-        vue_mer: l.vue_mer,
+        vue_mer: false,
         logement_id: l.id,
       });
     }
@@ -494,8 +489,7 @@ function construireGrille(jours) {
   }
 }
 
-// Absente = rien du tout : ni nuit, ni repas. Le supplement vue mer, lui,
-// n'existe que pour les chambres.
+// Absente = rien du tout : ni nuit, ni repas.
 // La grille se relit ENTIERE a chaque changement, jamais ligne par ligne :
 // le petit-dejeuner d'un jour depend de la nuit du jour d'avant, et une
 // regle posee sur une seule ligne ne voit pas sa voisine.
@@ -620,9 +614,7 @@ function remplirGrille(participantId) {
       ? "exterieur"
       : presence.logement_id && nuitParValeur.has(presence.logement_id)
         ? presence.logement_id
-        : presence.vue_mer && presence.hebergement === "chambre"
-          ? CHAMBRE_VUE_MER
-          : presence.hebergement;
+        : presence.hebergement;
     for (const repas of REPAS_COCHABLES) {
       champ(repas).checked = presence ? presence[repas] : false;
     }
@@ -641,7 +633,7 @@ function lireGrille() {
       // La categorie part quand meme : c'est elle qui facture, et c'est
       // elle qui reste quand le type disparait de l'inventaire.
       hebergement: nuit.categorie,
-      vue_mer: nuit.vue_mer,
+      vue_mer: false,
       logement_id: nuit.logement_id || null,
       petit_dejeuner: false, // pose juste apres, d'apres la nuit d'avant
       dejeuner: champ("dejeuner").checked,
