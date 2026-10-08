@@ -230,6 +230,40 @@ tfoot th, tfoot td { border-top: 2px solid var(--trait); font-weight: 700; }
 .tableau-large table { min-width: 100%; width: auto; }
 .tableau-large th, .tableau-large td { white-space: nowrap; }
 
+/* Les tableaux d'argent et de l'hotel (facture, comptes, onglets Facture
+   et Hotel) gardent leur EN-TETE et leur PREMIERE COLONNE sous les yeux :
+   soixante lignes et seize colonnes, et l'on ne sait plus quelle case
+   est a qui ni de quelle nuit elle parle.
+
+   `sticky` se colle au premier ancetre qui defile. Le cadre doit donc
+   defiler dans les deux sens, lui : sans hauteur maximale, il grandirait
+   avec le tableau, ne defilerait jamais en hauteur, et l'en-tete partirait
+   avec la page.
+
+   Les cases figees ont un fond plein -- sinon on lirait a travers -- et
+   leur trait est une ombre : avec `border-collapse`, une bordure reste
+   au tableau et ne suit pas la case qui se fige. */
+.tableau-fige { max-height: 75vh; overflow: auto; }
+.tableau-fige thead th {
+  position: sticky;
+  top: 0;
+  z-index: 2;
+  background: var(--carte);
+  box-shadow: inset 0 -1px 0 var(--trait);
+}
+.tableau-fige tr > :first-child {
+  position: sticky;
+  left: 0;
+  z-index: 1;
+  background: var(--carte);
+  box-shadow: inset -1px 0 0 var(--trait);
+}
+/* Le coin, fige dans les deux sens, passe au-dessus des deux. */
+.tableau-fige thead tr > :first-child {
+  z-index: 3;
+  box-shadow: inset -1px -1px 0 var(--trait);
+}
+
 /* Chaque famille ferme sur sa somme : c'est la ligne qu'on cherche quand
    on prepare un virement. */
 tr.sous-total th, tr.sous-total td {

@@ -123,7 +123,7 @@ window.TABLEAUX = (function () {
   // le meme nombre sur chaque ligne de la famille ne dirait rien de plus.
   function tableau(colonnes, lignes, gens) {
     const cadre = document.createElement("div");
-    cadre.className = "tableau-large";
+    cadre.className = "tableau-large tableau-fige";
     const table = document.createElement("table");
 
     const tete = document.createElement("thead");
@@ -323,7 +323,7 @@ window.TABLEAUX = (function () {
 
   function synthese(series, effectif) {
     const cadre = document.createElement("div");
-    cadre.className = "tableau-large";
+    cadre.className = "tableau-large tableau-fige";
     const table = document.createElement("table");
 
     const tete = document.createElement("thead");

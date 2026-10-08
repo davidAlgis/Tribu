@@ -76,7 +76,7 @@ window.HOTEL = (function () {
   // comptent restent a l'oeil.
   function tableau(colonnes, lignes) {
     const cadre = document.createElement("div");
-    cadre.className = "tableau-large";
+    cadre.className = "tableau-large tableau-fige";
     const table = document.createElement("table");
 
     const tete = document.createElement("thead");
@@ -162,7 +162,7 @@ window.HOTEL = (function () {
   function tableauDetail(prestations) {
     const somme = Math.round(prestations.reduce((t, l) => t + l.montant, 0) * 100) / 100;
     const cadre = document.createElement("div");
-    cadre.className = "tableau-large";
+    cadre.className = "tableau-large tableau-fige";
     const table = document.createElement("table");
 
     const tete = document.createElement("thead");
