@@ -1334,3 +1334,11 @@ kbd {
 
 /* La carte zoomee se deplace a la molette enfoncee. */
 .carte-svg.deplace, .carte-svg.deplace .dep { cursor: grabbing; }
+
+/* La derniere ligne du classement des departements : ce qui est a egalite
+   hors de la liste. Une mention, pas un rang. */
+.classement li.rang-reste {
+  color: var(--doux);
+  font-size: 0.85rem;
+  border-bottom: 0;
+}

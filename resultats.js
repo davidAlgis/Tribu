@@ -78,14 +78,20 @@ window.RESULTATS = (function () {
         a.libelle.localeCompare(b.libelle, "fr")
     );
 
-    // Le rang suit le nombre de OUI, pas la position : deux week-ends a
-    // egalite partagent la premiere place, et il n'y a pas de deuxieme.
+    // Le rang suit le COUPLE (oui, non), pas la position : a nombre de oui
+    // egal, celui qui a moins de non passe devant ET prend un meilleur rang.
+    // Seuls deux week-ends qui ont les memes oui et les memes non partagent
+    // leur place, et il n'y a alors pas de rang suivant.
+    //
+    // Le tri les rangeait deja ainsi, mais le rang ne regardait que les oui :
+    // deux week-ends a 6 oui, l'un a 0 non et l'autre a 4, s'affichaient tous
+    // deux « 1er » -- la liste disait un ordre, les etiquettes un autre.
     let rang = 0;
     let precedent = null;
     lignes.forEach((l, i) => {
-      if (precedent === null || l.oui !== precedent) rang = i + 1;
+      if (precedent === null || l.oui !== precedent.oui || l.non !== precedent.non) rang = i + 1;
       l.rang = rang;
-      precedent = l.oui;
+      precedent = l;
     });
 
     return {
@@ -112,7 +118,7 @@ window.RESULTATS = (function () {
       return `« ${tete[0].libelle} » tient la corde, avec ${oui} sur ${tete[0].repondu} réponse(s).`;
     }
     const noms = tete.map((l) => `« ${l.libelle} »`).join(" et ");
-    return `${tete.length} week-ends à égalité avec ${oui} : ${noms}. Le premier de la liste est refusé par moins de monde.`;
+    return `${tete.length} week-ends à égalité parfaite, avec ${oui} et ${tete[0].non} non : ${noms}.`;
   }
 
   function participationTexte(donnees) {
@@ -173,30 +179,34 @@ window.RESULTATS = (function () {
     return groupes;
   }
 
-  function quiADitQuoi(ligne, donnees, deplies) {
-    const groupes = grouperReponses(donnees, ligne.id);
-
+  // Le pli lui-meme, pour un week-end comme pour un departement : `groupes`
+  // porte trois listes de personnes, `oui`, `non` et `muet`.
+  function pliQuiADitQuoi(cle, groupes, tous, deplies) {
     const pli = document.createElement("details");
     pli.className = "qui-a-dit";
     // Rouvrir ce qu'on avait ouvert : la liste se redessine a chaque
     // enregistrement, et un panneau qui se referme sous le doigt agace.
-    pli.open = deplies.has(ligne.id);
+    pli.open = deplies.has(cle);
     pli.addEventListener("toggle", () => {
-      if (pli.open) deplies.add(ligne.id);
-      else deplies.delete(ligne.id);
+      if (pli.open) deplies.add(cle);
+      else deplies.delete(cle);
     });
 
     const resume = document.createElement("summary");
     resume.textContent = "Qui a répondu quoi";
     pli.appendChild(resume);
 
-    for (const [cle, libelle] of NOMS_CHOIX) {
+    for (const [clef, libelle] of NOMS_CHOIX) {
       const bloc = document.createElement("p");
       bloc.className = "note";
-      bloc.append(fort(libelle), ` (${groupes[cle].length}) — `, liste(groupes[cle], donnees.tous));
+      bloc.append(fort(libelle), ` (${groupes[clef].length}) — `, liste(groupes[clef], tous));
       pli.appendChild(bloc);
     }
     return pli;
+  }
+
+  function quiADitQuoi(ligne, donnees, deplies) {
+    return pliQuiADitQuoi(ligne.id, grouperReponses(donnees, ligne.id), donnees.tous, deplies);
   }
 
   // `zones` : { classement, verdict, participation, deplies, afficherJour }.
@@ -576,12 +586,12 @@ window.RESULTATS = (function () {
   // recolle -- retombe sur l'ancienne regle : avoir peint un refus, c'est
   // avoir repondu.
   function groupesDepartement(tous, code) {
-    const groupes = { non: [], oui: [], muets: 0 };
+    const groupes = { non: [], oui: [], muets: [] };
     for (const personne of tous || []) {
       const refus = personne.refus || [];
       if (refus.includes(code)) groupes.non.push(personne);
       else if (personne.repondu || refus.length) groupes.oui.push(personne);
-      else groupes.muets += 1;
+      else groupes.muets.push(personne);
     }
     return groupes;
   }
@@ -605,10 +615,127 @@ window.RESULTATS = (function () {
       corps.appendChild(ligne);
     }
 
-    if (g.muets) {
-      corps.appendChild(span(`${g.muets} sans réponse`, "infobulle-muets"));
+    if (g.muets.length) {
+      corps.appendChild(span(`${g.muets.length} sans réponse`, "infobulle-muets"));
     }
     return corps;
+  }
+
+  // ------------------------------------- le classement des departements
+  //
+  // Les dix departements les mieux acceptes, dessines comme le classement des
+  // dates : un rang, un nom, une barre, des chiffres, et qui a repondu quoi
+  // sous un pli.
+  //
+  // Il se lit sur les OUI -- ceux qui ont enregistre leur carte sans refuser
+  // le departement -- et, a egalite, sur les NON : celui qui bloque le moins
+  // de monde passe devant. Deux departements qui ont les memes oui ET les
+  // memes non partagent leur rang, comme deux week-ends.
+  //
+  // Avec peu de reponses, la plupart des departements sont a egalite : le
+  // classement le dit, au lieu de couronner dix noms pris dans l'ordre
+  // alphabetique.
+
+  const TAILLE_CLASSEMENT = 10;
+
+  function classerDepartements(donnees, limite) {
+    const tous = donnees.tous || [];
+    const lignes = window.CARTE.departements.map((dep) => {
+      const g = groupesDepartement(tous, dep.c);
+      return {
+        code: dep.c,
+        nom: dep.n,
+        oui: g.oui.length,
+        non: g.non.length,
+        muets: g.muets.length,
+        groupes: { oui: g.oui, non: g.non, muet: g.muets },
+      };
+    });
+
+    lignes.sort(
+      (a, b) => b.oui - a.oui || a.non - b.non || a.nom.localeCompare(b.nom, "fr")
+    );
+
+    let rang = 0;
+    let precedent = null;
+    lignes.forEach((l, i) => {
+      if (precedent === null || l.oui !== precedent.oui || l.non !== precedent.non) rang = i + 1;
+      l.rang = rang;
+      precedent = l;
+    });
+
+    const garde = lignes.slice(0, limite || TAILLE_CLASSEMENT);
+    const dernier = garde[garde.length - 1];
+    return {
+      lignes: garde,
+      // Personne n'a enregistre de carte : tous les departements sont a zero,
+      // et couronner l'un d'eux ne voudrait rien dire.
+      vide: lignes.every((l) => l.oui + l.non === 0),
+      nbTete: lignes.filter((l) => l.rang === 1).length,
+      // Ceux qui, hors de la liste, valent exactement le dernier qu'on montre.
+      egalite: lignes
+        .slice(garde.length)
+        .filter((l) => dernier && l.oui === dernier.oui && l.non === dernier.non).length,
+    };
+  }
+
+  function verdictLieux(c) {
+    if (c.vide) {
+      return "Personne n'a encore enregistré de carte : le classement apparaîtra ici dès les premières.";
+    }
+    const tete = c.lignes.filter((l) => l.rang === 1);
+    const premier = tete[0];
+    if (c.nbTete === 1) {
+      return `« ${premier.nom} » est le mieux accepté, avec ${premier.oui} oui et ${premier.non} non sur ${premier.oui + premier.non} réponse(s).`;
+    }
+    const noms = tete.slice(0, 3).map((l) => `« ${l.nom} »`).join(", ");
+    const reste = c.nbTete - Math.min(3, tete.length);
+    return (
+      `${c.nbTete} départements à égalité parfaite en tête, avec ${premier.oui} oui et ${premier.non} non : ` +
+      `${noms}${reste > 0 ? ` et ${reste} autre(s)` : ""}.`
+    );
+  }
+
+  // `zones` : { classement, verdict, participation, deplies }.
+  function dessinerClassementLieux(donnees, zones) {
+    const c = classerDepartements(donnees);
+
+    const combien = participationTexte(donnees);
+    zones.participation.textContent = combien ? `(${combien})` : "";
+
+    zones.verdict.className = c.vide ? "note" : "note resultat";
+    zones.verdict.textContent = verdictLieux(c);
+
+    zones.classement.textContent = "";
+    if (c.vide) return;
+
+    for (const ligne of c.lignes) {
+      const item = document.createElement("li");
+
+      const titre = document.createElement("div");
+      titre.className = "rang-titre";
+      titre.append(span(ordinal(ligne.rang), "etiquette"), fort(ligne.nom), span(ligne.code, "lien"));
+
+      const chiffres = document.createElement("div");
+      chiffres.className = "rang-chiffres";
+      chiffres.textContent =
+        `${ligne.oui} oui · ${ligne.non} non` +
+        (ligne.muets ? ` · ${ligne.muets} sans réponse` : "");
+
+      item.append(titre, barre(ligne, donnees.participants || ligne.oui + ligne.non || 1), chiffres);
+      item.appendChild(pliQuiADitQuoi(`dep-${ligne.code}`, ligne.groupes, donnees.tous, zones.deplies));
+      zones.classement.appendChild(item);
+    }
+
+    if (c.egalite > 0) {
+      const dernier = c.lignes[c.lignes.length - 1];
+      const reste = document.createElement("li");
+      reste.className = "rang-reste";
+      reste.textContent =
+        `… et ${c.egalite} autre(s) département(s) à égalité avec le dernier ci-dessus ` +
+        `(${dernier.oui} oui, ${dernier.non} non).`;
+      zones.classement.appendChild(reste);
+    }
   }
 
   // La bulle suit la souris sur le cadre de la carte. Au doigt il n'y a pas
@@ -681,5 +808,6 @@ window.RESULTATS = (function () {
     contenuDepartement,
     brancherSurvol,
     brancherZoom,
+    dessinerClassementLieux,
   };
 })();

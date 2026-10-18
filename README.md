@@ -107,6 +107,8 @@ la vue famille : sur sa propre carte, elle gênerait le pinceau.
 
 **Molette pour zoomer, molette enfoncée pour déplacer** — sur la carte de `lieux.html` comme sur celle de l'organisateur. Paris ne tient pas sous le doigt à l'échelle de la France. Le zoom se fait autour du curseur, de ×1 à ×8, et la carte ne sort jamais de son cadre. Trois boutons en haut à droite doublent la molette (+, −, et ⌂ pour tout revoir), pour un pavé tactile ou un doigt. Le clic gauche reste au pinceau, **et le pinceau rétrécit avec le zoom** : on zoome pour viser plus fin, un disque qui grossirait avec la carte couvrirait toujours autant de départements à l'écran. Les noms de villes et les traits gardent leur taille, au lieu de grossir. La carte revient entière à chaque chargement et à chaque enregistrement.
 
+**Les dix départements les mieux acceptés**, sous la carte de la famille — sur `lieux.html` (vue famille) comme dans l'onglet **Lieu** d'`admin.html` — dans le même style que le classement des dates : un rang, une barre, les chiffres, et *qui a répondu quoi* sous un pli. Il se lit sur les **oui** (ceux qui ont enregistré leur carte sans refuser le département) et, à égalité, sur les **non**. Chaque personne qui a répondu est soit oui soit non sur un département : à même nombre de oui, le nombre de non est donc le même, et ce second critère ne départage jamais deux départements — il reste écrit pour que le classement dise la même chose que celui des dates. En pratique, avec peu de réponses, beaucoup de départements sont à égalité : ils partagent leur rang, la liste le dit (« 20 départements à égalité parfaite en tête… ») et signale combien d'autres valent le dernier affiché, plutôt que de couronner dix noms pris dans l'ordre alphabétique.
+
 **Enregistrer une carte, c'est répondre — même toute verte.** Par défaut tout est vert, et rien n'est compté : celui qui n'a jamais ouvert la page est « sans réponse ». Mais celui qui enregistre sa carte sans rien peindre dit « partout me va », et cette réponse entre dans le résultat de la famille comme un « oui » sur chaque département. La base ne gardait que les refus, donc une carte vide ne laissait aucune trace et ne comptait pas parmi les votants : `public.reponses_lieu` retient désormais **qui a enregistré sa carte**, avec ou sans refus. Les gens qui avaient déjà peint au moins un refus sont repris tels quels ; ceux qui avaient enregistré une carte vide avant ce correctif ne peuvent pas être retrouvés, et doivent ré-enregistrer.
 
 Côté organisateur, l'onglet **Lieu** d'`admin.html` montre **la même carte**,
@@ -369,10 +371,13 @@ accentuée en tête, titre en capitales. Deux objets différents plutôt que
 deux nuances du même — on ne cherche pas où cliquer dans un panneau
 d'affichage.
 
-À égalité, celui qui bloque le moins de monde s'affiche en premier, mais
-l'égalité est annoncée plutôt que masquée derrière un classement arbitraire.
-Deux week-ends au même score partagent la première place, et il n'y a pas de
-deuxième.
+À nombre de oui égal, **celui qui a moins de non passe devant — et prend le
+meilleur rang** : le classement se lit sur le couple (oui, non), pas sur les oui
+seuls. Le tri les rangeait déjà ainsi, mais l'étiquette ne regardait que les oui :
+deux week-ends à 6 oui, l'un à 0 non et l'autre à 4, s'affichaient tous deux
+« 1er ». Seuls deux week-ends qui ont les mêmes oui **et** les mêmes non
+partagent leur place — l'égalité est alors annoncée plutôt que masquée derrière
+un classement arbitraire — et il n'y a pas de rang suivant.
 
 L'onglet **Dates** d'`admin.html` (il s'appelait *Week-ends*) montre sous
 la liste des propositions **le même rapport que la famille** : la

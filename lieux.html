@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="robots" content="noindex">
   <title>Tribu — choix du lieu</title>
-  <link rel="stylesheet" href="./style.css?v=4d9beb9590">
+  <link rel="stylesheet" href="./style.css?v=92fa4ebfdf">
 </head>
 <body>
 <main>
@@ -117,6 +117,24 @@
       <button type="button" id="tout-effacer" class="discret">Tout remettre en vert</button>
     </fieldset>
 
+    <!--
+      Le classement des dix departements les mieux acceptes, sous la carte de
+      la famille : il n'a de sens que sur cette vue, la page le masque sur
+      « Ma carte ». Meme bandeau que le resultat des dates.
+    -->
+    <details class="panneau-resultat" id="bloc-classement" open hidden>
+      <summary>Les départements les mieux acceptés <span id="participation-lieux" class="discret-inline"></span></summary>
+      <p id="verdict-lieux" class="note" role="status" aria-live="polite"></p>
+      <ol id="classement-departements" class="classement"></ol>
+      <p class="note">
+        Le classement suit le nombre de <strong>oui</strong>&nbsp;: ceux qui ont
+        enregistré leur carte sans refuser le département. À égalité, celui qui
+        est refusé par le moins de monde passe devant&nbsp;; deux départements
+        qui ont les mêmes oui <em>et</em> les mêmes non partagent leur rang.
+        <strong>Qui a répondu quoi</strong> se déplie sous chacun.
+      </p>
+    </details>
+
     <div class="actions">
       <button type="button" id="enregistrer">Enregistrer</button>
       <button type="button" id="appliquer-tous" class="discret" hidden></button>
@@ -129,7 +147,7 @@
 
 <script src="./config.js?v=bcb9f55b01"></script>
 <script src="./carte.js?v=b37ceaf5c6"></script>
-<script src="./resultats.js?v=a757ab735b"></script>
-<script src="./lieux.js?v=7a040d0234"></script>
+<script src="./resultats.js?v=4c2ef4837b"></script>
+<script src="./lieux.js?v=3b3fb63ea6"></script>
 </body>
 </html>

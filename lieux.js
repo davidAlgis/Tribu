@@ -258,6 +258,12 @@ const boutonEnregistrer = document.getElementById("enregistrer");
 const boutonTous = document.getElementById("appliquer-tous");
 const portee = document.getElementById("portee-saisie");
 
+// Le classement des departements, sous la carte de la famille. Les plis
+// « qui a repondu quoi » qu'on a ouverts sont retenus : la liste se
+// redessine a chaque changement de vue.
+const blocClassement = document.getElementById("bloc-classement");
+const deplieesLieux = new Set();
+
 // En unites du viewBox (large de 1000). Il couvrait deux ou trois
 // departements d'un coup -- commode pour peindre une region entiere, trop
 // large pour en designer un seul : on debordait sur le voisin a chaque
@@ -450,6 +456,7 @@ function peindre() {
       forme.classList.toggle("refuse", etat.refuses.has(code));
     }
     RESULTATS.effacerFamille(formes);
+    blocClassement.hidden = true;
     // innerHTML est sans risque ici, et seulement ici : ce gabarit ne
     // recoit que des nombres calcules sur place, jamais de texte venu de
     // la base. Y glisser un nom de departement demanderait span().
@@ -463,6 +470,14 @@ function peindre() {
   const totaux = etat.donnees.totaux || {};
   RESULTATS.colorierFamille(formes, totaux);
   carteLegende.innerHTML = RESULTATS.legendeFamille(formes, totaux);
+
+  RESULTATS.dessinerClassementLieux(etat.donnees, {
+    classement: document.getElementById("classement-departements"),
+    verdict: document.getElementById("verdict-lieux"),
+    participation: document.getElementById("participation-lieux"),
+    deplies: deplieesLieux,
+  });
+  blocClassement.hidden = false;
 }
 
 // Molette pour zoomer, molette enfoncee pour deplacer.

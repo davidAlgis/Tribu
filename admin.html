@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="robots" content="noindex">
   <title>Tribu — organisateur</title>
-  <link rel="stylesheet" href="./style.css?v=4d9beb9590">
+  <link rel="stylesheet" href="./style.css?v=92fa4ebfdf">
 </head>
 <body>
 <main>
@@ -948,6 +948,21 @@
           et <strong>qui n'a pas d'objection</strong>. «&nbsp;Oui&nbsp;» est quelqu'un qui a enregistré sa carte sans refuser ce département — y compris une carte toute verte, qui dit «&nbsp;partout me va&nbsp;». Les «&nbsp;sans réponse&nbsp;» n'ont jamais enregistré de carte.
         </p>
 
+        <!--
+          LE MÊME CLASSEMENT QUE LA FAMILLE lit sous sa carte : les dix
+          départements les mieux acceptés, dessinés par le même module.
+        -->
+        <details class="panneau-resultat" open>
+          <summary>Les départements les mieux acceptés <span id="lieux-participation" class="discret-inline"></span></summary>
+          <p id="lieux-verdict" class="note" role="status" aria-live="polite"></p>
+          <ol id="lieux-classement" class="classement"></ol>
+          <p class="note">
+            Le classement suit le nombre de <strong>oui</strong>&nbsp;: ceux qui ont
+            enregistré leur carte sans refuser le département. À égalité, celui qui
+            est refusé par le moins de monde passe devant.
+          </p>
+        </details>
+
         <div id="classement-lieux"></div>
         <p class="note">
           Les départements que personne ne refuse, d'après
@@ -1067,12 +1082,12 @@
 
 <script src="./config.js?v=bcb9f55b01"></script>
 <script src="./carte.js?v=b37ceaf5c6"></script>
-<script src="./resultats.js?v=a757ab735b"></script>
+<script src="./resultats.js?v=4c2ef4837b"></script>
 <script src="./plan.js?v=353950955a"></script>
 <script src="./repartir.js?v=e34c984171"></script>
 <script src="./facture.js?v=76a52daeae"></script>
 <script src="./tableaux.js?v=9f55492dff"></script>
 <script src="./hotel.js?v=5e05337b09"></script>
-<script src="./admin.js?v=105415034c"></script>
+<script src="./admin.js?v=2302151ff2"></script>
 </body>
 </html>

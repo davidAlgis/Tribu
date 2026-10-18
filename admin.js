@@ -2955,6 +2955,7 @@ const carteLieux = document.getElementById("carte-famille");
 const legendeLieux = document.getElementById("carte-famille-legende");
 
 let donneesLieux = null;
+const deplieesDepartements = new Set();
 let formesLieux = new Map();
 
 // La bulle des noms, branchee une fois : elle lit `donneesLieux` au moment
@@ -2983,6 +2984,13 @@ async function rechargerLieux() {
     RESULTATS.colorierFamille(formesLieux, totaux);
     // Des nombres, rien que des nombres : voir `legendeFamille`.
     legendeLieux.innerHTML = RESULTATS.legendeFamille(formesLieux, totaux);
+
+    RESULTATS.dessinerClassementLieux(d, {
+      classement: document.getElementById("lieux-classement"),
+      verdict: document.getElementById("lieux-verdict"),
+      participation: document.getElementById("lieux-participation"),
+      deplies: deplieesDepartements,
+    });
   }
 
   const classes = (window.CARTE?.departements || [])
