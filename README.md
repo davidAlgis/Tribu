@@ -23,7 +23,7 @@ Six pages pour la famille, une pour toi :
 | [`regimes.html`](regimes.html) | la famille | ce que chacun mange et boit |
 | [`activites.html`](activites.html) | la famille | ce qu'on a envie de faire sur place, et qui en a envie |
 | [`facture.html`](facture.html) | la famille | ce que ça coûte, à soi et aux siens — en lecture seule |
-| [`admin.html`](admin.html) | toi | dates du séjour, participants, préférences alimentaires, **activités**, logements et plan de couchage, tarifs, facture, hôtel, week-ends, résultat de la carte, retour en arrière |
+| [`admin.html`](admin.html) | toi | dates du séjour, participants, préférences alimentaires, **activités**, logements et plan de couchage, tarifs, facture, hôtel, dates, résultat de la carte, retour en arrière |
 
 Le code se donne **une fois**, sur la page d'accueil : il est retenu sur
 l'appareil, et les étapes suivantes le reprennent toutes seules. **Le prénom
@@ -45,7 +45,7 @@ L'accueil, lui, ne porte pas ce menu : il **est** le menu.
 l'annoncer à toute la famille ne ferait qu'inviter à la pousser.
 
 Elle a ses propres **onglets** — Séjour, Participants, Préférences
-alimentaires, Activités, Logements, Tarifs, Facture, Hôtel, Week-ends,
+alimentaires, Activités, Logements, Tarifs, Facture, Hôtel, Dates,
 Lieu, Historique. Onze sujets sans rapport se suivaient auparavant dans une
 seule colonne : pour ouvrir la carte, il fallait dérouler la liste entière
 des participants. Les flèches ← → passent d'un onglet à l'autre.
@@ -84,14 +84,32 @@ de location ; une tache sur une image, non.
 
 L'onglet **Celle de la famille** montre une carte de chaleur : vert là où
 personne ne refuse, puis ambre, puis rouge — le nombre de refus se lit
-comme une température. Les totaux sont
-visibles de tous, **jamais les noms**. Avec vingt personnes, il est
+comme une température. Avec vingt personnes, il est
 probable qu'aucun département ne fasse l'unanimité — d'où le dégradé
 plutôt qu'un verdict binaire qui n'afficherait rien.
 
-Côté organisateur, `admin.html` liste les départements sans aucun refus, ou
-à défaut les moins contestés, et l'interrupteur **Carte ouverte** clôt la
-saisie.
+**En passant la souris sur un département** — un appui, sur un téléphone —
+une bulle donne **qui le refuse** (*Non*) et **qui n'y voit pas
+d'objection** (*Oui*), plus le nombre de ceux qui n'ont rien répondu. Les
+noms étaient tus au début, et ce silence se défendait mal : on choisit un
+lieu en sachant qui pourra y aller, comme on choisit une date — et la page
+de la date dit déjà « qui a répondu quoi ». Ce qui reste réservé n'a jamais
+été les réponses, c'est ce que mange le cousin. La bulle ne s'ouvre que sur
+la vue famille : sur sa propre carte, elle gênerait le pinceau.
+
+**« Oui » a une limite que la base impose.** Elle ne stocke que les refus :
+quelqu'un qui a répondu « partout me va » n'a aucune ligne, et ne se
+distingue pas de quelqu'un qui n'a jamais ouvert la page. Est donc compté
+« oui » **celui qui a peint au moins un département** sans refuser celui-là ;
+les autres sont « sans réponse » — mieux vaut le dire que de gonfler les oui
+avec des gens qu'on n'a pas entendus.
+
+Côté organisateur, l'onglet **Lieu** d'`admin.html` montre **la même carte**,
+en lecture seule et avec la même bulle, puis liste les départements sans
+aucun refus, ou à défaut les moins contestés. L'interrupteur **Carte
+ouverte** clôt la saisie. Le dessin de la carte et de la bulle vit dans
+[`resultats.js`](resultats.js), partagé par les deux pages : celui qui
+organise et ceux qui répondent lisent la même chose.
 
 <details>
 <summary>Refaire le fond de carte</summary>
@@ -350,6 +368,14 @@ d'affichage.
 l'égalité est annoncée plutôt que masquée derrière un classement arbitraire.
 Deux week-ends au même score partagent la première place, et il n'y a pas de
 deuxième.
+
+L'onglet **Dates** d'`admin.html` (il s'appelait *Week-ends*) montre sous
+la liste des propositions **le même rapport que la famille** : la
+participation, le verdict, le classement avec ses barres, et qui a répondu
+quoi sous chaque week-end. C'est le même module
+([`resultats.js`](resultats.js)) et les mêmes données — l'organisateur ne
+lit rien que la famille ne lise. Il se rafraîchit à chaque ouverture de
+l'onglet : les réponses arrivent pendant qu'on organise.
 
 L'interrupteur **Sondage ouvert** ferme les réponses une fois la date
 arrêtée.

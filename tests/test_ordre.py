@@ -167,6 +167,8 @@ def test_toutes_les_listes_s_y_rangent():
         "sejour_charger",
         "dates_charger",
         "lieux_charger",
+        "admin_lieux",
+        "admin_dates_lister",
         "regimes_charger",
         "couchage_charger",
         "admin_lister",

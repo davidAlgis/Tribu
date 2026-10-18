@@ -304,6 +304,7 @@ MODULES = {
     "TABLEAUX": "tableaux.js",
     "HOTEL": "hotel.js",
     "CLASSEUR": "classeur.js",
+    "RESULTATS": "resultats.js",
 }
 
 
@@ -392,3 +393,39 @@ def test_chaque_page_reclame_ses_scripts_a_jour():
         html = page.read_text(encoding="utf-8")
         nues = re.findall(r'(?:src|href)="\./([\w.-]+\.(?:js|css))"', html)
         assert nues == [], f"{page.name} : sans empreinte : {nues}"
+# --- Les résultats, lus au même endroit -----------------------------------
+
+
+def test_l_onglet_des_dates_s_appelle_dates(admin):
+    """Il s'appelait « Week-ends » : le nom d'une réponse, pas de ce qu'on
+    y décide. Le volet suit, et le README liste les onglets sous ce nom."""
+    bouton = re.search(r'<button[^>]*id="onglet-dates"[^>]*>(.*?)</button>', admin, re.S)
+    assert bouton, "l'onglet des dates a disparu"
+    assert bouton.group(1).strip() == "Dates"
+
+
+def test_les_resultats_ne_passent_pas_par_innerhtml():
+    """`resultats.js` met en page des prénoms et des intitulés venus de la
+    base, c'est-à-dire du GEDCOM : des chaînes qu'aucun humain n'a relues.
+    Passées à `innerHTML`, elles seraient lues comme du balisage, et un nom
+    piégé s'exécuterait chez toute la famille.
+
+    Le module fabrique ses nœuds un par un. La légende de la carte, qui ne
+    porte que des nombres, est rendue comme une chaîne et posée par la page
+    — c'est à elle d'en répondre.
+    """
+    js = (RACINE / "resultats.js").read_text(encoding="utf-8")
+    code = "\n".join(l for l in js.splitlines() if not l.lstrip().startswith("//"))
+    assert "innerHTML" not in code
+
+
+def test_la_carte_en_lecture_a_son_style_sans_dependre_d_un_identifiant():
+    """La carte de la famille s'affiche sur deux pages sous deux
+    identifiants. Une règle accrochée à `#carte` n'atteint que la
+    première : l'autre perdrait ses départements, ou son curseur."""
+    style = (RACINE / "style.css").read_text(encoding="utf-8")
+    code = re.sub(r"/\*.*?\*/", "", style, flags=re.S)
+    assert "#carte" not in code
+    for page in ("lieux.html", "admin.html"):
+        html = (RACINE / page).read_text(encoding="utf-8")
+        assert re.search(r'<svg[^>]*class="[^"]*carte-svg', html), page

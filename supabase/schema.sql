@@ -2648,6 +2648,29 @@ begin
   return jsonb_build_object(
     'voeux_ouverts', (select voeux_ouverts from private.reglages),
     'participants', (select count(*) from private.participants),
+
+    -- Ce que la famille lit sur dates.html, l'organisateur le lit aussi :
+    -- la participation, et qui a repondu quoi. Les memes champs que
+    -- `dates_charger`, pour que le meme module dessine les deux rapports.
+    'repondants', (select count(distinct participant_id) from public.voeux),
+
+    'tous', coalesce((
+      select jsonb_agg(jsonb_build_object(
+               'id', p.id, 'prenom', p.prenom, 'famille', p.famille
+             ) order by o.rang)
+      from private.participants p
+      join private.ordre_familial() o on o.id = p.id
+    ), '[]'::jsonb),
+
+    'reponses', coalesce((
+      select jsonb_agg(jsonb_build_object(
+               'participant_id', v.participant_id,
+               'option_id', v.option_id,
+               'choix', v.choix
+             ) order by v.participant_id, v.option_id)
+      from public.voeux v
+    ), '[]'::jsonb),
+
     'options', coalesce((
       select jsonb_agg(jsonb_build_object(
                'id', o.id,
@@ -2767,9 +2790,9 @@ begin
     'lieux_ouverts', r.lieux_ouverts,
     'participants', (select count(*) from private.participants),
 
-    -- Combien de refus par departement, pour toute la famille. Des nombres,
-    -- jamais des noms : savoir qu'un departement recueille trois refus aide
-    -- a chercher ailleurs, savoir lesquels ne regarde personne.
+    -- Combien de refus par departement, pour toute la famille. Les noms
+    -- viennent plus bas, dans `tous` : les totaux colorent la carte, les
+    -- noms s'affichent au survol.
     'totaux', coalesce((
       select jsonb_object_agg(x.departement, x.n)
       from (
@@ -2781,6 +2804,31 @@ begin
     -- Combien de personnes se sont prononcees : sans cela, « 0 refus »
     -- pourrait aussi bien vouloir dire « personne n'a encore repondu ».
     'repondants', (select count(distinct participant_id) from public.refus_lieu),
+
+    -- QUI A REFUSE QUOI, depuis que la carte montre les noms au survol d'un
+    -- departement. Le silence d'avant se defendait -- savoir qui refuse la
+    -- Bretagne ne regarde personne -- mais on choisit un lieu en sachant
+    -- qui pourra y aller, exactement comme on choisit une date, et les
+    -- voeux disent deja « qui a dit quoi ». Ce qui reste cache n'a jamais
+    -- ete les reponses, c'est ce que mange le cousin.
+    --
+    -- Chaque personne porte la liste de SES refus : quelques codes, bien
+    -- plus compacts qu'une ligne par couple (personne, departement). Les
+    -- trois groupes -- non, oui, sans reponse -- se forment dans la page :
+    -- « sans reponse » n'est pas une donnee, c'est le reste de la famille.
+    'tous', coalesce((
+      select jsonb_agg(jsonb_build_object(
+               'id', p.id,
+               'prenom', p.prenom,
+               'famille', p.famille,
+               'refus', coalesce((
+                 select jsonb_agg(x.departement order by x.departement)
+                 from public.refus_lieu x where x.participant_id = p.id
+               ), '[]'::jsonb)
+             ) order by o.rang)
+      from private.participants p
+      join private.ordre_familial() o on o.id = p.id
+    ), '[]'::jsonb),
 
     'modifiables', coalesce((
       select jsonb_agg(jsonb_build_object(
@@ -2891,7 +2939,23 @@ begin
         select departement, count(*) as n
         from public.refus_lieu group by departement
       ) x
-    ), '{}'::jsonb)
+    ), '{}'::jsonb),
+
+    -- Les memes noms que ceux servis a la famille par `lieux_charger` : la
+    -- carte de l'organisateur et celle de la famille se lisent pareil.
+    'tous', coalesce((
+      select jsonb_agg(jsonb_build_object(
+               'id', p.id,
+               'prenom', p.prenom,
+               'famille', p.famille,
+               'refus', coalesce((
+                 select jsonb_agg(x.departement order by x.departement)
+                 from public.refus_lieu x where x.participant_id = p.id
+               ), '[]'::jsonb)
+             ) order by o.rang)
+      from private.participants p
+      join private.ordre_familial() o on o.id = p.id
+    ), '[]'::jsonb)
   );
 end $fn$;
 

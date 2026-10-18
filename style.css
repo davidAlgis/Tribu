@@ -1160,9 +1160,11 @@ kbd {
   border-radius: 10px;
   padding: 8px;
   margin: 12px 0 10px;
+  /* L'infobulle des noms se pose dans le cadre, relativement a lui. */
+  position: relative;
 }
 
-#carte {
+.carte-svg {
   display: block;
   width: 100%;
   height: auto;
@@ -1171,7 +1173,9 @@ kbd {
   touch-action: none;
   cursor: crosshair;
 }
-#carte.lecture { cursor: default; }
+/* `carte-svg` et non `#carte` : admin.html montre la meme carte, en lecture
+   seule, sous un autre identifiant. */
+.carte-svg.lecture { cursor: default; }
 
 /* Vert pour « on peut y aller », rouge pour « pas là » : le couple se lit
    sans légende, et c'est ce qui compte sur une carte qu'on parcourt du
@@ -1182,7 +1186,11 @@ kbd {
   stroke-width: 1.2;
   transition: fill 0.08s linear;
 }
-#carte:not(.lecture) .dep:hover { fill: #5b9b75; }
+.carte-svg:not(.lecture) .dep:hover { fill: #5b9b75; }
+/* En lecture, la teinte porte le nombre de refus : on ne la change pas sous
+   la souris, on l'assombrit a peine -- assez pour voir quel departement la
+   bulle decrit, pas assez pour se lire comme un autre nombre. */
+.carte-svg.lecture .dep:hover { filter: brightness(0.9); }
 
 .dep.refuse { fill: #c0392b; }
 
@@ -1258,3 +1266,32 @@ kbd {
   line-height: 1.7;
 }
 .tutoriel strong { color: var(--texte); }
+
+/* ---------- Qui est pour, qui est contre : la bulle de la carte ---------- */
+
+/* Elle suit la souris sans jamais la gener : `pointer-events: none`, sans
+   quoi elle s'interposerait entre le curseur et le departement, et
+   s'eteindrait d'elle-meme en s'ouvrant. */
+.infobulle-carte {
+  position: absolute;
+  z-index: 5;
+  max-width: min(320px, 90%);
+  padding: 9px 12px;
+  background: var(--carte);
+  color: var(--texte);
+  border: 1px solid var(--trait);
+  border-left: 4px solid var(--accent);
+  border-radius: 6px;
+  box-shadow: 0 3px 10px rgba(0, 0, 0, 0.18);
+  font-size: 0.85rem;
+  line-height: 1.4;
+  pointer-events: none;
+}
+.infobulle-carte[hidden] { display: none; }
+.infobulle-carte p { margin: 0 0 4px; }
+.infobulle-carte .infobulle-titre { margin-bottom: 6px; }
+/* Le rouge et le vert des boutons de reponse : on lit « non » et « oui »
+   avant de lire le mot. */
+.infobulle-non strong { color: var(--erreur); }
+.infobulle-oui strong { color: var(--ok); }
+.infobulle-muets { color: var(--doux); }

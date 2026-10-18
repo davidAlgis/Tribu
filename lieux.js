@@ -265,88 +265,17 @@ const portee = document.getElementById("portee-saisie");
 // promene encore assez vite pour couvrir une region en quelques passages.
 const RAYON_PINCEAU = 15.2;
 
-const formes = new Map(); // code -> <path>
+let formes = new Map(); // code -> <path>
 let pinceau = null;
 
 const SVG = "http://www.w3.org/2000/svg";
 
+// Le fond de carte et ses villes vivent dans `resultats.js`, partages avec
+// admin.html : les deux cartes se dessinent de la meme facon, et la
+// politique des noms de villes n'existe qu'une fois.
 function dessinerCarte() {
-  svg.setAttribute("viewBox", window.CARTE.viewBox);
-  svg.innerHTML = "";
-  formes.clear();
-
-  for (const dep of window.CARTE.departements) {
-    const forme = document.createElementNS(SVG, "path");
-    forme.setAttribute("d", dep.d);
-    forme.dataset.code = dep.c;
-    forme.classList.add("dep");
-
-    const titre = document.createElementNS(SVG, "title");
-    titre.textContent = `${dep.c} — ${dep.n}`;
-    forme.appendChild(titre);
-
-    svg.appendChild(forme);
-    formes.set(dep.c, forme);
-  }
-
-  dessinerVilles();
+  formes = RESULTATS.dessinerFond(svg);
   dessinerPinceau();
-}
-
-// Les villes servent a se reperer : sans elles, difficile de dire si l'on
-// peint au-dessus ou au-dessous de Lyon.
-//
-// La couche entiere ignore la souris : sans `pointer-events: none`, un nom
-// de ville interposerait un trou dans lequel le pinceau ne peindrait pas.
-// Largeur approchee d'un nom, en unites du viewBox. Mesurer le texte pour
-// de vrai supposerait de l'avoir deja insere ; cette estimation suffit a
-// decider de quel cote l'ecrire.
-const HAUTEUR_NOM = 27;
-
-function largeurNom(nom) {
-  return nom.length * HAUTEUR_NOM * 0.52;
-}
-
-// Un nom s'ecrit a droite de son point, sauf dans deux cas : pres du bord
-// est, ou il sortirait du cadre, et quand une autre ville se trouve juste
-// derriere, ou il la recouvrirait — c'est le cas de Clermont-Ferrand, dont
-// le nom mesure plus que la distance qui le separe de Lyon.
-function ecrireAGauche(ville, largeur) {
-  if (ville.x + largeurNom(ville.n) > largeur * 0.97) return true;
-
-  return (window.CARTE.villes || []).some(
-    (autre) =>
-      autre !== ville &&
-      autre.x > ville.x &&
-      autre.x - ville.x < largeurNom(ville.n) + 14 &&
-      Math.abs(autre.y - ville.y) < 22
-  );
-}
-
-function dessinerVilles() {
-  const couche = document.createElementNS(SVG, "g");
-  couche.setAttribute("id", "couche-villes");
-
-  const largeur = Number(window.CARTE.viewBox.split(" ")[2]);
-
-  for (const ville of window.CARTE.villes || []) {
-    const point = document.createElementNS(SVG, "circle");
-    point.setAttribute("cx", ville.x);
-    point.setAttribute("cy", ville.y);
-    point.setAttribute("r", 6.5);
-    point.classList.add("ville-point");
-
-    const aGauche = ecrireAGauche(ville, largeur);
-    const nom = document.createElementNS(SVG, "text");
-    nom.setAttribute("x", ville.x + (aGauche ? -12 : 12));
-    nom.setAttribute("y", ville.y + 9);
-    if (aGauche) nom.setAttribute("text-anchor", "end");
-    nom.textContent = ville.n;
-    nom.classList.add("ville-nom");
-
-    couche.append(point, nom);
-  }
-  svg.appendChild(couche);
 }
 
 function dessinerPinceau() {
@@ -520,25 +449,20 @@ function peindre() {
     return;
   }
 
-  // Vue famille : une teinte par nombre de refus. Il y a peu de chances
-  // qu'un departement fasse l'unanimite, donc on montre le degrade plutot
-  // qu'un verdict binaire qui serait souvent vide.
+  // Vue famille : une teinte par nombre de refus.
   const totaux = etat.donnees.totaux || {};
-  for (const [code, forme] of formes) {
-    const n = totaux[code] || 0;
-    forme.classList.remove("refuse", "chaleur-1", "chaleur-2", "chaleur-3");
-    if (n > 0) forme.classList.add(`chaleur-${Math.min(n, 3)}`);
-  }
-
-  const acceptes = [...formes.keys()].filter((c) => !(totaux[c] > 0));
-  // Meme remarque : des nombres, rien que des nombres.
-  carteLegende.innerHTML =
-    `<span class="pastille-legende vert"></span> aucun refus (${acceptes.length}) ` +
-    `<span class="pastille-legende c1"></span> 1 ` +
-    `<span class="pastille-legende c2"></span> 2 ` +
-    `<span class="pastille-legende c3"></span> 3 ou plus`;
-
+  RESULTATS.colorierFamille(formes, totaux);
+  carteLegende.innerHTML = RESULTATS.legendeFamille(formes, totaux);
 }
+
+// Les noms des deux camps, au survol d'un departement -- mais seulement dans
+// la vue famille. Sur sa propre carte, une bulle qui s'ouvre sous le
+// pinceau gene le geste, et on y peint ses refus, pas ceux des autres.
+RESULTATS.brancherSurvol(cadreCarte, (code) => {
+  if (etat.vue !== "famille" || !etat.donnees) return null;
+  const dep = window.CARTE.departements.find((d) => d.c === code);
+  return dep ? RESULTATS.contenuDepartement(dep, etat.donnees.tous) : null;
+});
 
 // ------------------------------------------------------- etape 3, cadre
 

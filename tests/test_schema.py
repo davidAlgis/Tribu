@@ -525,3 +525,45 @@ def test_aucune_variable_ne_porte_le_nom_d_une_colonne_interrogee():
         "variable PL/pgSQL et colonne de même nom — Postgres refusera "
         "l'appel : " + " | ".join(fautives)
     )
+
+
+# --- Les noms servis avec les résultats ----------------------------------
+
+
+def corps_de(nom: str) -> str:
+    trouve = re.search(
+        r"create or replace function public\." + nom + r"\(.*?\$fn\$(.*?)\$fn\$",
+        SCHEMA,
+        re.DOTALL,
+    )
+    assert trouve, f"{nom} : fonction introuvable"
+    return trouve.group(1)
+
+
+@pytest.mark.parametrize("nom", ["lieux_charger", "admin_lieux"])
+def test_la_carte_sert_les_refus_de_chacun(nom):
+    """Les noms au survol d'un département viennent de la base : chaque
+    personne porte la liste de ses refus. Sans elle, la bulle n'aurait que
+    des nombres à montrer."""
+    corps = corps_de(nom)
+    assert "'tous'" in corps
+    assert "'refus'" in corps
+
+
+@pytest.mark.parametrize("nom", ["dates_charger", "admin_dates_lister"])
+def test_les_dates_servent_a_l_organisateur_ce_que_la_famille_lit(nom):
+    """Le même module dessine le rapport des deux côtés : il lui faut les
+    mêmes champs. L'organisateur ne lit rien que la famille ne lise — et
+    inversement, il ne doit pas lui en manquer."""
+    corps = corps_de(nom)
+    for champ in ("'tous'", "'reponses'", "'repondants'", "'participants'", "'options'"):
+        assert champ in corps, f"{nom} ne sert pas {champ}"
+
+
+@pytest.mark.parametrize("nom", ["lieux_charger", "admin_lieux", "dates_charger", "admin_dates_lister"])
+def test_les_resultats_ne_servent_que_des_prenoms(nom):
+    """Les noms partent, mais pas n'importe quoi : un prénom, une famille,
+    un identifiant. Ni la date de naissance, ni ce que mange le cousin."""
+    corps = corps_de(nom)
+    for interdit in ("date_naissance", "vegetarien", "vegan", "sans_gluten", "non_buveur"):
+        assert interdit not in corps, f"{nom} sert {interdit}"

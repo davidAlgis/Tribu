@@ -641,6 +641,21 @@ function ouvrirOnglet(onglet) {
   // Les supplements et reductions disent ce qu'ils ajoutent ou retirent :
   // c'est un calcul de facture, refait comme elle a chaque ouverture.
   if (onglet.id === "onglet-tarifs") rechargerAjustements();
+  // Les reponses de la famille arrivent pendant qu'on organise : sans ce
+  // rechargement, le classement et la carte resteraient ceux de l'ouverture
+  // de la page.
+  if (onglet.id === "onglet-dates") {
+    rechargerDates().catch((e) => {
+      messageDates.className = "erreur";
+      messageDates.textContent = e.message;
+    });
+  }
+  if (onglet.id === "onglet-lieu") {
+    rechargerLieux().catch((e) => {
+      messageLieux.className = "erreur";
+      messageLieux.textContent = e.message;
+    });
+  }
 }
 
 onglets.forEach((onglet, i) => {
@@ -668,6 +683,11 @@ const zoneDates = document.getElementById("liste-dates");
 const compteurDates = document.getElementById("compteur-dates");
 const messageDates = document.getElementById("message-dates");
 
+// Le rapport du sondage, tel que la famille le lit sur dates.html : meme
+// module, memes donnees. Les plis « qui a repondu quoi » qu'on a ouverts
+// sont retenus, la liste se redessine a chaque rechargement.
+const deplieesDates = new Set();
+
 function afficherJour(iso) {
   return new Date(iso + "T00:00:00").toLocaleDateString("fr-FR", {
     day: "numeric",
@@ -680,6 +700,14 @@ async function rechargerDates() {
   compteurDates.textContent = donnees.options.length
     ? `${donnees.options.length} proposé(s)`
     : "aucun pour l'instant";
+
+  RESULTATS.dessinerSondage(donnees, {
+    classement: document.getElementById("dates-classement"),
+    verdict: document.getElementById("dates-verdict"),
+    participation: document.getElementById("dates-participation"),
+    deplies: deplieesDates,
+    afficherJour,
+  });
 
   zoneDates.innerHTML = "";
   for (const option of donnees.options) {
@@ -2916,18 +2944,46 @@ document.getElementById("couchages-reporter").addEventListener("click", async ()
 
 // ------------------------------------------------------------ le lieu
 //
-// La carte se peint sur lieux.html ; ici on ne montre que le resultat du
-// croisement, et on ouvre ou ferme la saisie.
+// La carte se peint sur lieux.html ; ici on montre le resultat du
+// croisement -- la meme carte que celle de la famille, en lecture seule --
+// et on ouvre ou ferme la saisie depuis l'onglet Sejour.
 
 const zoneLieux = document.getElementById("classement-lieux");
 const compteurLieux = document.getElementById("compteur-lieux");
 const messageLieux = document.getElementById("message-lieux");
+const carteLieux = document.getElementById("carte-famille");
+const legendeLieux = document.getElementById("carte-famille-legende");
+
+let donneesLieux = null;
+let formesLieux = new Map();
+
+// La bulle des noms, branchee une fois : elle lit `donneesLieux` au moment
+// du survol, et suit donc les rechargements sans qu'on la rebranche.
+if (carteLieux && window.CARTE) {
+  RESULTATS.brancherSurvol(carteLieux.closest(".carte-cadre"), (code) => {
+    if (!donneesLieux) return null;
+    const dep = window.CARTE.departements.find((d) => d.c === code);
+    return dep ? RESULTATS.contenuDepartement(dep, donneesLieux.tous) : null;
+  });
+}
 
 async function rechargerLieux() {
   const d = await rpc("admin_lieux", { p_code: etat.code });
+  donneesLieux = d;
   compteurLieux.textContent = `${d.repondants} réponse(s) sur ${d.participants}`;
 
   const totaux = d.totaux || {};
+
+  // Le fond de carte ne bouge pas d'un rechargement a l'autre : on ne le
+  // redessine que s'il manque. Redessiner a chaque fois ferait clignoter la
+  // carte sous la souris, et la bulle avec.
+  if (window.CARTE && carteLieux) {
+    if (!formesLieux.size) formesLieux = RESULTATS.dessinerFond(carteLieux);
+    RESULTATS.colorierFamille(formesLieux, totaux);
+    // Des nombres, rien que des nombres : voir `legendeFamille`.
+    legendeLieux.innerHTML = RESULTATS.legendeFamille(formesLieux, totaux);
+  }
+
   const classes = (window.CARTE?.departements || [])
     .map((dep) => ({ ...dep, refus: totaux[dep.c] || 0 }))
     .sort((a, b) => a.refus - b.refus || a.n.localeCompare(b.n, "fr"));

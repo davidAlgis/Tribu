@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="robots" content="noindex">
   <title>Tribu — organisateur</title>
-  <link rel="stylesheet" href="./style.css?v=fb05335d13">
+  <link rel="stylesheet" href="./style.css?v=d5ccab1052">
 </head>
 <body>
 <main>
@@ -76,7 +76,7 @@
       <button type="button" role="tab" id="onglet-hotel"
               aria-controls="volet-hotel" aria-selected="false" tabindex="-1">Hôtel</button>
       <button type="button" role="tab" id="onglet-dates"
-              aria-controls="volet-dates" aria-selected="false" tabindex="-1">Week-ends</button>
+              aria-controls="volet-dates" aria-selected="false" tabindex="-1">Dates</button>
       <button type="button" role="tab" id="onglet-lieu"
               aria-controls="volet-lieu" aria-selected="false" tabindex="-1">Lieu</button>
       <button type="button" role="tab" id="onglet-sauvegardes"
@@ -874,7 +874,7 @@
       </details>
     </div>
 
-    <!-- ---- Week-ends ------------------------------------------- -->
+    <!-- ---- Dates ----------------------------------------------- -->
     <div class="volet" id="volet-dates" role="tabpanel" aria-labelledby="onglet-dates" tabindex="0" hidden>
       <fieldset>
         <legend>Week-ends proposés <span id="compteur-dates" class="discret-inline"></span></legend>
@@ -906,12 +906,51 @@
           avec les trois autres pages.
         </p>
       </fieldset>
+
+      <!--
+        LE MÊME RAPPORT QUE LA FAMILLE LIT sur dates.html, dessiné par le même
+        module : le classement, la participation, et qui a répondu quoi. Il
+        n'y a pas ici de renseignement qu'elle n'ait déjà — ce qui se lit
+        dans le classement est ce qu'elle lit, ni plus ni moins.
+        Ouvert par défaut : on vient ici pour consulter, pas pour répondre.
+      -->
+      <details class="panneau-resultat" id="dates-resultats" open>
+        <summary>Résultat des choix <span id="dates-participation" class="discret-inline"></span></summary>
+        <p id="dates-verdict" class="note" role="status" aria-live="polite"></p>
+        <ol id="dates-classement" class="classement"></ol>
+        <p class="note">
+          Le classement suit le nombre de <strong>oui</strong>&nbsp;: combien de
+          personnes peuvent venir. À égalité, celui qui est refusé par le moins
+          de monde passe devant. <strong>Qui a répondu quoi</strong> se déplie
+          sous chaque week-end.
+        </p>
+      </details>
     </div>
 
     <!-- ---- Lieu ------------------------------------------------ -->
     <div class="volet" id="volet-lieu" role="tabpanel" aria-labelledby="onglet-lieu" tabindex="0" hidden>
       <fieldset>
         <legend>Lieu <span id="compteur-lieux" class="discret-inline"></span></legend>
+
+        <!--
+          LA CARTE DE LA FAMILLE, comme sur lieux.html : une teinte par nombre
+          de refus, et en passant la souris sur un département la liste de
+          ceux qui le refusent, de ceux qui n'y voient pas d'objection. En
+          lecture seule — la carte se peint sur lieux.html.
+        -->
+        <div class="carte-cadre">
+          <svg id="carte-famille" class="carte-svg lecture" role="img"
+               aria-label="Carte des refus de la famille, par département"></svg>
+        </div>
+        <p class="carte-legende" id="carte-famille-legende"></p>
+        <p class="note">
+          Passe la souris sur un département pour voir <strong>qui le refuse</strong>
+          et <strong>qui n'a pas d'objection</strong>. «&nbsp;Oui&nbsp;» ne compte que
+          ceux qui ont peint au moins un département&nbsp;: la base ne garde que les
+          refus, et quelqu'un pour qui tout va bien ne se distingue pas de quelqu'un
+          qui n'a pas ouvert la page.
+        </p>
+
         <div id="classement-lieux"></div>
         <p class="note">
           Les départements que personne ne refuse, d'après
@@ -1031,11 +1070,12 @@
 
 <script src="./config.js?v=bcb9f55b01"></script>
 <script src="./carte.js?v=b37ceaf5c6"></script>
+<script src="./resultats.js?v=2b1ff81556"></script>
 <script src="./plan.js?v=353950955a"></script>
 <script src="./repartir.js?v=e34c984171"></script>
 <script src="./facture.js?v=76a52daeae"></script>
 <script src="./tableaux.js?v=9f55492dff"></script>
 <script src="./hotel.js?v=5e05337b09"></script>
-<script src="./admin.js?v=b488178a5b"></script>
+<script src="./admin.js?v=3e707c1fc8"></script>
 </body>
 </html>
