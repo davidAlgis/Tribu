@@ -309,9 +309,10 @@ window.RESULTATS = (function () {
   // Pas de `<title>` sur les departements : l'infobulle du navigateur
   // s'ajouterait a la notre, deux bulles l'une sur l'autre.
   function dessinerFond(svg) {
-    // Redessiner ne doit pas rendre sa carte entiere a quelqu'un qui avait
-    // zoome : la page redessine apres chaque enregistrement.
-    if (svg.__zoom) svg.__zoom.appliquer();
+    // Redessiner, c'est repartir de la carte entiere : la page redessine
+    // apres chaque enregistrement, et un zoom qu'on gardait alors cachait
+    // ce qui venait d'etre enregistre.
+    if (svg.__zoom) svg.__zoom.reinitialiser();
     else svg.setAttribute("viewBox", window.CARTE.viewBox);
     svg.textContent = "";
     const formes = new Map();
@@ -469,6 +470,11 @@ window.RESULTATS = (function () {
       appliquer();
     }
 
+    function reinitialiser() {
+      Object.assign(vue, { x: x0, y: y0, w: L, h: H });
+      appliquer();
+    }
+
     function auCentre() {
       return { x: vue.x + vue.w / 2, y: vue.y + vue.h / 2 };
     }
@@ -488,10 +494,7 @@ window.RESULTATS = (function () {
     }
     bouton("+", "Zoom avant", () => zoomer(1.5, auCentre()));
     bouton("\u2212", "Zoom arrière", () => zoomer(1 / 1.5, auCentre()));
-    const tout = bouton("\u2302", "Voir toute la carte", () => {
-      Object.assign(vue, { x: x0, y: y0, w: L, h: H });
-      appliquer();
-    });
+    const tout = bouton("\u2302", "Voir toute la carte", reinitialiser);
     tout.hidden = true;
     cadre.appendChild(commandes);
 
@@ -554,7 +557,7 @@ window.RESULTATS = (function () {
       });
     }
 
-    const controle = { appliquer, niveau };
+    const controle = { appliquer, niveau, reinitialiser };
     svg.__zoom = controle;
     return controle;
   }
