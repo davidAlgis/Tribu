@@ -1708,7 +1708,7 @@ begin
   select jsonb_agg(to_jsonb(x)) into couchages_vises
     from private.ajustements x where x.participant_id is null;
 
-  truncate table public.presences, public.voeux, public.refus_lieu,
+  truncate table public.presences, public.voeux, public.refus_lieu, public.reponses_lieu,
                  private.couchages, private.ajustements, private.participants;
 
   insert into private.ajustements
@@ -2754,6 +2754,13 @@ grant execute on function public.admin_date_retirer(text, uuid)                t
 --  l'absence pour les presences : la base ne stocke que ce qui a ete
 --  declare.
 --
+--  MAIS « PAS D'OBJECTION » N'EST PAS « PAS DE REPONSE ». Quelqu'un qui
+--  enregistre sa carte sans rien peindre dit « partout me va » : c'est une
+--  reponse, et elle doit compter dans le resultat de la famille. Les refus
+--  seuls ne le disent pas -- aucune ligne -- d'ou `reponses_lieu`, qui
+--  retient QUI a enregistre sa carte, refus ou non. Ne pas avoir ouvert la
+--  page reste l'etat par defaut : aucune ligne, aucune reponse.
+--
 --  On stocke le CODE du departement et rien d'autre. Les contours vivent
 --  dans carte.js, cote navigateur : la base n'a aucune geometrie a
 --  manipuler, et changer le fond de carte ne la touche pas.
@@ -2774,6 +2781,22 @@ create index if not exists refus_lieu_dep_idx on public.refus_lieu (departement)
 
 revoke all on public.refus_lieu from anon, authenticated;
 grant select on public.refus_lieu to service_role;
+
+-- Qui a enregistre sa carte. Une ligne par personne, avec ou sans refus.
+create table if not exists public.reponses_lieu (
+  participant_id uuid primary key references private.participants(id) on delete cascade,
+  maj_le         timestamptz not null default now()
+);
+
+revoke all on public.reponses_lieu from anon, authenticated;
+grant select on public.reponses_lieu to service_role;
+
+-- Ceux qui avaient deja peint un refus avaient evidemment repondu : leur
+-- reponse existait avant que la base sache la retenir. Rejouable : ce qui
+-- est deja pose est laisse tel quel.
+insert into public.reponses_lieu (participant_id)
+select distinct participant_id from public.refus_lieu
+on conflict (participant_id) do nothing;
 
 -- ---- 10a. Charger la carte ----
 create or replace function public.lieux_charger(p_code text, p_acteur uuid)
@@ -2803,7 +2826,7 @@ begin
 
     -- Combien de personnes se sont prononcees : sans cela, « 0 refus »
     -- pourrait aussi bien vouloir dire « personne n'a encore repondu ».
-    'repondants', (select count(distinct participant_id) from public.refus_lieu),
+    'repondants', (select count(*) from public.reponses_lieu),
 
     -- QUI A REFUSE QUOI, depuis que la carte montre les noms au survol d'un
     -- departement. Le silence d'avant se defendait -- savoir qui refuse la
@@ -2821,6 +2844,8 @@ begin
                'id', p.id,
                'prenom', p.prenom,
                'famille', p.famille,
+               'repondu', exists (select 1 from public.reponses_lieu rl
+                                   where rl.participant_id = p.id),
                'refus', coalesce((
                  select jsonb_agg(x.departement order by x.departement)
                  from public.refus_lieu x where x.participant_id = p.id
@@ -2835,7 +2860,7 @@ begin
                'id', p.id,
                'prenom', p.prenom,
                'famille', p.famille,
-               'repondu', exists (select 1 from public.refus_lieu x
+               'repondu', exists (select 1 from public.reponses_lieu x
                                    where x.participant_id = p.id)
              ) order by (p.id <> p_acteur), o.rang)
       from private.participants p
@@ -2913,6 +2938,14 @@ begin
 
     get diagnostics nb = row_count;
     total := total + nb;
+
+    -- Une carte enregistree sans rien peindre est une reponse : « partout
+    -- me va ». Sans cette ligne, la personne resterait indiscernable de
+    -- quelqu'un qui n'a jamais ouvert la page, et n'entrerait pas dans le
+    -- resultat de la famille.
+    insert into public.reponses_lieu (participant_id)
+    values (cible)
+    on conflict (participant_id) do nothing;
   end loop;
 
   return jsonb_build_object('personnes', array_length(cibles, 1), 'refus', total);
@@ -2932,7 +2965,7 @@ begin
   return jsonb_build_object(
     'lieux_ouverts', (select lieux_ouverts from private.reglages),
     'participants', (select count(*) from private.participants),
-    'repondants', (select count(distinct participant_id) from public.refus_lieu),
+    'repondants', (select count(*) from public.reponses_lieu),
     'totaux', coalesce((
       select jsonb_object_agg(x.departement, x.n)
       from (
@@ -2948,6 +2981,8 @@ begin
                'id', p.id,
                'prenom', p.prenom,
                'famille', p.famille,
+               'repondu', exists (select 1 from public.reponses_lieu rl
+                                   where rl.participant_id = p.id),
                'refus', coalesce((
                  select jsonb_agg(x.departement order by x.departement)
                  from public.refus_lieu x where x.participant_id = p.id
@@ -4996,6 +5031,8 @@ set search_path = private, pg_temp as $fn$
       (select jsonb_agg(to_jsonb(v) order by v.participant_id, v.option_id) from public.voeux v), '[]'::jsonb),
     'refus_lieu', coalesce(
       (select jsonb_agg(to_jsonb(r) order by r.participant_id, r.departement) from public.refus_lieu r), '[]'::jsonb),
+    'reponses_lieu', coalesce(
+      (select jsonb_agg(to_jsonb(r) order by r.participant_id) from public.reponses_lieu r), '[]'::jsonb),
     'logements', coalesce(
       (select jsonb_agg(to_jsonb(l) order by l.id) from private.logements l), '[]'::jsonb),
     'couchages', coalesce(
@@ -5047,6 +5084,7 @@ language sql immutable as $fn$
     ('private.couchages',          array['id'],                       4),
     ('public.voeux',               array['id'],                       4),
     ('public.refus_lieu',          array['id'],                       4),
+    ('public.reponses_lieu',       array['participant_id'],           4),
     ('private.envies',             array['id'],                       4),
     ('private.ajustements',        array['id'],                       4)
   ) as t(nom, cles, rang)
@@ -5734,7 +5772,7 @@ begin
   -- on les met de cote, et ceux dont le type existe encore reviennent.
   select jsonb_agg(to_jsonb(x)) into tarifs_gardes from private.tarifs x;
 
-  truncate table public.presences, public.voeux, public.refus_lieu,
+  truncate table public.presences, public.voeux, public.refus_lieu, public.reponses_lieu,
                  private.couchages, private.tarifs, private.ajustements,
                  private.logements, private.envies, private.activites,
                  private.options_date, private.participants;
@@ -5890,6 +5928,20 @@ begin
          coalesce((l->>'maj_le')::timestamptz, now())
     from jsonb_array_elements(coalesce(c->'refus_lieu', '[]'::jsonb)) as l;
   get diagnostics n_refus = row_count;
+
+  insert into public.reponses_lieu (participant_id, maj_le)
+  select (l->>'participant_id')::uuid,
+         coalesce((l->>'maj_le')::timestamptz, now())
+    from jsonb_array_elements(coalesce(c->'reponses_lieu', '[]'::jsonb)) as l
+   where exists (select 1 from private.participants p
+                  where p.id = (l->>'participant_id')::uuid)
+  on conflict (participant_id) do nothing;
+
+  -- Une copie d'avant ce marqueur n'en porte pas : ceux qui avaient peint
+  -- un refus avaient forcement repondu.
+  insert into public.reponses_lieu (participant_id)
+  select distinct participant_id from public.refus_lieu
+  on conflict (participant_id) do nothing;
 
   -- Le plan revient apres les participants ET les logements : il pointe
   -- vers les deux.
@@ -6111,6 +6163,7 @@ end $mig$;
 --    options_date   les week-ends proposes, poses depuis admin.html
 --    voeux          les reponses de la famille au sondage des dates
 --    refus_lieu     les departements peints en rouge sur la carte
+--    reponses_lieu  qui a enregistre sa carte, avec ou sans refus
 --    logements      l'inventaire des couchages, et comment il se facture
 --    couchages      qui dort ou, nuit par nuit
 --    activites      les sorties proposees, par la famille ou l'organisateur
@@ -6127,6 +6180,7 @@ select
   (select count(*) from private.options_date) as options_date,
   (select count(*) from public.voeux)         as voeux,
   (select count(*) from public.refus_lieu)    as refus_lieu,
+  (select count(*) from public.reponses_lieu) as reponses_lieu,
   (select count(*) from private.logements)    as logements,
   (select count(*) from private.couchages)    as couchages,
   (select count(*) from private.activites)    as activites,

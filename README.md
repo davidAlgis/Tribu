@@ -107,12 +107,7 @@ la vue famille : sur sa propre carte, elle gênerait le pinceau.
 
 **Molette pour zoomer, molette enfoncée pour déplacer** — sur la carte de `lieux.html` comme sur celle de l'organisateur. Paris ne tient pas sous le doigt à l'échelle de la France. Le zoom se fait autour du curseur, de ×1 à ×8, et la carte ne sort jamais de son cadre. Trois boutons en haut à droite doublent la molette (+, −, et ⌂ pour tout revoir), pour un pavé tactile ou un doigt. Le clic gauche reste au pinceau, **et le pinceau rétrécit avec le zoom** : on zoome pour viser plus fin, un disque qui grossirait avec la carte couvrirait toujours autant de départements à l'écran. Les noms de villes et les traits gardent leur taille, au lieu de grossir. La carte revient entière à chaque chargement et à chaque enregistrement.
 
-**« Oui » a une limite que la base impose.** Elle ne stocke que les refus :
-quelqu'un qui a répondu « partout me va » n'a aucune ligne, et ne se
-distingue pas de quelqu'un qui n'a jamais ouvert la page. Est donc compté
-« oui » **celui qui a peint au moins un département** sans refuser celui-là ;
-les autres sont « sans réponse » — mieux vaut le dire que de gonfler les oui
-avec des gens qu'on n'a pas entendus.
+**Enregistrer une carte, c'est répondre — même toute verte.** Par défaut tout est vert, et rien n'est compté : celui qui n'a jamais ouvert la page est « sans réponse ». Mais celui qui enregistre sa carte sans rien peindre dit « partout me va », et cette réponse entre dans le résultat de la famille comme un « oui » sur chaque département. La base ne gardait que les refus, donc une carte vide ne laissait aucune trace et ne comptait pas parmi les votants : `public.reponses_lieu` retient désormais **qui a enregistré sa carte**, avec ou sans refus. Les gens qui avaient déjà peint au moins un refus sont repris tels quels ; ceux qui avaient enregistré une carte vide avant ce correctif ne peuvent pas être retrouvés, et doivent ré-enregistrer.
 
 Côté organisateur, l'onglet **Lieu** d'`admin.html` montre **la même carte**,
 en lecture seule et avec la même bulle, puis liste les départements sans

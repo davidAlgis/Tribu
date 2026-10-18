@@ -3272,6 +3272,7 @@ const NOMS_TABLES = {
   "public.presences": "présences",
   "public.voeux": "réponses aux week-ends",
   "public.refus_lieu": "refus de lieux",
+  "public.reponses_lieu": "cartes enregistrées",
   "private.participants": "participants",
   "private.options_date": "week-ends proposés",
   "private.logements": "logements",

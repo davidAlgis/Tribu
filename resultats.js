@@ -565,20 +565,22 @@ window.RESULTATS = (function () {
   // Qui dit quoi pour UN departement.
   //
   //   non          ceux qui l'ont peint en rouge
-  //   oui          ceux qui ont repondu -- ils ont peint AU MOINS un
-  //                departement -- sans refuser celui-la
-  //   sans reponse ceux qui n'ont rien peint du tout
+  //   oui          ceux qui ont ENREGISTRE leur carte sans refuser celui-la
+  //                -- y compris une carte toute verte : « partout me va »
+  //                est une reponse
+  //   sans reponse ceux qui n'ont jamais enregistre de carte
   //
-  // La base ne stocke que les refus : quelqu'un qui a repondu « partout me
-  // va » n'a aucune ligne, et ne se distingue donc pas de quelqu'un qui n'a
-  // pas ouvert la page. C'est la limite de « absent est l'etat par defaut »,
-  // et mieux vaut la dire que compter ces gens-la comme des « oui ».
+  // `repondu` vient de la base, qui retient qui a enregistre sa carte : les
+  // refus seuls ne le disent pas, une carte sans refus ne laisse aucune
+  // ligne. Une base qui ne le sert pas encore -- le script n'a pas ete
+  // recolle -- retombe sur l'ancienne regle : avoir peint un refus, c'est
+  // avoir repondu.
   function groupesDepartement(tous, code) {
     const groupes = { non: [], oui: [], muets: 0 };
     for (const personne of tous || []) {
       const refus = personne.refus || [];
       if (refus.includes(code)) groupes.non.push(personne);
-      else if (refus.length) groupes.oui.push(personne);
+      else if (personne.repondu || refus.length) groupes.oui.push(personne);
       else groupes.muets += 1;
     }
     return groupes;

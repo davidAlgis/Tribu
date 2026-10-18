@@ -145,6 +145,7 @@ SAISIE = [
     "public.presences",
     "public.voeux",
     "public.refus_lieu",
+    "public.reponses_lieu",
     "private.participants",
     "private.options_date",
     "private.logements",
@@ -567,3 +568,43 @@ def test_les_resultats_ne_servent_que_des_prenoms(nom):
     corps = corps_de(nom)
     for interdit in ("date_naissance", "vegetarien", "vegan", "sans_gluten", "non_buveur"):
         assert interdit not in corps, f"{nom} sert {interdit}"
+
+
+# --- Une carte enregistree est une reponse, meme toute verte --------------
+
+
+def test_enregistrer_une_carte_vide_est_une_reponse():
+    """La base ne gardait que les refus : une carte enregistree sans rien
+    peindre ne laissait aucune ligne, et la personne restait indiscernable
+    de quelqu'un qui n'a jamais ouvert la page -- absente du resultat de la
+    famille. `reponses_lieu` retient qui a enregistre, refus ou non."""
+    corps = corps_de("lieux_enregistrer")
+    assert "insert into public.reponses_lieu" in corps
+    # Dans la boucle des cibles, et pas seulement quand il y a des refus.
+    boucle = corps[corps.index("foreach cible in array cibles loop"):]
+    assert "insert into public.reponses_lieu" in boucle
+
+
+@pytest.mark.parametrize("nom", ["lieux_charger", "admin_lieux"])
+def test_les_repondants_du_lieu_se_comptent_sur_les_cartes_enregistrees(nom):
+    """Compter les `distinct participant_id` de `refus_lieu` oublie tous
+    ceux qui ont repondu « partout me va »."""
+    corps = corps_de(nom)
+    assert "from public.reponses_lieu" in corps
+    assert "distinct participant_id from public.refus_lieu" not in corps
+    assert "'repondu'" in corps
+
+
+def test_la_reponse_au_lieu_suit_l_historique_et_les_jalons():
+    """Une table qui ne serait pas tracee ne s'annulerait pas avec son geste,
+    et ne reviendrait pas avec un jalon : la carte vide redeviendrait « sans
+    reponse » au premier retour en arriere. Et les deux `truncate` de
+    `participants` doivent l'inclure -- Postgres refuse de vider une table
+    referencee sans celles qui la referencent."""
+    assert re.search(r"\('public\.reponses_lieu',\s+array\['participant_id'\]", SCHEMA)
+    assert "'reponses_lieu', coalesce(" in SCHEMA, "absente de l'instantane"
+    truncates = re.findall(r"truncate table (.*?);", SCHEMA, re.S)
+    avec_participants = [t for t in truncates if "private.participants" in t]
+    assert avec_participants
+    for t in avec_participants:
+        assert "public.reponses_lieu" in t, "TRUNCATE de participants sans reponses_lieu"
