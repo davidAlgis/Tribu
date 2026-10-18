@@ -2960,6 +2960,7 @@ let formesLieux = new Map();
 // La bulle des noms, branchee une fois : elle lit `donneesLieux` au moment
 // du survol, et suit donc les rechargements sans qu'on la rebranche.
 if (carteLieux && window.CARTE) {
+  RESULTATS.brancherZoom(carteLieux, carteLieux.closest(".carte-cadre"));
   RESULTATS.brancherSurvol(carteLieux.closest(".carte-cadre"), (code) => {
     if (!donneesLieux) return null;
     const dep = window.CARTE.departements.find((d) => d.c === code);

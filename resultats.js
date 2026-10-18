@@ -309,7 +309,10 @@ window.RESULTATS = (function () {
   // Pas de `<title>` sur les departements : l'infobulle du navigateur
   // s'ajouterait a la notre, deux bulles l'une sur l'autre.
   function dessinerFond(svg) {
-    svg.setAttribute("viewBox", window.CARTE.viewBox);
+    // Redessiner ne doit pas rendre sa carte entiere a quelqu'un qui avait
+    // zoome : la page redessine apres chaque enregistrement.
+    if (svg.__zoom) svg.__zoom.appliquer();
+    else svg.setAttribute("viewBox", window.CARTE.viewBox);
     svg.textContent = "";
     const formes = new Map();
 
@@ -402,6 +405,158 @@ window.RESULTATS = (function () {
       `<span class="degrade-legende" style="background: linear-gradient(to right, ${degrade})"></span>` +
       `${haut}</span>`
     );
+  }
+
+  // ------------------------------------------------------- zoom et pan
+  //
+  // MOLETTE pour zoomer, MOLETTE ENFONCEE pour deplacer. Un departement
+  // comme Paris ne tient pas sous le doigt a l'echelle de la France, et les
+  // petites couronnes se perdent sur une carte entiere.
+  //
+  // Le zoom ne touche qu'a l'attribut `viewBox` : les departements, les
+  // villes et le pinceau gardent leurs coordonnees, et tout ce qui passe
+  // par la matrice du navigateur (`getScreenCTM`) suit sans rien savoir du
+  // zoom. Le niveau est aussi pose en `--zoom` sur le SVG : les noms de
+  // villes et les traits s'en servent pour garder la meme taille a l'ecran
+  // au lieu de grossir avec la carte.
+  //
+  // Des boutons + / - / « voir toute la carte » doublent la molette : un
+  // pave tactile sans molette, ou un doigt, n'ont pas d'autre moyen.
+
+  const ZOOM_MAX = 8;
+
+  function brancherZoom(svg, cadre) {
+    const [x0, y0, L, H] = window.CARTE.viewBox.split(" ").map(Number);
+    const vue = { x: x0, y: y0, w: L, h: H };
+
+    const borne = (v, min, max) => Math.min(max, Math.max(min, v));
+
+    function niveau() {
+      return L / vue.w;
+    }
+
+    function appliquer() {
+      svg.setAttribute("viewBox", `${vue.x} ${vue.y} ${vue.w} ${vue.h}`);
+      svg.style.setProperty("--zoom", niveau());
+      const zoome = niveau() > 1.001;
+      svg.classList.toggle("zoome", zoome);
+      tout.hidden = !zoome;
+    }
+
+    // La carte ne sort jamais de son cadre d'origine : on ne peut pas
+    // l'envoyer dans le vide et ne plus la retrouver.
+    function borner() {
+      vue.x = borne(vue.x, x0, x0 + L - vue.w);
+      vue.y = borne(vue.y, y0, y0 + H - vue.h);
+    }
+
+    function pointSVG(e) {
+      const p = svg.createSVGPoint();
+      p.x = e.clientX;
+      p.y = e.clientY;
+      return p.matrixTransform(svg.getScreenCTM().inverse());
+    }
+
+    // Zoome en gardant `centre` (en unites de la carte) sous le curseur.
+    function zoomer(facteur, centre) {
+      const w = borne(vue.w / facteur, L / ZOOM_MAX, L);
+      const k = w / vue.w;
+      vue.x = centre.x - (centre.x - vue.x) * k;
+      vue.y = centre.y - (centre.y - vue.y) * k;
+      vue.h *= k;
+      vue.w = w;
+      borner();
+      appliquer();
+    }
+
+    function auCentre() {
+      return { x: vue.x + vue.w / 2, y: vue.y + vue.h / 2 };
+    }
+
+    // Les boutons.
+    const commandes = document.createElement("div");
+    commandes.className = "carte-zoom";
+    function bouton(texte, titre, action) {
+      const b = document.createElement("button");
+      b.type = "button";
+      b.textContent = texte;
+      b.title = titre;
+      b.setAttribute("aria-label", titre);
+      b.addEventListener("click", action);
+      commandes.appendChild(b);
+      return b;
+    }
+    bouton("+", "Zoom avant", () => zoomer(1.5, auCentre()));
+    bouton("\u2212", "Zoom arrière", () => zoomer(1 / 1.5, auCentre()));
+    const tout = bouton("\u2302", "Voir toute la carte", () => {
+      Object.assign(vue, { x: x0, y: y0, w: L, h: H });
+      appliquer();
+    });
+    tout.hidden = true;
+    cadre.appendChild(commandes);
+
+    // La molette. `passive: false` : sans cela le navigateur ne laisse pas
+    // annuler le defilement de la page, qui partirait en meme temps que le
+    // zoom.
+    cadre.addEventListener(
+      "wheel",
+      (e) => {
+        e.preventDefault();
+        // 16 pixels par ligne quand le pilote compte en lignes, et non en
+        // pixels : la molette d'une souris et le pave tactile n'ont pas la
+        // meme unite.
+        const pixels = e.deltaY * (e.deltaMode === 1 ? 16 : 1);
+        zoomer(Math.exp(-pixels * 0.0015), pointSVG(e));
+      },
+      { passive: false }
+    );
+
+    // Le pan, au bouton du milieu. Le clic gauche reste au pinceau.
+    //
+    // Les deplacements se font en pixels d'ecran, convertis par la matrice :
+    // une regle de trois sur la largeur ignorerait les marges que le
+    // navigateur laisse quand la carte est contrainte en hauteur.
+    let prise = null;
+
+    // Le bouton du milieu declenche, selon le navigateur, le defilement
+    // automatique : il faut l'annuler sur `mousedown`, `pointerdown` ne
+    // suffit pas partout.
+    cadre.addEventListener("mousedown", (e) => {
+      if (e.button === 1) e.preventDefault();
+    });
+
+    cadre.addEventListener("pointerdown", (e) => {
+      if (e.button !== 1) return;
+      e.preventDefault();
+      prise = { x: e.clientX, y: e.clientY };
+      svg.classList.add("deplace");
+      try {
+        cadre.setPointerCapture(e.pointerId);
+      } catch {
+        /* on deplacera tant que le pointeur reste sur le cadre */
+      }
+    });
+
+    cadre.addEventListener("pointermove", (e) => {
+      if (!prise) return;
+      const m = svg.getScreenCTM();
+      vue.x -= (e.clientX - prise.x) / m.a;
+      vue.y -= (e.clientY - prise.y) / m.a;
+      prise = { x: e.clientX, y: e.clientY };
+      borner();
+      appliquer();
+    });
+
+    for (const fin of ["pointerup", "pointercancel"]) {
+      cadre.addEventListener(fin, () => {
+        prise = null;
+        svg.classList.remove("deplace");
+      });
+    }
+
+    const controle = { appliquer, niveau };
+    svg.__zoom = controle;
+    return controle;
   }
 
   // Qui dit quoi pour UN departement.
@@ -520,5 +675,6 @@ window.RESULTATS = (function () {
     groupesDepartement,
     contenuDepartement,
     brancherSurvol,
+    brancherZoom,
   };
 })();

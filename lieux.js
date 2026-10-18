@@ -318,9 +318,16 @@ function versSVG(evenement) {
   return point.matrixTransform(svg.getScreenCTM().inverse());
 }
 
+// Le pinceau retrecit quand on zoome : zoomer sert a viser plus fin, et un
+// disque qui grossirait avec la carte couvrirait toujours autant de
+// departements a l'ecran.
+function rayonPinceau() {
+  return RAYON_PINCEAU / (svg.__zoom ? svg.__zoom.niveau() : 1);
+}
+
 function rayonEcran() {
   const matrice = svg.getScreenCTM();
-  return matrice ? RAYON_PINCEAU * matrice.a : 0;
+  return matrice ? rayonPinceau() * matrice.a : 0;
 }
 
 // Tout ce qui passe sous le disque, et pas seulement le point central.
@@ -383,13 +390,16 @@ function suivrePinceau(evenement) {
   const point = versSVG(evenement);
   pinceau.setAttribute("cx", point.x);
   pinceau.setAttribute("cy", point.y);
-  pinceau.setAttribute("r", RAYON_PINCEAU);
+  pinceau.setAttribute("r", rayonPinceau());
   pinceau.classList.toggle("masquee", etat.vue !== "moi");
 }
 
 // Les evenements sont poses sur le CADRE et non sur le SVG : appuyer dans
 // la marge autour de la carte doit aussi commencer un trace.
 cadreCarte.addEventListener("pointerdown", (e) => {
+  // Le clic gauche peint ; le bouton du milieu deplace la carte (voir
+  // `brancherZoom`), et les boutons de zoom ne sont pas la carte.
+  if (e.button !== 0 || e.target.closest(".carte-zoom")) return;
   if (etat.vue !== "moi") return;
   e.preventDefault();
   etat.trace = true;
@@ -454,6 +464,9 @@ function peindre() {
   RESULTATS.colorierFamille(formes, totaux);
   carteLegende.innerHTML = RESULTATS.legendeFamille(formes, totaux);
 }
+
+// Molette pour zoomer, molette enfoncee pour deplacer.
+RESULTATS.brancherZoom(svg, cadreCarte);
 
 // Les noms des deux camps, au survol d'un departement -- mais seulement dans
 // la vue famille. Sur sa propre carte, une bulle qui s'ouvre sous le

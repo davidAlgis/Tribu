@@ -429,3 +429,26 @@ def test_la_carte_en_lecture_a_son_style_sans_dependre_d_un_identifiant():
     for page in ("lieux.html", "admin.html"):
         html = (RACINE / page).read_text(encoding="utf-8")
         assert re.search(r'<svg[^>]*class="[^"]*carte-svg', html), page
+
+
+def test_le_pinceau_ne_peint_qu_au_clic_gauche():
+    """La molette enfoncée déplace la carte (`brancherZoom`) : si le pinceau
+    écoutait tous les boutons, chaque déplacement peindrait aussi le
+    département sous le curseur — des refus que personne n'a voulu poser,
+    enregistrés sans que rien ne les signale."""
+    js = (RACINE / "lieux.js").read_text(encoding="utf-8")
+    m = re.search(r'cadreCarte\.addEventListener\("pointerdown", \(e\) => \{(.*?)\n\}\);', js, re.S)
+    assert m, "le gestionnaire du pinceau a changé de forme"
+    assert "e.button !== 0" in m.group(1)
+    assert 'closest(".carte-zoom")' in m.group(1)
+
+
+def test_chaque_carte_se_zoome():
+    """Les deux pages qui montrent la carte la branchent sur le zoom, et la
+    molette y est interceptée : sans cela la page défile pendant qu'on
+    zoome."""
+    for fichier in ("lieux.js", "admin.js"):
+        js = (RACINE / fichier).read_text(encoding="utf-8")
+        assert "RESULTATS.brancherZoom(" in js, fichier
+    module = (RACINE / "resultats.js").read_text(encoding="utf-8")
+    assert "passive: false" in module

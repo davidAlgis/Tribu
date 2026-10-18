@@ -1183,7 +1183,7 @@ kbd {
 .dep {
   fill: #6aab84;
   stroke: var(--carte);
-  stroke-width: 1.2;
+  stroke-width: calc(1.2px / var(--zoom, 1));
   transition: fill 0.08s linear;
 }
 .carte-svg:not(.lecture) .dep:hover { fill: #5b9b75; }
@@ -1233,7 +1233,7 @@ kbd {
 #pinceau {
   fill: rgba(217, 83, 79, 0.18);
   stroke: #d9534f;
-  stroke-width: 1.5;
+  stroke-width: calc(1.5px / var(--zoom, 1));
   /* Sans cela, le disque du pinceau masquerait ce qu'il doit peindre. */
   pointer-events: none;
 }
@@ -1249,16 +1249,17 @@ kbd {
 .ville-point {
   fill: #ffffff;
   stroke: rgba(0, 0, 0, 0.7);
-  stroke-width: 2;
+  stroke-width: calc(2px / var(--zoom, 1));
+  r: calc(6.5px / var(--zoom, 1));
 }
 .ville-nom {
-  font-size: 27px;
+  font-size: calc(27px / var(--zoom, 1));
   font-weight: 600;
   fill: #ffffff;
   font-family: system-ui, sans-serif;
   paint-order: stroke;
   stroke: rgba(0, 0, 0, 0.72);
-  stroke-width: 5.5px;
+  stroke-width: calc(5.5px / var(--zoom, 1));
   stroke-linejoin: round;
 }
 
@@ -1300,3 +1301,36 @@ kbd {
 .infobulle-non strong { color: var(--erreur); }
 .infobulle-oui strong { color: var(--ok); }
 .infobulle-muets { color: var(--doux); }
+
+/* ---------- Zoom et pan de la carte ---------- */
+
+/* Sur le cadre, en haut a droite, hors du chemin du pinceau. Le bouton de
+   retour n'apparait que si l'on a zoome : sur une carte entiere il ne
+   servirait a rien. */
+.carte-zoom {
+  position: absolute;
+  top: 14px;
+  right: 14px;
+  z-index: 4;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.carte-zoom button {
+  width: 32px;
+  height: 32px;
+  padding: 0;
+  font-size: 1.1rem;
+  line-height: 1;
+  background: var(--carte);
+  color: var(--texte);
+  border: 1px solid var(--trait);
+  border-radius: 6px;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.12);
+  cursor: pointer;
+}
+.carte-zoom button:hover { border-color: var(--accent); color: var(--accent); }
+.carte-zoom button[hidden] { display: none; }
+
+/* La carte zoomee se deplace a la molette enfoncee. */
+.carte-svg.deplace, .carte-svg.deplace .dep { cursor: grabbing; }
