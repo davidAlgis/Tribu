@@ -1195,10 +1195,9 @@ kbd {
 .dep.refuse { fill: #c0392b; }
 
 /* Du vert au rouge en passant par l'ambre : le nombre de refus se lit
-   comme une température. */
-.dep.chaleur-1 { fill: #b6c98a; }
-.dep.chaleur-2 { fill: #e0b167; }
-.dep.chaleur-3 { fill: #c0392b; }
+   comme une température. La teinte de la vue famille est posee par
+   `resultats.js`, en ligne : elle depend du plus grand nombre de refus,
+   qu'une feuille de style ne connait pas. */
 
 .carte-legende {
   display: flex;
@@ -1219,9 +1218,15 @@ kbd {
 }
 .pastille-legende.vert { background: #6aab84; }
 .pastille-legende.rouge { background: #c0392b; }
-.pastille-legende.c1 { background: #b6c98a; }
-.pastille-legende.c2 { background: #e0b167; }
-.pastille-legende.c3 { background: #c0392b; }
+
+/* Le degrade de la legende : de un refus au plus grand nombre observe. */
+.legende-echelle { display: inline-flex; align-items: center; gap: 6px; }
+.degrade-legende {
+  display: inline-block;
+  width: 110px;
+  height: 13px;
+  border-radius: 3px;
+}
 
 /* ---------- Pinceau et villes ---------- */
 

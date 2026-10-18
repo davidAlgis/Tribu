@@ -82,11 +82,19 @@ la donnée tient en quelques codes, le croisement est un simple comptage,
 et surtout **la sortie porte un nom**. « Dordogne » se cherche sur un site
 de location ; une tache sur une image, non.
 
-L'onglet **Celle de la famille** montre une carte de chaleur : vert là où
-personne ne refuse, puis ambre, puis rouge — le nombre de refus se lit
-comme une température. Avec vingt personnes, il est
-probable qu'aucun département ne fasse l'unanimité — d'où le dégradé
-plutôt qu'un verdict binaire qui n'afficherait rien.
+L'onglet **Celle de la famille** montre une carte de chaleur : vert franc là
+où personne ne refuse, puis un dégradé de **un refus** (vert-jaune) au **plus
+grand nombre de refus** observé (rouge), par l'ambre — le nombre de refus se
+lit comme une température. Avec vingt personnes, il est probable qu'aucun
+département ne fasse l'unanimité — d'où le dégradé plutôt qu'un verdict
+binaire qui n'afficherait rien.
+
+**L'échelle s'adapte aux réponses.** Elle plafonnait à « 3 refus ou plus » :
+avec soixante personnes et des refus un peu partout, la carte entière virait
+au rouge uni et ne disait plus rien. Le rouge est désormais le département
+le plus refusé, quel que soit son score, et la légende dit combien il vaut.
+Tant qu'il y a moins de trois refus au plus, l'échelle reste celle de trois :
+un seul refus ne doit pas peindre un département en rouge.
 
 **En passant la souris sur un département** — un appui, sur un téléphone —
 une bulle donne **qui le refuse** (*Non*) et **qui n'y voit pas

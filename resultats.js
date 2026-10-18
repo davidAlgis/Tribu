@@ -326,26 +326,81 @@ window.RESULTATS = (function () {
     return formes;
   }
 
-  // Une teinte par nombre de refus. Il y a peu de chances qu'un departement
-  // fasse l'unanimite, donc on montre le degrade plutot qu'un verdict
-  // binaire qui serait souvent vide.
-  function colorierFamille(formes, totaux) {
-    for (const [code, forme] of formes) {
-      const n = (totaux || {})[code] || 0;
-      forme.classList.remove("refuse", "chaleur-1", "chaleur-2", "chaleur-3");
-      if (n > 0) forme.classList.add(`chaleur-${Math.min(n, 3)}`);
+  // UNE TEINTE PAR NOMBRE DE REFUS, ET UNE ECHELLE QUI S'ADAPTE.
+  //
+  // Elle plafonnait a trois : au-dela, tout etait rouge. Avec soixante
+  // personnes et des refus un peu partout, la carte entiere virait au
+  // rouge uni, et ne disait plus rien. L'echelle va maintenant de UN refus
+  // (vert-jaune) au PLUS GRAND nombre de refus observe (rouge), en passant
+  // par l'ambre : la teinte se lit par rapport aux autres departements,
+  // pas par rapport a un seuil arbitraire.
+  //
+  // Aucun refus reste le vert franc, hors de l'echelle : « personne ne
+  // refuse » est une autre information que « peu de monde refuse ». Et
+  // l'echelle ne descend pas sous trois : quand il n'y a que deux ou trois
+  // refus au plus, un seul ne doit pas peindre un departement en rouge.
+  const ECHELLE_MINIMALE = 3;
+  const VERT = "#6aab84";
+  const ARRETS = [
+    [0, [182, 201, 138]], // un refus
+    [0.5, [224, 177, 103]], // ambre
+    [1, [192, 57, 43]], // le plus refuse
+  ];
+
+  function teinte(t) {
+    const x = Math.min(1, Math.max(0, t));
+    for (let i = 1; i < ARRETS.length; i++) {
+      const [fin, couleurFin] = ARRETS[i];
+      const [debut, couleurDebut] = ARRETS[i - 1];
+      if (x <= fin) {
+        const k = (x - debut) / (fin - debut);
+        const rgb = couleurDebut.map((c, n) => Math.round(c + (couleurFin[n] - c) * k));
+        return `rgb(${rgb.join(",")})`;
+      }
     }
+    return `rgb(${ARRETS[ARRETS.length - 1][1].join(",")})`;
+  }
+
+  function plusGrand(totaux) {
+    return Math.max(0, ...Object.values(totaux || {}).map(Number));
+  }
+
+  function couleurRefus(n, maximum) {
+    if (!(n > 0)) return VERT;
+    const echelle = Math.max(maximum, ECHELLE_MINIMALE);
+    return teinte((n - 1) / (echelle - 1));
+  }
+
+  function colorierFamille(formes, totaux) {
+    const maximum = plusGrand(totaux);
+    for (const [code, forme] of formes) {
+      forme.classList.remove("refuse");
+      forme.style.fill = couleurRefus((totaux || {})[code] || 0, maximum);
+    }
+  }
+
+  // Rend aux departements la couleur de la feuille de style : la vue
+  // « Ma carte » les peint par classe, et un `fill` en ligne passerait
+  // devant.
+  function effacerFamille(formes) {
+    for (const forme of formes.values()) forme.style.fill = "";
   }
 
   // Des nombres, rien que des nombres : c'est ce qui rend `innerHTML` sans
   // risque ici. Y glisser un nom demanderait span().
   function legendeFamille(formes, totaux) {
-    const acceptes = [...formes.keys()].filter((c) => !((totaux || {})[c] > 0));
+    const acceptes = [...formes.keys()].filter((c) => !((totaux || {})[c] > 0)).length;
+    const maximum = plusGrand(totaux);
+    // Sous trois refus au plus, le rouge n'est jamais atteint : on ne
+    // l'annonce pas comme « 2 refus ».
+    const haut = maximum >= ECHELLE_MINIMALE ? `${maximum} refus` : `${ECHELLE_MINIMALE} refus ou plus`;
+    // Le degrade de la legende suit l'echelle : meme couleurs, memes arrets.
+    const degrade = [0, 0.25, 0.5, 0.75, 1].map((t) => teinte(t)).join(", ");
     return (
-      `<span class="pastille-legende vert"></span> aucun refus (${acceptes.length}) ` +
-      `<span class="pastille-legende c1"></span> 1 ` +
-      `<span class="pastille-legende c2"></span> 2 ` +
-      `<span class="pastille-legende c3"></span> 3 ou plus`
+      `<span class="pastille-legende vert"></span> aucun refus (${acceptes}) ` +
+      `<span class="legende-echelle">1 refus` +
+      `<span class="degrade-legende" style="background: linear-gradient(to right, ${degrade})"></span>` +
+      `${haut}</span>`
     );
   }
 
@@ -460,6 +515,7 @@ window.RESULTATS = (function () {
     dessinerSondage,
     dessinerFond,
     colorierFamille,
+    effacerFamille,
     legendeFamille,
     groupesDepartement,
     contenuDepartement,

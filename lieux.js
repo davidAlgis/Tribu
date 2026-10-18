@@ -438,8 +438,8 @@ function peindre() {
   if (etat.vue === "moi") {
     for (const [code, forme] of formes) {
       forme.classList.toggle("refuse", etat.refuses.has(code));
-      forme.classList.remove("chaleur-1", "chaleur-2", "chaleur-3");
     }
+    RESULTATS.effacerFamille(formes);
     // innerHTML est sans risque ici, et seulement ici : ce gabarit ne
     // recoit que des nombres calcules sur place, jamais de texte venu de
     // la base. Y glisser un nom de departement demanderait span().
