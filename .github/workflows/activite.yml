@@ -1,0 +1,38 @@
+name: Garder les workflows actifs
+
+# GitHub desactive les workflows PLANIFIES d'un depot public quand il n'y a
+# eu aucune activite sur la branche principale pendant 60 jours. Le ping
+# quotidien de Supabase (eveil.yml) en est un : desactive, il ne partirait
+# plus, et le projet retomberait en pause.
+#
+# Une fois par mois, ce workflow pose la date du jour dans
+# `.github/derniere-activite.txt` et la pousse sur main. C'est un commit
+# ordinaire -- il remet le compteur a zero -- dans un fichier a part, pour ne
+# jamais toucher au README ni a un fichier qu'on edite a la main.
+#
+# Le commit est fait avec le jeton par defaut du workflow : il ne declenche
+# donc pas les autres workflows (les tests ne repartent pas pour une date).
+on:
+  schedule:
+    - cron: "23 5 1 * *"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  battement:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Poser la date du jour
+        run: |
+          printf 'Dernier battement automatique : %s\n\nCe fichier ne sert qu'"'"'a cela : un commit par mois garde le depot actif\n(voir .github/workflows/activite.yml).\n' "$(date -u +%F)" \
+            > .github/derniere-activite.txt
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add .github/derniere-activite.txt
+          # Deux lancements le meme jour ne changent rien : pas de commit vide.
+          git diff --cached --quiet || git commit -m "Battement automatique : le depot reste actif"
+          git push

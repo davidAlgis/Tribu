@@ -970,10 +970,20 @@ Pour le lancer à la main : onglet **Actions** de GitHub → *Garder Supabase
 GitHub le signale, et il se restaure depuis le tableau de bord Supabase (bouton
 *Restore project*).
 
-**Deux limites.** GitHub désactive les workflows planifiés d'un dépôt public
-**sans aucune activité depuis 60 jours** : un commit de temps en temps suffit.
-Et rien de tout cela n'est une garantie de Supabase — seul un plan payant
-n'est jamais mis en pause.
+**Le dépôt reste actif tout seul.** GitHub désactive les workflows planifiés
+d'un dépôt public **sans aucune activité sur `main` depuis 60 jours** — et le
+ping s'arrêterait avec eux. [`activite.yml`](.github/workflows/activite.yml)
+pose donc un commit **une fois par mois** (la date du jour dans
+`.github/derniere-activite.txt`, un fichier à part pour ne jamais toucher au
+README). Ces commits sont signés `github-actions[bot]` et ne relancent pas les
+tests. Si on les trouve gênants dans l'historique, `git log --invert-grep
+--grep="Battement automatique"` les masque.
+
+**Une limite.** Rien de tout cela n'est une garantie : seul un plan payant
+n'est jamais mis en pause côté Supabase, et GitHub ne documente pas
+explicitement qu'un commit fait par le jeton d'un workflow remet son compteur
+à zéro. Si l'onglet **Actions** montre un jour *Garder Supabase éveillé*
+désactivé, un commit à la main ou le bouton *Enable workflow* le réveille.
 
 ## Export Excel
 

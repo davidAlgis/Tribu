@@ -1,0 +1,4 @@
+Dernier battement automatique : (pas encore)
+
+Ce fichier ne sert qu'a cela : un commit par mois garde le depot actif
+(voir .github/workflows/activite.yml).
