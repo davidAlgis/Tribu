@@ -6150,6 +6150,43 @@ begin
 end $mig$;
 
 -- ============================================================
+--  Garder le projet eveille
+-- ============================================================
+--
+--  Un projet Supabase gratuit est mis en pause quand sa base reste sans
+--  activite pendant une semaine. Cette famille ne s'en sert que par
+--  vagues -- une saisie, puis des semaines de silence -- et la pause
+--  coupait tout, formulaires compris.
+--
+--  `public.ping()` ecrit UNE ligne, et la rend. Le workflow
+--  `.github/workflows/eveil.yml` l'appelle chaque jour avec la cle
+--  publique deja presente dans config.js : une ECRITURE, parce que ouvrir
+--  une connexion sans rien faire ne compte pas comme de l'activite.
+--
+--  Elle ne sert aucune donnee -- la date de l'appel, rien d'autre -- et
+--  reste HORS de l'historique : un battement par jour n'est pas un geste,
+--  il noierait la liste des vrais.
+--
+create table if not exists private.sonde (
+  id    boolean primary key default true check (id),  -- une seule ligne
+  vu_le timestamptz not null default now()
+);
+
+revoke all on private.sonde from anon, authenticated;
+
+create or replace function public.ping()
+returns timestamptz
+language sql security definer
+set search_path = private, pg_temp as $fn$
+  insert into private.sonde as s (id, vu_le)
+  values (true, now())
+  on conflict (id) do update set vu_le = now()
+  returning s.vu_le
+$fn$;
+
+grant execute on function public.ping() to anon;
+
+-- ============================================================
 --  14. Etat de la base apres execution
 -- ============================================================
 --

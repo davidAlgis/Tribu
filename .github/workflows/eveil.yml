@@ -1,0 +1,37 @@
+name: Garder Supabase eveille
+
+# Un projet Supabase gratuit est mis en pause apres une semaine sans activite
+# sur sa base. Ce workflow appelle `public.ping()` chaque jour : la fonction
+# ecrit une ligne (voir supabase/schema.sql), ce qui compte comme de
+# l'activite.
+#
+# L'adresse et la cle viennent de config.js : elles y sont PUBLIQUES par
+# conception (le site est servi par GitHub Pages), donc rien a configurer et
+# aucun secret a creer. La cle `secret`, elle, n'a rien a faire ici.
+#
+# Si le projet est deja en pause, l'appel echoue et GitHub previent : c'est
+# le signal qu'il faut le restaurer depuis le tableau de bord Supabase.
+#
+# LIMITE : GitHub desactive les workflows planifies d'un depot public sans
+# aucune activite depuis 60 jours. Un commit de temps en temps suffit.
+on:
+  schedule:
+    - cron: "17 6 * * *"
+  workflow_dispatch:
+
+jobs:
+  ping:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Appeler public.ping()
+        run: |
+          url=$(grep -oP 'SUPABASE_URL:\s*"\K[^"]+' config.js)
+          cle=$(grep -oP 'SUPABASE_ANON_KEY:\s*"\K[^"]+' config.js)
+          test -n "$url" && test -n "$cle"
+          curl --fail-with-body --silent --show-error \
+            --request POST "$url/rest/v1/rpc/ping" \
+            --header "apikey: $cle" \
+            --header "Content-Type: application/json" \
+            --data '{}'

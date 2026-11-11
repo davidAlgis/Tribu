@@ -952,6 +952,29 @@ python -m venv .venv
 .venv/Scripts/python.exe -m pytest -q
 ```
 
+## Garder le projet éveillé
+
+Un projet Supabase **gratuit est mis en pause** quand sa base reste une semaine
+sans activité — et cette famille ne s'en sert que par vagues : une saisie, puis
+des semaines de silence. La pause coupe tout, formulaires compris.
+
+[`eveil.yml`](.github/workflows/eveil.yml) appelle donc `public.ping()` chaque
+jour. La fonction **écrit une ligne** (la date de l'appel) dans
+`private.sonde` : ouvrir une connexion sans rien faire ne compte pas comme de
+l'activité, une écriture si. Elle ne sert aucune donnée, reste hors de
+l'historique, et l'adresse comme la clé viennent de `config.js`, où elles sont
+publiques — rien à configurer, aucun secret.
+
+Pour le lancer à la main : onglet **Actions** de GitHub → *Garder Supabase
+éveillé* → *Run workflow*. S'il échoue, c'est que le projet est déjà en pause :
+GitHub le signale, et il se restaure depuis le tableau de bord Supabase (bouton
+*Restore project*).
+
+**Deux limites.** GitHub désactive les workflows planifiés d'un dépôt public
+**sans aucune activité depuis 60 jours** : un commit de temps en temps suffit.
+Et rien de tout cela n'est une garantie de Supabase — seul un plan payant
+n'est jamais mis en pause.
+
 ## Export Excel
 
 ```bash
